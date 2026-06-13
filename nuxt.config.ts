@@ -4,6 +4,7 @@ export default defineNuxtConfig({
   compatibilityDate: "2024-11-01",
   future: { compatibilityVersion: 4 },
   modules: ["@clerk/nuxt", "@sentry/nuxt/module"],
+  sourcemap: { client: "hidden" },
   sentry: {
     sourceMapsUploadOptions: {
       org: process.env.SENTRY_ORG,
@@ -27,8 +28,5 @@ export default defineNuxtConfig({
   },
   vite: {
     plugins: [tailwindcss()],
-    build: {
-      sourcemap: "hidden",
-    },
   },
 });
