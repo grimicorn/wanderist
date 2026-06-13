@@ -20,6 +20,7 @@ export default defineNuxtConfig({
       sentryDsn: "",
     },
   },
+  sourcemap: { client: true, server: true },
   css: ["~/assets/css/main.css"],
   devtools: { enabled: true },
   nitro: {
