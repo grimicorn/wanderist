@@ -1,36 +1,31 @@
 import { createClerkClient } from "@clerk/backend";
-import type { H3Event } from "h3";
 
-const UNPROTECTED_PREFIXES = ["/api/_"];
+let cachedClerkClient: ReturnType<typeof createClerkClient> | null = null;
 
-function isProtectedRoute(path: string): boolean {
-  return (
-    path.startsWith("/api/") &&
-    !UNPROTECTED_PREFIXES.some((prefix) => path.startsWith(prefix))
-  );
-}
-
-function extractBearerToken(event: H3Event): string | undefined {
-  return getRequestHeader(event, "authorization")?.replace("Bearer ", "");
-}
-
-async function verifyClerkToken(token: string): Promise<string> {
-  const clerkClient = createClerkClient({
-    secretKey: process.env.NUXT_CLERK_SECRET_KEY,
-  });
-  const session = await clerkClient.sessions.verifySession(token, token);
-  return session.userId;
+function getClerkClient() {
+  if (cachedClerkClient) return cachedClerkClient;
+  const secretKey = process.env.NUXT_CLERK_SECRET_KEY;
+  if (!secretKey) {
+    throw new Error("NUXT_CLERK_SECRET_KEY is not set");
+  }
+  cachedClerkClient = createClerkClient({ secretKey });
+  return cachedClerkClient;
 }
 
 export default defineEventHandler(async (event) => {
-  if (!isProtectedRoute(getRequestURL(event).pathname)) return;
+  if (!event.path.startsWith("/api/")) return;
 
-  const token = extractBearerToken(event);
-  if (!token) throw createError({ statusCode: 401, message: "Unauthorized" });
+  const clerkClient = getClerkClient();
+
+  const token = getHeader(event, "authorization")?.replace("Bearer ", "");
+  if (!token) {
+    throw createError({ statusCode: 401, statusMessage: "Unauthorized" });
+  }
 
   try {
-    event.context.auth = { userId: await verifyClerkToken(token) };
+    const { sub } = await clerkClient.verifyToken(token);
+    event.context.userId = sub;
   } catch {
-    throw createError({ statusCode: 401, message: "Unauthorized" });
+    throw createError({ statusCode: 401, statusMessage: "Unauthorized" });
   }
 });

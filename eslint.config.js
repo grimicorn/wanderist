@@ -9,31 +9,27 @@ export default [
   ...pluginVue.configs["flat/recommended"],
   prettier,
   {
-    files: ["**/*.ts", "**/*.tsx"],
     languageOptions: {
-      parser: tsParser,
-      globals: {
-        ...globals.node,
-        ...globals.browser,
-      },
-    },
-    rules: {
-      // TypeScript handles undefined variable checking; Nuxt auto-imports break no-undef
-      "no-undef": "off",
-    },
-  },
-  {
-    files: ["**/*.vue"],
-    languageOptions: {
+      parser: pluginVue.parser,
       parserOptions: {
         parser: tsParser,
+        extraFileExtensions: [".vue"],
+        sourceType: "module",
       },
       globals: {
         ...globals.browser,
+        ...globals.node,
       },
     },
   },
   {
-    ignores: [".nuxt/**", ".output/**", "dist/**", "node_modules/**"],
+    ignores: [
+      ".netlify/**",
+      ".nuxt/**",
+      ".output/**",
+      "dist/**",
+      "node_modules/**",
+      "coverage/**",
+    ],
   },
 ];

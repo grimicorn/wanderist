@@ -55,7 +55,7 @@ npm run db:studio
 
 ## Authentication
 
-Authentication is handled by [Clerk](https://clerk.com) via the `@clerk/nuxt` module. Server middleware at `server/middleware/auth.ts` verifies the session on every request and makes the user available at `event.context.auth` in API route handlers.
+Authentication is handled by [Clerk](https://clerk.com) via the `@clerk/nuxt` module. Server middleware at `server/middleware/auth.ts` verifies the session on every request and makes the user available at `event.context.userId` in API route handlers.
 
 ## Development
 
@@ -115,3 +115,7 @@ Required repository secrets (Settings → Secrets → Actions):
 - `E2E_DATABASE_URL`
 - `NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
 - `NUXT_CLERK_SECRET_KEY`
+- `SENTRY_AUTH_TOKEN`
+- `SENTRY_DSN`
+- `SENTRY_ORG`
+- `SENTRY_PROJECT`
