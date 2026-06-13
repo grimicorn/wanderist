@@ -20,7 +20,6 @@ export default defineNuxtConfig({
       sentryDsn: "",
     },
   },
-  sourcemap: { client: true, server: true },
   css: ["~/assets/css/main.css"],
   devtools: { enabled: true },
   nitro: {
@@ -28,5 +27,8 @@ export default defineNuxtConfig({
   },
   vite: {
     plugins: [tailwindcss()],
+    build: {
+      sourcemap: "hidden",
+    },
   },
 });
