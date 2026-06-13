@@ -17,7 +17,9 @@ export default defineEventHandler(async (event) => {
 
   const clerkClient = getClerkClient();
 
-  const token = getHeader(event, "authorization")?.replace(/^Bearer\s+/i, "").trim();
+  const token = getHeader(event, "authorization")
+    ?.replace(/^Bearer\s+/i, "")
+    .trim();
   if (!token) {
     throw createError({ statusCode: 401, statusMessage: "Unauthorized" });
   }
