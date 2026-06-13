@@ -5,6 +5,6 @@ export default defineConfig({
   plugins: [vue()],
   test: {
     environment: "happy-dom",
-    exclude: ["node_modules", "e2e"],
+    exclude: ["node_modules", "e2e/**"],
   },
 });

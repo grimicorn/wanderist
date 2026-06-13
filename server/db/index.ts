@@ -7,6 +7,7 @@ let cachedDb: ReturnType<typeof drizzle> | null = null;
 export function getDb() {
   if (cachedDb) return cachedDb;
   const { databaseUrl } = useRuntimeConfig();
+  if (!databaseUrl) throw new Error("Missing DATABASE_URL runtime config");
   const sql = neon(databaseUrl);
   cachedDb = drizzle(sql, { schema });
   return cachedDb;
