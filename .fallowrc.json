@@ -1,0 +1,9 @@
+{
+  "$schema": "https://fallow.tools/schema.json",
+  "entry": [
+    "server/db/index.ts",
+    "sentry.client.config.ts",
+    "sentry.server.config.ts"
+  ],
+  "ignoreDependencies": ["@clerk/testing", "@sentry/nuxt", "@vue/test-utils"]
+}

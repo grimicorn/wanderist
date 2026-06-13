@@ -1,0 +1,3 @@
+[build]
+  command = "npx nuxt prepare && npm run test:ci && npm run build"
+  publish = "dist"

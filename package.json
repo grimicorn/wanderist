@@ -1,0 +1,63 @@
+{
+  "name": "wanderist",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "TMPDIR=/tmp nuxt dev",
+    "build": "nuxt build",
+    "preview": "nuxt preview",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:ci": "vitest run",
+    "lint": "prettier --check . && eslint . && fallow audit",
+    "lint:ci": "prettier --check . && eslint . && fallow audit --base origin/${BASE_BRANCH:-main}",
+    "lint:fix": "prettier --write . && eslint . --fix && fallow fix --yes",
+    "prepare": "husky",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio",
+    "e2e": "playwright test",
+    "e2e:headed": "playwright test --headed",
+    "e2e:ui": "playwright test --ui",
+    "e2e:debug": "playwright test --debug",
+    "e2e:report": "playwright show-report e2e/report"
+  },
+  "dependencies": {
+    "@clerk/nuxt": "^2.6.2",
+    "@neondatabase/serverless": "^1.1.0",
+    "@sentry/nuxt": "^10.57.0",
+    "drizzle-orm": "^0.45.2",
+    "nuxt": "^4.4.8",
+    "vue": "^3.5.35",
+    "vue-router": "^5.1.0"
+  },
+  "devDependencies": {
+    "@clerk/backend": "^3.7.0",
+    "@clerk/testing": "^2.1.1",
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.60.0",
+    "@tailwindcss/vite": "^4.3.1",
+    "@typescript-eslint/parser": "^8.61.0",
+    "@vitejs/plugin-vue": "^6.0.7",
+    "@vitest/ui": "^4.1.8",
+    "@vue/test-utils": "^2.4.11",
+    "dotenv": "^17.4.2",
+    "drizzle-kit": "^0.31.10",
+    "eslint": "^10.5.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-vue": "^10.9.2",
+    "fallow": "^2.96.0",
+    "globals": "^17.6.0",
+    "happy-dom": "^20.10.3",
+    "husky": "^9.1.7",
+    "prettier": "^3.8.4",
+    "prettier-plugin-tailwindcss": "^0.8.0",
+    "tailwindcss": "^4.3.1",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.8"
+  }
+}
