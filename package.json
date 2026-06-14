@@ -29,9 +29,11 @@
   "dependencies": {
     "@clerk/nuxt": "^2.6.2",
     "@neondatabase/serverless": "^1.1.0",
+    "@pinia/nuxt": "^0.11.3",
     "@sentry/nuxt": "^10.57.0",
     "drizzle-orm": "^0.45.2",
     "nuxt": "^4.4.8",
+    "pinia": "^3.0.4",
     "vue": "^3.5.35",
     "vue-router": "^5.1.0"
   },
