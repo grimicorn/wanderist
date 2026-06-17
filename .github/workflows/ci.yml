@@ -33,6 +33,8 @@ jobs:
   changed:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
     outputs:
       e2e: ${{ steps.filter.outputs.e2e }}
     steps:
@@ -51,6 +53,7 @@ jobs:
               - 'playwright.config.ts'
               - 'nuxt.config.ts'
               - 'package-lock.json'
+              - 'package.json'
 
   e2e:
     needs: [ci, changed]
