@@ -5,7 +5,9 @@
       <header class="drawer__head">
         <div>
           <div class="label">// new entry</div>
-          <h3 class="display" style="font-size:18px;margin-top:6px">Capture a moment</h3>
+          <h3 class="display" style="font-size: 18px; margin-top: 6px">
+            Capture a moment
+          </h3>
         </div>
         <button class="icon-btn" aria-label="Close" @click="$emit('close')">
           <AppIcon name="x" :size="18" />
@@ -29,7 +31,7 @@
           </div>
           <p class="dropzone__hint">
             Drag photos here, or import geotagged shots from
-            <AppIcon name="instagram" :size="13" style="vertical-align:-2px" />
+            <AppIcon name="instagram" :size="13" style="vertical-align: -2px" />
             Instagram.
           </p>
         </div>
@@ -70,7 +72,8 @@
               :key="suggestion"
               class="chip"
               @click="form.location = suggestion"
-            >{{ suggestion }}</span>
+              >{{ suggestion }}</span
+            >
           </div>
         </div>
 
@@ -84,30 +87,38 @@
               class="pick"
               :class="{ 'is-active': form.trip === trip }"
               @click="form.trip = trip"
-            >{{ trip }}</button>
+            >
+              {{ trip }}
+            </button>
           </div>
         </div>
 
         <!-- Date & Visibility row -->
         <div class="drawer__row">
-          <div class="field" style="margin:0">
+          <div class="field" style="margin: 0">
             <label class="field__label">Date</label>
             <div class="field__wrap">
               <input v-model="form.date" class="field__input" />
-              <span class="field__icon"><AppIcon name="calendar" :size="16" /></span>
+              <span class="field__icon"
+                ><AppIcon name="calendar" :size="16"
+              /></span>
             </div>
           </div>
-          <div class="field" style="margin:0">
+          <div class="field" style="margin: 0">
             <label class="field__label">Visibility</label>
             <div class="segmented seg-sm">
               <button
                 :class="{ 'is-active': form.visibility === 'private' }"
                 @click="form.visibility = 'private'"
-              >Private</button>
+              >
+                Private
+              </button>
               <button
                 :class="{ 'is-active': form.visibility === 'public' }"
                 @click="form.visibility = 'public'"
-              >Public</button>
+              >
+                Public
+              </button>
             </div>
           </div>
         </div>
@@ -116,23 +127,37 @@
         <div class="field">
           <label class="field__label">Tags</label>
           <div class="tags-input">
-            <span
-              v-for="tag in form.tags"
-              :key="tag"
-              class="tag tag--accent"
-            >
+            <span v-for="tag in form.tags" :key="tag" class="tag tag--accent">
               {{ tag }}
-              <button class="tag-x" style="background:none;border:none;padding:0;cursor:pointer;font-size:10px" @click="removeTag(tag)">×</button>
+              <button
+                class="tag-x"
+                style="
+                  background: none;
+                  border: none;
+                  padding: 0;
+                  cursor: pointer;
+                  font-size: 10px;
+                "
+                @click="removeTag(tag)"
+              >
+                ×
+              </button>
             </span>
-            <input v-model="tagInput" placeholder="add tag…" @keydown.enter.prevent="addTag" />
+            <input
+              v-model="tagInput"
+              placeholder="add tag…"
+              @keydown.enter.prevent="addTag"
+            />
           </div>
         </div>
 
         <!-- Weather -->
-        <div class="field" style="margin-bottom:4px">
+        <div class="field" style="margin-bottom: 4px">
           <label class="field__label">
             Weather
-            <span class="muted" style="text-transform:none;letter-spacing:0">optional</span>
+            <span class="muted" style="text-transform: none; letter-spacing: 0"
+              >optional</span
+            >
           </label>
           <div class="pill-pick">
             <button
@@ -150,9 +175,13 @@
       </div>
 
       <footer class="drawer__foot">
-        <button class="btn btn--ghost btn--sm" @click="saveDraft">save draft</button>
-        <span style="flex:1" />
-        <button class="btn btn--outline btn--sm" @click="$emit('close')">cancel</button>
+        <button class="btn btn--ghost btn--sm" @click="saveDraft">
+          save draft
+        </button>
+        <span style="flex: 1" />
+        <button class="btn btn--outline btn--sm" @click="$emit('close')">
+          cancel
+        </button>
         <button class="btn btn--primary btn--sm" @click="publish">
           <AppIcon name="check" :size="14" />
           publish
@@ -163,43 +192,43 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref } from "vue";
 
-defineProps<{ open: boolean }>()
-defineEmits<{ close: [] }>()
+defineProps<{ open: boolean }>();
+defineEmits<{ close: [] }>();
 
-const locationSuggestions = ['Old Harbour', 'Hallgrímskirkja', 'Sun Voyager']
-const trips = ['Iceland, ring road', 'Portugal 2026', 'None']
+const locationSuggestions = ["Old Harbour", "Hallgrímskirkja", "Sun Voyager"];
+const trips = ["Iceland, ring road", "Portugal 2026", "None"];
 
 const weatherOptions = [
-  { value: 'clear', label: 'Clear', icon: 'sun' },
-  { value: 'overcast', label: 'Overcast', icon: 'cloud' },
-  { value: 'windy', label: 'Windy', icon: 'wind' },
-]
+  { value: "clear", label: "Clear", icon: "sun" },
+  { value: "overcast", label: "Overcast", icon: "cloud" },
+  { value: "windy", label: "Windy", icon: "wind" },
+];
 
 const form = ref({
-  title: '',
-  body: '',
-  location: 'Reykjavík, Iceland',
-  trip: 'Iceland, ring road',
-  date: 'Jun 14, 2026',
-  visibility: 'private' as 'private' | 'public',
-  tags: ['iceland', 'ring road'] as string[],
-  weather: 'overcast',
-})
+  title: "",
+  body: "",
+  location: "Reykjavík, Iceland",
+  trip: "Iceland, ring road",
+  date: "Jun 14, 2026",
+  visibility: "private" as "private" | "public",
+  tags: ["iceland", "ring road"] as string[],
+  weather: "overcast",
+});
 
-const tagInput = ref('')
+const tagInput = ref("");
 
 function addTag() {
-  const value = tagInput.value.trim()
+  const value = tagInput.value.trim();
   if (value && !form.value.tags.includes(value)) {
-    form.value.tags = [...form.value.tags, value]
+    form.value.tags = [...form.value.tags, value];
   }
-  tagInput.value = ''
+  tagInput.value = "";
 }
 
 function removeTag(tag: string) {
-  form.value.tags = form.value.tags.filter((t) => t !== tag)
+  form.value.tags = form.value.tags.filter((t) => t !== tag);
 }
 
 function saveDraft() {

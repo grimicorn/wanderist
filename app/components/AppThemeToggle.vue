@@ -18,5 +18,5 @@
 </template>
 
 <script setup lang="ts">
-const { theme, setTheme } = useTheme()
+const { theme, setTheme } = useTheme();
 </script>

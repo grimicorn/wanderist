@@ -14,9 +14,18 @@
         :required="required"
         :disabled="disabled"
         :rows="rows"
-        @input="emit('update:modelValue', ($event.target as HTMLTextAreaElement).value)"
+        @input="
+          emit(
+            'update:modelValue',
+            ($event.target as HTMLTextAreaElement).value,
+          )
+        "
       />
-      <span v-if="state !== 'default'" class="field__icon" style="top: 12px; bottom: auto;">
+      <span
+        v-if="state !== 'default'"
+        class="field__icon"
+        style="top: 12px; bottom: auto"
+      >
         <AppIcon v-if="stateIcon" :name="stateIcon" :size="16" />
       </span>
     </div>
@@ -25,39 +34,46 @@
 </template>
 
 <script setup lang="ts">
-import type { InputState } from './InputText.vue'
+import type { InputState } from "./InputText.vue";
 
 const STATE_ICONS: Record<InputState, string | undefined> = {
   default: undefined,
-  success: 'check-circle',
-  error: 'alert-circle',
-}
+  success: "check-circle",
+  error: "alert-circle",
+};
 
 const STATE_CLASSES: Record<InputState, string | undefined> = {
   default: undefined,
-  success: 'is-success',
-  error: 'is-error',
-}
+  success: "is-success",
+  error: "is-error",
+};
 
-const props = withDefaults(defineProps<{
-  modelValue?: string
-  label?: string
-  placeholder?: string
-  hint?: string
-  state?: InputState
-  required?: boolean
-  disabled?: boolean
-  rows?: number
-}>(), {
-  state: 'default',
-  rows: 4,
-})
+const props = withDefaults(
+  defineProps<{
+    modelValue?: string;
+    label?: string;
+    placeholder?: string;
+    hint?: string;
+    state?: InputState;
+    required?: boolean;
+    disabled?: boolean;
+    rows?: number;
+  }>(),
+  {
+    modelValue: undefined,
+    label: undefined,
+    placeholder: undefined,
+    hint: undefined,
+    state: "default",
+    rows: 4,
+  },
+);
 
-defineOptions({ inheritAttrs: false })
+defineOptions({ inheritAttrs: false });
 
-const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
+const emit = defineEmits<{ "update:modelValue": [value: string] }>();
 
-const inputId = useId()
-const stateClass = computed(() => STATE_CLASSES[props.state])
-const stateIcon = computed(() => STATE_ICONS[props.state])
+const inputId = useId();
+const stateClass = computed(() => STATE_CLASSES[props.state]);
+const stateIcon = computed(() => STATE_ICONS[props.state]);
 </script>

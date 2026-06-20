@@ -36,18 +36,22 @@
     <div class="side-foot">
       <AppThemeToggle />
       <NuxtLink class="user-chip" to="/settings">
-        <span
-          v-if="user?.imageUrl"
-          class="user-chip__av"
-        >
+        <span v-if="user?.imageUrl" class="user-chip__av">
           <img :src="user.imageUrl" :alt="displayName" class="user-chip__av" />
         </span>
-        <span v-else class="user-chip__av" style="display:grid;place-items:center;color:var(--accent-ink)">
+        <span
+          v-else
+          class="user-chip__av"
+          style="display: grid; place-items: center; color: var(--accent-ink)"
+        >
           <AppIcon name="user" :size="16" />
         </span>
         <span>
-          <span class="user-chip__name">{{ displayName }}</span><br />
-          <span class="user-chip__mail">{{ user?.primaryEmailAddress?.emailAddress }}</span>
+          <span class="user-chip__name">{{ displayName }}</span
+          ><br />
+          <span class="user-chip__mail">{{
+            user?.primaryEmailAddress?.emailAddress
+          }}</span>
         </span>
       </NuxtLink>
     </div>
@@ -55,19 +59,22 @@
 </template>
 
 <script setup lang="ts">
-const props = defineProps<{ isOpen: boolean }>()
-const emit = defineEmits<{ close: [] }>()
+defineProps<{ isOpen: boolean }>();
+const emit = defineEmits<{ close: [] }>();
 
-const { user } = useClerkUser()
+const { user } = useClerkUser();
 
-const displayName = computed(() => {
-  if (!user.value) {
-    return ''
+function resolveDisplayName(): string {
+  const u = user.value;
+  if (!u) {
+    return "Traveler";
   }
-  return user.value.fullName || user.value.username || user.value.firstName || 'Traveler'
-})
+  return u.fullName || u.username || "Traveler";
+}
+
+const displayName = computed(resolveDisplayName);
 
 function close() {
-  emit('close')
+  emit("close");
 }
 </script>

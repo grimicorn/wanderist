@@ -8,5 +8,5 @@
 </template>
 
 <script setup lang="ts">
-useTheme()
+useTheme();
 </script>

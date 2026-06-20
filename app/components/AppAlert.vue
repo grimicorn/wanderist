@@ -19,25 +19,30 @@
 </template>
 
 <script setup lang="ts">
-export type AlertIntent = 'error' | 'warning' | 'success' | 'info'
+type AlertIntent = "error" | "warning" | "success" | "info";
 
 const INTENT_ICONS: Record<AlertIntent, string> = {
-  error: 'alert-circle',
-  warning: 'alert-triangle',
-  success: 'check-circle',
-  info: 'info',
-}
+  error: "alert-circle",
+  warning: "alert-triangle",
+  success: "check-circle",
+  info: "info",
+};
 
-const props = withDefaults(defineProps<{
-  intent?: AlertIntent
-  title?: string
-  message?: string
-  dismissible?: boolean
-}>(), {
-  intent: 'info',
-  dismissible: false,
-})
+const props = withDefaults(
+  defineProps<{
+    intent?: AlertIntent;
+    title?: string;
+    message?: string;
+    dismissible?: boolean;
+  }>(),
+  {
+    intent: "info",
+    title: undefined,
+    message: undefined,
+    dismissible: false,
+  },
+);
 
-const visible = ref(true)
-const iconName = computed(() => INTENT_ICONS[props.intent])
+const visible = ref(true);
+const iconName = computed(() => INTENT_ICONS[props.intent]);
 </script>

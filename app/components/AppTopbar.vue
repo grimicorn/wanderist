@@ -1,6 +1,10 @@
 <template>
   <header class="topbar">
-    <button class="icon-btn menu-btn" aria-label="Menu" @click="openSidebar?.()">
+    <button
+      class="icon-btn menu-btn"
+      aria-label="Menu"
+      @click="openSidebar?.()"
+    >
       <AppIcon name="menu" :size="16" />
     </button>
 
@@ -17,9 +21,9 @@
 
 <script setup lang="ts">
 defineProps<{
-  title: string
-  crumb?: string
-}>()
+  title: string;
+  crumb?: string;
+}>();
 
-const openSidebar = inject<(() => void) | undefined>('openSidebar', undefined)
+const openSidebar = inject<(() => void) | undefined>("openSidebar", undefined);
 </script>

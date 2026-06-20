@@ -15,7 +15,9 @@
         :placeholder="placeholder"
         :required="required"
         :disabled="disabled"
-        @input="emit('update:modelValue', ($event.target as HTMLInputElement).value)"
+        @input="
+          emit('update:modelValue', ($event.target as HTMLInputElement).value)
+        "
       />
       <span v-if="icon || state" class="field__icon">
         <AppIcon v-if="stateIcon" :name="stateIcon" :size="16" />
@@ -27,40 +29,48 @@
 </template>
 
 <script setup lang="ts">
-export type InputState = 'default' | 'success' | 'error'
+export type InputState = "default" | "success" | "error";
 
 const STATE_ICONS: Record<InputState, string | undefined> = {
   default: undefined,
-  success: 'check-circle',
-  error: 'alert-circle',
-}
+  success: "check-circle",
+  error: "alert-circle",
+};
 
 const STATE_CLASSES: Record<InputState, string | undefined> = {
   default: undefined,
-  success: 'is-success',
-  error: 'is-error',
-}
+  success: "is-success",
+  error: "is-error",
+};
 
-const props = withDefaults(defineProps<{
-  modelValue?: string
-  label?: string
-  placeholder?: string
-  hint?: string
-  type?: string
-  icon?: string
-  state?: InputState
-  required?: boolean
-  disabled?: boolean
-}>(), {
-  type: 'text',
-  state: 'default',
-})
+const props = withDefaults(
+  defineProps<{
+    modelValue?: string;
+    label?: string;
+    placeholder?: string;
+    hint?: string;
+    type?: string;
+    icon?: string;
+    state?: InputState;
+    required?: boolean;
+    disabled?: boolean;
+  }>(),
+  {
+    modelValue: undefined,
+    label: undefined,
+    placeholder: undefined,
+    hint: undefined,
+    type: "text",
+    icon: undefined,
+    state: "default",
+  },
+);
 
-defineOptions({ inheritAttrs: false })
+defineOptions({ inheritAttrs: false });
 
-const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
+const emit = defineEmits<{ "update:modelValue": [value: string] }>();
 
-const inputId = useId()
-const stateClass = computed(() => STATE_CLASSES[props.state])
-const stateIcon = computed(() => STATE_ICONS[props.state])
+const inputId = useId();
+const stateClass = computed(() => STATE_CLASSES[props.state]);
+const stateIcon = computed(() => STATE_ICONS[props.state]);
 </script>
