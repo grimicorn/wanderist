@@ -8,7 +8,7 @@ exports[`Explore page (/explore) > renders without crashing and matches snapshot
     <div data-v-fccf1d79="" class="xhero__in">
       <div data-v-fccf1d79="" class="label">// discover</div>
       <h1 data-v-fccf1d79="">Where to next?</h1>
-      <p data-v-fccf1d79="">Curated destinations, guides from travelers you follow, and places trending across Wanderist.</p><label data-v-fccf1d79="" class="xsearch"><svg data-v-fccf1d79="" data-icon="" name="search" size="18"></svg><input data-v-fccf1d79="" placeholder="Search a city, country, or kind of place…"><span data-v-fccf1d79="" class="kbd">⌘K</span></label>
+      <p data-v-fccf1d79=""> Curated destinations, guides from travelers you follow, and places trending across Wanderist. </p><label data-v-fccf1d79="" class="xsearch"><svg data-v-fccf1d79="" data-icon="" name="search" size="18"></svg><input data-v-fccf1d79="" placeholder="Search a city, country, or kind of place…"><span data-v-fccf1d79="" class="kbd">⌘K</span></label>
       <div data-v-fccf1d79="" class="xchips"><span data-v-fccf1d79="" class="xchip">Cold-water swims</span><span data-v-fccf1d79="" class="xchip">Northern lights</span><span data-v-fccf1d79="" class="xchip">Slow coastlines</span><span data-v-fccf1d79="" class="xchip">Food cities</span><span data-v-fccf1d79="" class="xchip">Off-season Europe</span></div>
     </div>
   </div><!-- Featured destinations -->
@@ -102,7 +102,7 @@ exports[`Explore page (/explore) > renders without crashing and matches snapshot
           </div>
         </div><a data-v-fccf1d79="" class="guide" href="#">
           <div data-v-fccf1d79="" class="guide__thumb ph">
-            <div data-v-fccf1d79="" class="topo" style="opacity: .4;"></div>
+            <div data-v-fccf1d79="" class="topo" style="opacity: 0.4;"></div>
           </div>
           <div data-v-fccf1d79="">
             <div data-v-fccf1d79="" class="guide__name">The cold-water swimming guide to Iceland</div>
@@ -111,7 +111,7 @@ exports[`Explore page (/explore) > renders without crashing and matches snapshot
           </div>
         </a><a data-v-fccf1d79="" class="guide" href="#">
           <div data-v-fccf1d79="" class="guide__thumb ph">
-            <div data-v-fccf1d79="" class="topo" style="opacity: .4;"></div>
+            <div data-v-fccf1d79="" class="topo" style="opacity: 0.4;"></div>
           </div>
           <div data-v-fccf1d79="">
             <div data-v-fccf1d79="" class="guide__name">Lisbon on foot: a hill-by-hill walk</div>
@@ -120,7 +120,7 @@ exports[`Explore page (/explore) > renders without crashing and matches snapshot
           </div>
         </a><a data-v-fccf1d79="" class="guide" href="#">
           <div data-v-fccf1d79="" class="guide__thumb ph">
-            <div data-v-fccf1d79="" class="topo" style="opacity: .4;"></div>
+            <div data-v-fccf1d79="" class="topo" style="opacity: 0.4;"></div>
           </div>
           <div data-v-fccf1d79="">
             <div data-v-fccf1d79="" class="guide__name">Eating Tokyo for a week without a plan</div>

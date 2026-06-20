@@ -53,7 +53,7 @@ exports[`Map page (/map) > renders the map stage and matches snapshot 1`] = `
   </div><!-- Detail card -->
   <div data-v-346616cd="" class="detail is-open">
     <div data-v-346616cd="" class="detail__img ph">
-      <div data-v-346616cd="" class="topo" style="opacity: .5;"></div><button data-v-346616cd="" class="icon-btn detail__close" aria-label="Close"><svg data-v-346616cd="" data-icon="" name="x" size="16"></svg></button>
+      <div data-v-346616cd="" class="topo" style="opacity: 0.5;"></div><button data-v-346616cd="" class="icon-btn detail__close" aria-label="Close"><svg data-v-346616cd="" data-icon="" name="x" size="16"></svg></button>
     </div>
     <div data-v-346616cd="" class="detail__body">
       <div data-v-346616cd="" class="detail__loc">Iceland · current trip</div>

@@ -6,7 +6,7 @@ exports[`Trip Detail page (/trips/[id]) > renders without crashing and matches s
   <div data-v-a25903e0="" class="thero ph">
     <div data-v-a25903e0="" class="topo"></div>
     <div data-v-a25903e0="" class="thero__veil"></div>
-    <div data-v-a25903e0="" class="thero__acts"><button data-v-a25903e0="" class="btn btn--outline btn--sm" style="background: rgba(255, 255, 255, .12); border-color: rgba(255, 255, 255, .4); color: #fff;"><svg data-v-a25903e0="" data-icon="" name="image" size="14"></svg> edit cover </button><button data-v-a25903e0="" class="btn btn--outline btn--sm" style="background: rgba(255, 255, 255, .12); border-color: rgba(255, 255, 255, .4); color: #fff;"><svg data-v-a25903e0="" data-icon="" name="globe" size="14"></svg> share </button></div>
+    <div data-v-a25903e0="" class="thero__acts"><button data-v-a25903e0="" class="btn btn--outline btn--sm" style="background: rgba(255, 255, 255, 0.12); border-color: rgba(255, 255, 255, 0.4); color: #fff;"><svg data-v-a25903e0="" data-icon="" name="image" size="14"></svg> edit cover </button><button data-v-a25903e0="" class="btn btn--outline btn--sm" style="background: rgba(255, 255, 255, 0.12); border-color: rgba(255, 255, 255, 0.4); color: #fff;"><svg data-v-a25903e0="" data-icon="" name="globe" size="14"></svg> share </button></div>
     <div data-v-a25903e0="" class="thero__in">
       <div data-v-a25903e0="" class="label">// ongoing · day 6 of 9</div>
       <h1 data-v-a25903e0="">Iceland, the ring road</h1>
@@ -19,7 +19,7 @@ exports[`Trip Detail page (/trips/[id]) > renders without crashing and matches s
       <div data-v-a25903e0="" class="iti-head">
         <div data-v-a25903e0="">
           <div data-v-a25903e0="" class="label">// itinerary</div>
-          <h2 data-v-a25903e0="" class="display" style="font-size: 20px; margin-top: 8px;">Route &amp; stops</h2>
+          <h2 data-v-a25903e0="" class="display" style="font-size: 20px; margin-top: 8px;"> Route &amp; stops </h2>
         </div><button data-v-a25903e0="" class="btn btn--ghost btn--sm"><svg data-v-a25903e0="" data-icon="" name="sliders" size="14"></svg> reorder </button>
       </div>
       <div data-v-a25903e0="" class="iti">
@@ -34,7 +34,7 @@ exports[`Trip Detail page (/trips/[id]) > renders without crashing and matches s
                 <div data-v-a25903e0="" class="stop__sub"><svg data-v-a25903e0="" data-icon="" name="calendar" size="12"></svg> Jun 9–11 · 2 nights <span data-v-a25903e0="" class="tag tag--accent">base</span></div>
               </div><span data-v-a25903e0="" class="stop__grip"><svg data-v-a25903e0="" data-icon="" name="grip" size="16"></svg></span>
             </div>
-            <p data-v-a25903e0="" class="stop__note">Landed, picked up the camper. Old harbour at 4am, Hallgrímskirkja, then stocked up before heading east.</p>
+            <p data-v-a25903e0="" class="stop__note"> Landed, picked up the camper. Old harbour at 4am, Hallgrímskirkja, then stocked up before heading east. </p>
             <div data-v-a25903e0="" class="stop__foot"><span data-v-a25903e0="" class="m"><svg data-v-a25903e0="" data-icon="" name="journal" size="12"></svg> 2 entries</span><span data-v-a25903e0="" class="m"><svg data-v-a25903e0="" data-icon="" name="image" size="12"></svg> 28 photos</span><span data-v-a25903e0="" class="m"><svg data-v-a25903e0="" data-icon="" name="plane" size="12"></svg> arrival</span></div>
           </div>
         </div>
@@ -45,11 +45,11 @@ exports[`Trip Detail page (/trips/[id]) > renders without crashing and matches s
           <div data-v-a25903e0="" class="stop__card">
             <div data-v-a25903e0="" class="stop__top">
               <div data-v-a25903e0="">
-                <div data-v-a25903e0="" class="stop__name">Þingvellir &amp; the Golden Circle</div>
-                <div data-v-a25903e0="" class="stop__sub"><svg data-v-a25903e0="" data-icon="" name="calendar" size="12"></svg> Jun 11 · day trip</div>
+                <div data-v-a25903e0="" class="stop__name"> Þingvellir &amp; the Golden Circle </div>
+                <div data-v-a25903e0="" class="stop__sub"><svg data-v-a25903e0="" data-icon="" name="calendar" size="12"></svg> Jun 11 · day trip </div>
               </div><span data-v-a25903e0="" class="stop__grip"><svg data-v-a25903e0="" data-icon="" name="grip" size="16"></svg></span>
             </div>
-            <p data-v-a25903e0="" class="stop__note">Continental rift, Geysir, Gullfoss. Rained sideways the whole afternoon and it was still worth it.</p>
+            <p data-v-a25903e0="" class="stop__note"> Continental rift, Geysir, Gullfoss. Rained sideways the whole afternoon and it was still worth it. </p>
             <div data-v-a25903e0="" class="stop__foot"><span data-v-a25903e0="" class="m"><svg data-v-a25903e0="" data-icon="" name="journal" size="12"></svg> 1 entry</span><span data-v-a25903e0="" class="m"><svg data-v-a25903e0="" data-icon="" name="image" size="12"></svg> 19 photos</span><span data-v-a25903e0="" class="m"><svg data-v-a25903e0="" data-icon="" name="ruler" size="12"></svg> 250 km</span></div>
           </div>
         </div>
@@ -61,10 +61,10 @@ exports[`Trip Detail page (/trips/[id]) > renders without crashing and matches s
             <div data-v-a25903e0="" class="stop__top">
               <div data-v-a25903e0="">
                 <div data-v-a25903e0="" class="stop__name">Vík í Mýrdal</div>
-                <div data-v-a25903e0="" class="stop__sub"><svg data-v-a25903e0="" data-icon="" name="calendar" size="12"></svg> Jun 12–13 · 1 night</div>
+                <div data-v-a25903e0="" class="stop__sub"><svg data-v-a25903e0="" data-icon="" name="calendar" size="12"></svg> Jun 12–13 · 1 night </div>
               </div><span data-v-a25903e0="" class="stop__grip"><svg data-v-a25903e0="" data-icon="" name="grip" size="16"></svg></span>
             </div>
-            <p data-v-a25903e0="" class="stop__note">Black sand at Reynisfjara, the church on the hill. Puffins finally showed up near the cliffs.</p>
+            <p data-v-a25903e0="" class="stop__note"> Black sand at Reynisfjara, the church on the hill. Puffins finally showed up near the cliffs. </p>
             <div data-v-a25903e0="" class="stop__foot"><span data-v-a25903e0="" class="m"><svg data-v-a25903e0="" data-icon="" name="journal" size="12"></svg> 1 entry</span><span data-v-a25903e0="" class="m"><svg data-v-a25903e0="" data-icon="" name="image" size="12"></svg> 14 photos</span><span data-v-a25903e0="" class="m"><svg data-v-a25903e0="" data-icon="" name="ruler" size="12"></svg> 187 km</span></div>
           </div>
         </div>
@@ -76,10 +76,10 @@ exports[`Trip Detail page (/trips/[id]) > renders without crashing and matches s
             <div data-v-a25903e0="" class="stop__top">
               <div data-v-a25903e0="">
                 <div data-v-a25903e0="" class="stop__name">Jökulsárlón glacier lagoon</div>
-                <div data-v-a25903e0="" class="stop__sub"><span data-v-a25903e0="" class="tag tag--accent">next · today</span> 1h 40m drive ahead</div>
+                <div data-v-a25903e0="" class="stop__sub"><span data-v-a25903e0="" class="tag tag--accent">next · today</span> 1h 40m drive ahead </div>
               </div><span data-v-a25903e0="" class="stop__grip"><svg data-v-a25903e0="" data-icon="" name="grip" size="16"></svg></span>
             </div>
-            <p data-v-a25903e0="" class="stop__note">Icebergs calving into the lagoon, then Diamond Beach at golden hour. Camp at Höfn after.</p>
+            <p data-v-a25903e0="" class="stop__note"> Icebergs calving into the lagoon, then Diamond Beach at golden hour. Camp at Höfn after. </p>
             <div data-v-a25903e0="" class="stop__foot"><span data-v-a25903e0="" class="m"><svg data-v-a25903e0="" data-icon="" name="clock" size="12"></svg> arrive ~2:30pm</span><span data-v-a25903e0="" class="m"><svg data-v-a25903e0="" data-icon="" name="ruler" size="12"></svg> 270 km</span><span data-v-a25903e0="" class="m"><svg data-v-a25903e0="" data-icon="" name="bookmark" size="12"></svg> 3 saved spots</span></div>
           </div>
         </div>
@@ -91,7 +91,7 @@ exports[`Trip Detail page (/trips/[id]) > renders without crashing and matches s
             <div data-v-a25903e0="" class="stop__top">
               <div data-v-a25903e0="">
                 <div data-v-a25903e0="" class="stop__name">Höfn &amp; the eastfjords</div>
-                <div data-v-a25903e0="" class="stop__sub"><svg data-v-a25903e0="" data-icon="" name="calendar" size="12"></svg> Jun 14–15 · 1 night</div>
+                <div data-v-a25903e0="" class="stop__sub"><svg data-v-a25903e0="" data-icon="" name="calendar" size="12"></svg> Jun 14–15 · 1 night </div>
               </div><span data-v-a25903e0="" class="stop__grip"><svg data-v-a25903e0="" data-icon="" name="grip" size="16"></svg></span>
             </div>
             <div data-v-a25903e0="" class="stop__foot"><span data-v-a25903e0="" class="m"><svg data-v-a25903e0="" data-icon="" name="ruler" size="12"></svg> 180 km</span><span data-v-a25903e0="" class="m"><svg data-v-a25903e0="" data-icon="" name="bookmark" size="12"></svg> langoustine, harbour</span></div>
@@ -105,7 +105,7 @@ exports[`Trip Detail page (/trips/[id]) > renders without crashing and matches s
             <div data-v-a25903e0="" class="stop__top">
               <div data-v-a25903e0="">
                 <div data-v-a25903e0="" class="stop__name">Mývatn &amp; the north</div>
-                <div data-v-a25903e0="" class="stop__sub"><svg data-v-a25903e0="" data-icon="" name="calendar" size="12"></svg> Jun 16 · geothermal</div>
+                <div data-v-a25903e0="" class="stop__sub"><svg data-v-a25903e0="" data-icon="" name="calendar" size="12"></svg> Jun 16 · geothermal </div>
               </div><span data-v-a25903e0="" class="stop__grip"><svg data-v-a25903e0="" data-icon="" name="grip" size="16"></svg></span>
             </div>
             <div data-v-a25903e0="" class="stop__foot"><span data-v-a25903e0="" class="m"><svg data-v-a25903e0="" data-icon="" name="ruler" size="12"></svg> 360 km</span><span data-v-a25903e0="" class="m"><svg data-v-a25903e0="" data-icon="" name="bookmark" size="12"></svg> nature baths</span></div>
@@ -133,7 +133,7 @@ exports[`Trip Detail page (/trips/[id]) > renders without crashing and matches s
         <div class="fact" data-v-a25903e0=""><span class="k" data-v-a25903e0="">Visibility</span><span class="v" data-v-a25903e0="">Private</span></div>
       </div>
       <div data-v-a25903e0="" class="rail-card">
-        <h4 data-v-a25903e0="" class="display" style="display: flex; align-items: center; justify-content: space-between;"> Travelling with <button data-v-a25903e0="" class="label label--plain" style="font-size: 10px; border: none none; background: none none; color: var(--accent-ink);">invite</button></h4>
+        <h4 data-v-a25903e0="" class="display" style="display: flex; align-items: center; justify-content: space-between;"> Travelling with <button data-v-a25903e0="" class="label label--plain" style="font-size: 10px; border: none none; background: none none; color: var(--accent-ink);"> invite </button></h4>
         <div data-v-a25903e0="" class="companions">
           <div data-v-a25903e0="" class="companion"><span data-v-a25903e0="" class="companion__av"><svg data-v-a25903e0="" data-icon="" name="user" size="16"></svg></span>
             <div data-v-a25903e0=""><b data-v-a25903e0="">Maya R.</b><br data-v-a25903e0=""><span data-v-a25903e0="">@mayarambles · editor</span></div>

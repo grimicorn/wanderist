@@ -11,10 +11,10 @@ exports[`Pricing page (/pricing) > renders without crashing and matches snapshot
   <header data-v-330b0f26="" class="cmp-head" data-reveal="">
     <div data-v-330b0f26="" class="topo topo--fade"></div>
     <div data-v-330b0f26="" class="cmp-head__in">
-      <div data-v-330b0f26="" class="label" style="justify-content: center;">// compare plans</div>
+      <div data-v-330b0f26="" class="label" style="justify-content: center;"> // compare plans </div>
       <h1 data-v-330b0f26="">Every feature,<br data-v-330b0f26=""><b data-v-330b0f26="">side by side.</b></h1>
       <p data-v-330b0f26="">Find the plan that fits how you travel. Switch or cancel anytime.</p>
-      <div data-v-330b0f26="" class="billing"><button data-v-330b0f26="" class="is-active">Monthly</button><button data-v-330b0f26="" class=""> Yearly <span data-v-330b0f26="" class="save">−25%</span></button></div>
+      <div data-v-330b0f26="" class="billing"><button data-v-330b0f26="" class="is-active"> Monthly </button><button data-v-330b0f26="" class=""> Yearly <span data-v-330b0f26="" class="save">−25%</span></button></div>
     </div>
   </header><!-- TABLE -->
   <div data-v-330b0f26="" class="table-wrap" data-reveal="">
@@ -24,7 +24,7 @@ exports[`Pricing page (/pricing) > renders without crashing and matches snapshot
           <th data-v-330b0f26="" class="thd thd--feat"><span data-v-330b0f26="" class="thd__name">Features</span></th>
           <th data-v-330b0f26="" class="thd">
             <div data-v-330b0f26="" class="thd__name">Drifter</div>
-            <div data-v-330b0f26="" class="thd__price">$0<span data-v-330b0f26="" class="thd__per">/forever</span></div>
+            <div data-v-330b0f26="" class="thd__price"> $0<span data-v-330b0f26="" class="thd__per">/forever</span></div>
             <div data-v-330b0f26="" class="thd__cta"><a data-v-330b0f26="" class="btn btn--outline btn--sm btn--block">start</a></div>
           </th>
           <th data-v-330b0f26="" class="thd thd--pop">

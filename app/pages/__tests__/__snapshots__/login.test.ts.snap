@@ -11,7 +11,7 @@ exports[`Login page (/login) > renders without crashing and matches snapshot 1`]
     <div class="brand-mid" data-v-43592d06="">
       <div class="label" data-v-43592d06="">// 117 places · 9 countries</div>
       <h1 style="margin-top:14px;" data-v-43592d06="">Your map is<br data-v-43592d06=""><b data-v-43592d06="">waiting.</b></h1>
-      <p data-v-43592d06="">Pick up where you left off — every pin, journal entry and photo, exactly where you dropped it.</p>
+      <p data-v-43592d06=""> Pick up where you left off — every pin, journal entry and photo, exactly where you dropped it. </p>
       <div class="stamp" data-v-43592d06="">
         <div data-v-43592d06="">
           <div class="k" data-v-43592d06="">Last entry</div>

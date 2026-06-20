@@ -7,7 +7,7 @@ exports[`Home / Dashboard page (/home) > renders without crashing and matches sn
     <div data-v-10844834="">
       <div data-v-10844834="" class="label">// evening · fri, jun 14</div>
       <h1 data-v-10844834="" style="margin-top: 10px;">Welcome back, <b data-v-10844834="">Dan.</b></h1>
-      <p data-v-10844834="">You've been to 9 countries. Iceland is your most-journaled trip this year.</p>
+      <p data-v-10844834=""> You've been to 9 countries. Iceland is your most-journaled trip this year. </p>
     </div><a data-v-10844834="" class="btn btn--outline"><svg data-v-10844834="" data-icon="" name="map" size="16"></svg> open the map </a>
   </div><!-- Import alert -->
   <div data-v-10844834="" class="alert alert--info" style="margin-bottom: 22px;"><svg data-v-10844834="" data-icon="" name="instagram" size="18" class="alert__ico"></svg>
@@ -48,23 +48,23 @@ exports[`Home / Dashboard page (/home) > renders without crashing and matches sn
       <div data-v-10844834="" class="map-card__bar"><span data-v-10844834="" class="label label--plain" style="color: var(--ink);">Your world</span><span data-v-10844834="" class="grow"></span><span data-v-10844834="" class="tag">117 pins</span><a data-v-10844834="" class="btn btn--ghost btn--sm"> expand <svg data-v-10844834="" data-icon="" name="arrow-right" size="14"></svg></a></div>
       <div data-v-10844834="" class="map-body">
         <div data-v-10844834="" class="map-panel">
-          <div data-v-10844834="" class="topo" style="opacity: .4;"></div>
+          <div data-v-10844834="" class="topo" style="opacity: 0.4;"></div>
         </div><a data-v-10844834="" class="pin-abs" style="left: 24%; top: 40%;"><svg data-v-10844834="" data-icon="" name="pin" size="24" class="pin"></svg><span data-v-10844834="" class="pin-tip">Reykjavík · 4 entries</span></a><a data-v-10844834="" class="pin-abs sm" style="left: 47%; top: 34%;"><svg data-v-10844834="" data-icon="" name="pin" size="17" class="pin"></svg><span data-v-10844834="" class="pin-tip">London</span></a><a data-v-10844834="" class="pin-abs sm" style="left: 45%; top: 52%;"><svg data-v-10844834="" data-icon="" name="pin" size="17" class="pin"></svg><span data-v-10844834="" class="pin-tip">Lisbon · 12 photos</span></a><a data-v-10844834="" class="pin-abs sm" style="left: 72%; top: 44%;"><svg data-v-10844834="" data-icon="" name="pin" size="17" class="pin"></svg><span data-v-10844834="" class="pin-tip">Tokyo</span></a><a data-v-10844834="" class="pin-abs sm" style="left: 82%; top: 66%;"><svg data-v-10844834="" data-icon="" name="pin" size="17" class="pin"></svg><span data-v-10844834="" class="pin-tip">Sydney</span></a><a data-v-10844834="" class="pin-abs sm" style="left: 30%; top: 62%;"><svg data-v-10844834="" data-icon="" name="pin" size="17" class="pin"></svg><span data-v-10844834="" class="pin-tip">Marrakech</span></a>
       </div>
     </div>
     <div data-v-10844834="" class="trip-card">
       <div class="label" data-v-10844834="">// current trip</div>
       <div class="trip-hero ph" style="margin-top:12px;" data-v-10844834="">
-        <div class="topo" style="opacity:.5;" data-v-10844834=""></div><span class="ph__tag" style="position:relative;z-index:2;" data-v-10844834="">cover · iceland</span>
+        <div class="topo" style="opacity:0.5;" data-v-10844834=""></div><span class="ph__tag" style="position:relative;z-index:2;" data-v-10844834="">cover · iceland</span>
       </div>
       <h3 style="font-size:18px;" data-v-10844834="">Iceland, the ring road</h3>
-      <p class="muted" style="font-size:12px;margin:4px 0 0;" data-v-10844834="">Day 6 of 9 · 4 of 7 stops logged</p>
+      <p class="muted" style="font-size:12px;margin:4px 0 0;" data-v-10844834=""> Day 6 of 9 · 4 of 7 stops logged </p>
       <div class="progress" data-v-10844834=""><span style="width:64%;" data-v-10844834=""></span></div>
       <div class="hstack" style="justify-content:space-between;font-size:11px;color:var(--muted);" data-v-10844834=""><span data-v-10844834="">64% logged</span><span data-v-10844834="">3 days left</span></div>
       <div data-v-10844834="" class="nextstop"><svg data-v-10844834="" data-icon="" name="pin" size="18" style="color: var(--accent);"></svg>
         <div data-v-10844834="">
-          <div data-v-10844834="" style="font-size: 12.5px; font-weight: 600;">Next: Jökulsárlón</div>
-          <div data-v-10844834="" style="font-size: 11px; color: var(--muted);">glacier lagoon · 1h 40m drive</div>
+          <div data-v-10844834="" style="font-size: 12.5px; font-weight: 600;"> Next: Jökulsárlón </div>
+          <div data-v-10844834="" style="font-size: 11px; color: var(--muted);"> glacier lagoon · 1h 40m drive </div>
         </div>
       </div>
     </div>
@@ -72,12 +72,12 @@ exports[`Home / Dashboard page (/home) > renders without crashing and matches sn
   <div data-v-10844834="" class="feed-head">
     <div data-v-10844834="">
       <div data-v-10844834="" class="label">// recent entries</div>
-      <h2 data-v-10844834="" class="display" style="font-size: 20px; margin-top: 8px;">From the journal</h2>
+      <h2 data-v-10844834="" class="display" style="font-size: 20px; margin-top: 8px;"> From the journal </h2>
     </div><a data-v-10844834="" class="btn btn--ghost btn--sm"> view all <svg data-v-10844834="" data-icon="" name="arrow-right" size="14"></svg></a>
   </div>
   <div data-v-10844834="" class="entries"><a data-v-10844834="" class="entry">
       <div data-v-10844834="" class="entry__thumb ph">
-        <div data-v-10844834="" class="topo" style="opacity: .4;"></div>
+        <div data-v-10844834="" class="topo" style="opacity: 0.4;"></div>
       </div>
       <div data-v-10844834="" class="entry__meta">
         <div data-v-10844834="" class="entry__loc"><svg data-v-10844834="" data-icon="" name="pin" size="11"></svg> Reykjavík, IS</div>
@@ -87,7 +87,7 @@ exports[`Home / Dashboard page (/home) > renders without crashing and matches sn
       </div>
     </a><a data-v-10844834="" class="entry">
       <div data-v-10844834="" class="entry__thumb ph">
-        <div data-v-10844834="" class="topo" style="opacity: .4;"></div>
+        <div data-v-10844834="" class="topo" style="opacity: 0.4;"></div>
       </div>
       <div data-v-10844834="" class="entry__meta">
         <div data-v-10844834="" class="entry__loc"><svg data-v-10844834="" data-icon="" name="pin" size="11"></svg> Lisbon, PT</div>
