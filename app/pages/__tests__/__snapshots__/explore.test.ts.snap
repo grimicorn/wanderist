@@ -1,0 +1,157 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Explore page (/explore) > renders without crashing and matches snapshot 1`] = `
+"<div data-v-fccf1d79="" class="content content--wide">
+  <header data-v-fccf1d79="" class="topbar"><button data-v-fccf1d79="" class="icon-btn" aria-label="Search"><svg data-v-fccf1d79="" data-icon="" name="search" size="18"></svg></button><button data-v-fccf1d79="" class="icon-btn" aria-label="Alerts"><svg data-v-fccf1d79="" data-icon="" name="bell" size="18"></svg></button><button data-v-fccf1d79="" class="btn btn--primary btn--sm"><svg data-v-fccf1d79="" data-icon="" name="plus" size="14"></svg> new entry </button></header><!-- Hero search -->
+  <div data-v-fccf1d79="" class="xhero">
+    <div data-v-fccf1d79="" class="topo"></div>
+    <div data-v-fccf1d79="" class="xhero__in">
+      <div data-v-fccf1d79="" class="label">// discover</div>
+      <h1 data-v-fccf1d79="">Where to next?</h1>
+      <p data-v-fccf1d79="">Curated destinations, guides from travelers you follow, and places trending across Wanderist.</p><label data-v-fccf1d79="" class="xsearch"><svg data-v-fccf1d79="" data-icon="" name="search" size="18"></svg><input data-v-fccf1d79="" placeholder="Search a city, country, or kind of place…"><span data-v-fccf1d79="" class="kbd">⌘K</span></label>
+      <div data-v-fccf1d79="" class="xchips"><span data-v-fccf1d79="" class="xchip">Cold-water swims</span><span data-v-fccf1d79="" class="xchip">Northern lights</span><span data-v-fccf1d79="" class="xchip">Slow coastlines</span><span data-v-fccf1d79="" class="xchip">Food cities</span><span data-v-fccf1d79="" class="xchip">Off-season Europe</span></div>
+    </div>
+  </div><!-- Featured destinations -->
+  <section data-v-fccf1d79="" class="xsec">
+    <div data-v-fccf1d79="" class="sec-head">
+      <div data-v-fccf1d79="">
+        <div data-v-fccf1d79="" class="label">// featured this week</div>
+        <h2 data-v-fccf1d79="">Destinations to dream on</h2>
+      </div><a data-v-fccf1d79="" class="btn btn--ghost btn--sm" href="#"> see all <svg data-v-fccf1d79="" data-icon="" name="arrow-right" size="14"></svg></a>
+    </div>
+    <div data-v-fccf1d79="" class="feat-row"><a data-v-fccf1d79="" class="feat ph" href="#">
+        <div data-v-fccf1d79="" class="topo"></div>
+        <div data-v-fccf1d79="" class="feat__veil"></div><button data-v-fccf1d79="" class="feat__save" aria-label="Save"><svg data-v-fccf1d79="" data-icon="" name="bookmark" size="15"></svg></button>
+        <div data-v-fccf1d79="" class="feat__in">
+          <div data-v-fccf1d79="" class="feat__kicker">Iceland · summer</div>
+          <div data-v-fccf1d79="" class="feat__title">The ring road, slowly</div>
+          <div data-v-fccf1d79="" class="feat__meta"><span data-v-fccf1d79=""><svg data-v-fccf1d79="" data-icon="" name="route" size="12"></svg> 9 days</span><span data-v-fccf1d79=""><svg data-v-fccf1d79="" data-icon="" name="pin" size="12"></svg> 7 stops</span><span data-v-fccf1d79=""><svg data-v-fccf1d79="" data-icon="" name="heart" size="12"></svg> 2.4k</span></div>
+        </div>
+      </a><a data-v-fccf1d79="" class="feat ph" href="#">
+        <div data-v-fccf1d79="" class="topo"></div>
+        <div data-v-fccf1d79="" class="feat__veil"></div><button data-v-fccf1d79="" class="feat__save" aria-label="Save"><svg data-v-fccf1d79="" data-icon="" name="bookmark" size="15"></svg></button>
+        <div data-v-fccf1d79="" class="feat__in">
+          <div data-v-fccf1d79="" class="feat__kicker">Portugal · coast</div>
+          <div data-v-fccf1d79="" class="feat__title">Lisbon to the Algarve</div>
+          <div data-v-fccf1d79="" class="feat__meta"><span data-v-fccf1d79=""><svg data-v-fccf1d79="" data-icon="" name="route" size="12"></svg> 7 days</span><span data-v-fccf1d79=""><svg data-v-fccf1d79="" data-icon="" name="pin" size="12"></svg> 5 stops</span><span data-v-fccf1d79=""><svg data-v-fccf1d79="" data-icon="" name="heart" size="12"></svg> 1.8k</span></div>
+        </div>
+      </a><a data-v-fccf1d79="" class="feat ph" href="#">
+        <div data-v-fccf1d79="" class="topo"></div>
+        <div data-v-fccf1d79="" class="feat__veil"></div><button data-v-fccf1d79="" class="feat__save" aria-label="Save"><svg data-v-fccf1d79="" data-icon="" name="bookmark" size="15"></svg></button>
+        <div data-v-fccf1d79="" class="feat__in">
+          <div data-v-fccf1d79="" class="feat__kicker">Japan · autumn</div>
+          <div data-v-fccf1d79="" class="feat__title">North to south by rail</div>
+          <div data-v-fccf1d79="" class="feat__meta"><span data-v-fccf1d79=""><svg data-v-fccf1d79="" data-icon="" name="route" size="12"></svg> 18 days</span><span data-v-fccf1d79=""><svg data-v-fccf1d79="" data-icon="" name="pin" size="12"></svg> 9 stops</span><span data-v-fccf1d79=""><svg data-v-fccf1d79="" data-icon="" name="heart" size="12"></svg> 3.1k</span></div>
+        </div>
+      </a></div>
+  </section><!-- Trending places -->
+  <section data-v-fccf1d79="" class="xsec">
+    <div data-v-fccf1d79="" class="sec-head">
+      <div data-v-fccf1d79="">
+        <div data-v-fccf1d79="" class="label">// trending places</div>
+        <h2 data-v-fccf1d79="">Pinned a lot this month</h2>
+      </div>
+    </div>
+    <div data-v-fccf1d79="" class="filter-row"><button data-v-fccf1d79="" class="fbtn is-active">All</button><button data-v-fccf1d79="" class="fbtn">Nature</button><button data-v-fccf1d79="" class="fbtn">Cities</button><button data-v-fccf1d79="" class="fbtn">Coast</button><button data-v-fccf1d79="" class="fbtn">Food</button><button data-v-fccf1d79="" class="fbtn">Culture</button></div>
+    <div data-v-fccf1d79="" class="place-grid"><a data-v-fccf1d79="" class="pcard" href="#">
+        <div data-v-fccf1d79="" class="pcard__cover ph">
+          <div data-v-fccf1d79="" class="topo"></div><span data-v-fccf1d79="" class="pcard__tag tag tag--accent">nature</span>
+        </div>
+        <div data-v-fccf1d79="" class="pcard__body">
+          <div data-v-fccf1d79="" class="pcard__name">Reynisfjara</div>
+          <div data-v-fccf1d79="" class="pcard__loc"><svg data-v-fccf1d79="" data-icon="" name="pin" size="11"></svg> Vík, Iceland</div>
+          <div data-v-fccf1d79="" class="pcard__foot"><span data-v-fccf1d79="" class="saves"><svg data-v-fccf1d79="" data-icon="" name="bookmark" size="12"></svg> 4.2k saves </span><span data-v-fccf1d79=""><svg data-v-fccf1d79="" data-icon="" name="trending" size="12" style="vertical-align: -2px;"></svg> +18%</span></div>
+        </div>
+      </a><a data-v-fccf1d79="" class="pcard" href="#">
+        <div data-v-fccf1d79="" class="pcard__cover ph">
+          <div data-v-fccf1d79="" class="topo"></div><span data-v-fccf1d79="" class="pcard__tag tag tag--accent">city</span>
+        </div>
+        <div data-v-fccf1d79="" class="pcard__body">
+          <div data-v-fccf1d79="" class="pcard__name">Alfama</div>
+          <div data-v-fccf1d79="" class="pcard__loc"><svg data-v-fccf1d79="" data-icon="" name="pin" size="11"></svg> Lisbon, Portugal</div>
+          <div data-v-fccf1d79="" class="pcard__foot"><span data-v-fccf1d79="" class="saves"><svg data-v-fccf1d79="" data-icon="" name="bookmark" size="12"></svg> 3.7k saves </span><span data-v-fccf1d79=""><svg data-v-fccf1d79="" data-icon="" name="trending" size="12" style="vertical-align: -2px;"></svg> +24%</span></div>
+        </div>
+      </a><a data-v-fccf1d79="" class="pcard" href="#">
+        <div data-v-fccf1d79="" class="pcard__cover ph">
+          <div data-v-fccf1d79="" class="topo"></div><span data-v-fccf1d79="" class="pcard__tag tag tag--accent">coast</span>
+        </div>
+        <div data-v-fccf1d79="" class="pcard__body">
+          <div data-v-fccf1d79="" class="pcard__name">Diamond Beach</div>
+          <div data-v-fccf1d79="" class="pcard__loc"><svg data-v-fccf1d79="" data-icon="" name="pin" size="11"></svg> Jökulsárlón, Iceland</div>
+          <div data-v-fccf1d79="" class="pcard__foot"><span data-v-fccf1d79="" class="saves"><svg data-v-fccf1d79="" data-icon="" name="bookmark" size="12"></svg> 2.9k saves </span><span data-v-fccf1d79=""><svg data-v-fccf1d79="" data-icon="" name="trending" size="12" style="vertical-align: -2px;"></svg> +12%</span></div>
+        </div>
+      </a><a data-v-fccf1d79="" class="pcard" href="#">
+        <div data-v-fccf1d79="" class="pcard__cover ph">
+          <div data-v-fccf1d79="" class="topo"></div><span data-v-fccf1d79="" class="pcard__tag tag tag--accent">food</span>
+        </div>
+        <div data-v-fccf1d79="" class="pcard__body">
+          <div data-v-fccf1d79="" class="pcard__name">Tsukiji outer market</div>
+          <div data-v-fccf1d79="" class="pcard__loc"><svg data-v-fccf1d79="" data-icon="" name="pin" size="11"></svg> Tokyo, Japan</div>
+          <div data-v-fccf1d79="" class="pcard__foot"><span data-v-fccf1d79="" class="saves"><svg data-v-fccf1d79="" data-icon="" name="bookmark" size="12"></svg> 5.1k saves </span><span data-v-fccf1d79=""><svg data-v-fccf1d79="" data-icon="" name="trending" size="12" style="vertical-align: -2px;"></svg> +9%</span></div>
+        </div>
+      </a></div>
+  </section><!-- Guides + People -->
+  <section data-v-fccf1d79="" class="xsec">
+    <div data-v-fccf1d79="" class="two-col">
+      <!-- Guides -->
+      <div data-v-fccf1d79="">
+        <div data-v-fccf1d79="" class="sec-head">
+          <div data-v-fccf1d79="">
+            <div data-v-fccf1d79="" class="label">// guides</div>
+            <h2 data-v-fccf1d79="">Reads for your next trip</h2>
+          </div>
+        </div><a data-v-fccf1d79="" class="guide" href="#">
+          <div data-v-fccf1d79="" class="guide__thumb ph">
+            <div data-v-fccf1d79="" class="topo" style="opacity: .4;"></div>
+          </div>
+          <div data-v-fccf1d79="">
+            <div data-v-fccf1d79="" class="guide__name">The cold-water swimming guide to Iceland</div>
+            <div data-v-fccf1d79="" class="guide__by">by @elsa_far · 14 spots mapped</div>
+            <div data-v-fccf1d79="" class="guide__meta"><span data-v-fccf1d79="" class="m"><svg data-v-fccf1d79="" data-icon="" name="clock" size="12"></svg> 8 min read </span><span data-v-fccf1d79="" class="m"><svg data-v-fccf1d79="" data-icon="" name="heart" size="12"></svg> 412</span></div>
+          </div>
+        </a><a data-v-fccf1d79="" class="guide" href="#">
+          <div data-v-fccf1d79="" class="guide__thumb ph">
+            <div data-v-fccf1d79="" class="topo" style="opacity: .4;"></div>
+          </div>
+          <div data-v-fccf1d79="">
+            <div data-v-fccf1d79="" class="guide__name">Lisbon on foot: a hill-by-hill walk</div>
+            <div data-v-fccf1d79="" class="guide__by">by @marco.travels · 9 stops</div>
+            <div data-v-fccf1d79="" class="guide__meta"><span data-v-fccf1d79="" class="m"><svg data-v-fccf1d79="" data-icon="" name="clock" size="12"></svg> 6 min read </span><span data-v-fccf1d79="" class="m"><svg data-v-fccf1d79="" data-icon="" name="heart" size="12"></svg> 287</span></div>
+          </div>
+        </a><a data-v-fccf1d79="" class="guide" href="#">
+          <div data-v-fccf1d79="" class="guide__thumb ph">
+            <div data-v-fccf1d79="" class="topo" style="opacity: .4;"></div>
+          </div>
+          <div data-v-fccf1d79="">
+            <div data-v-fccf1d79="" class="guide__name">Eating Tokyo for a week without a plan</div>
+            <div data-v-fccf1d79="" class="guide__by">by @yuki · 21 spots mapped</div>
+            <div data-v-fccf1d79="" class="guide__meta"><span data-v-fccf1d79="" class="m"><svg data-v-fccf1d79="" data-icon="" name="clock" size="12"></svg> 11 min read </span><span data-v-fccf1d79="" class="m"><svg data-v-fccf1d79="" data-icon="" name="heart" size="12"></svg> 638</span></div>
+          </div>
+        </a>
+      </div><!-- People -->
+      <div data-v-fccf1d79="">
+        <div data-v-fccf1d79="" class="sec-head">
+          <div data-v-fccf1d79="">
+            <div data-v-fccf1d79="" class="label">// people</div>
+            <h2 data-v-fccf1d79="">Travelers to follow</h2>
+          </div>
+        </div>
+        <div data-v-fccf1d79="" class="card card--pad" style="padding: 16px 18px;">
+          <div data-v-fccf1d79="" class="person"><span data-v-fccf1d79="" class="person__av"><svg data-v-fccf1d79="" data-icon="" name="user" size="19"></svg></span>
+            <div data-v-fccf1d79="" class="person__name"><b data-v-fccf1d79="">Elsa Farþegi</b><span data-v-fccf1d79="">@elsa_far · Reykjavík · 84 places</span></div><button data-v-fccf1d79="" class="btn btn--sm btn--outline">follow</button>
+          </div>
+          <div data-v-fccf1d79="" class="person"><span data-v-fccf1d79="" class="person__av"><svg data-v-fccf1d79="" data-icon="" name="user" size="19"></svg></span>
+            <div data-v-fccf1d79="" class="person__name"><b data-v-fccf1d79="">Marco Reis</b><span data-v-fccf1d79="">@marco.travels · Lisbon · 2100 places</span></div><button data-v-fccf1d79="" class="btn btn--sm btn--outline">follow</button>
+          </div>
+          <div data-v-fccf1d79="" class="person"><span data-v-fccf1d79="" class="person__av"><svg data-v-fccf1d79="" data-icon="" name="user" size="19"></svg></span>
+            <div data-v-fccf1d79="" class="person__name"><b data-v-fccf1d79="">Yuki Tanaka</b><span data-v-fccf1d79="">@yuki · Tokyo · 510 places</span></div><button data-v-fccf1d79="" class="btn btn--sm btn--primary"><svg data-v-fccf1d79="" data-icon="" name="check" size="14"></svg> following </button>
+          </div>
+          <div data-v-fccf1d79="" class="person"><span data-v-fccf1d79="" class="person__av"><svg data-v-fccf1d79="" data-icon="" name="user" size="19"></svg></span>
+            <div data-v-fccf1d79="" class="person__name"><b data-v-fccf1d79="">Maya Rambles</b><span data-v-fccf1d79="">@mayarambles · Oslo · 332 places</span></div><button data-v-fccf1d79="" class="btn btn--sm btn--outline">follow</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>"
+`;

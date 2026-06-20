@@ -1,0 +1,158 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Settings page (/settings) > renders without crashing and matches snapshot 1`] = `
+"<div data-v-a376170b="">
+  <header data-v-a376170b="" class="topbar"><button data-v-a376170b="" class="btn btn--ghost btn--sm">discard</button><button data-v-a376170b="" class="btn btn--primary btn--sm"><svg data-v-a376170b="" data-icon="" name="check" size="14"></svg> save changes </button></header>
+  <div data-v-a376170b="" class="content content--wide">
+    <div data-v-a376170b="" class="set-layout">
+      <!-- Side nav -->
+      <nav data-v-a376170b="" class="set-nav"><a data-v-a376170b="" href="#profile" class="is-active">Profile</a><a data-v-a376170b="" href="#account" class="">Email &amp; password</a><a data-v-a376170b="" href="#connections" class="">Connections</a><a data-v-a376170b="" href="#prefs" class="">Units &amp; map</a><a data-v-a376170b="" href="#privacy" class="">Privacy</a><a data-v-a376170b="" href="#danger" class="">Danger zone</a></nav>
+      <div data-v-a376170b="" class="set-sections">
+        <!-- Profile -->
+        <section data-v-a376170b="" id="profile" class="sect">
+          <div data-v-a376170b="" class="sect__head">
+            <div data-v-a376170b="" class="label">// 01 — profile</div>
+            <h3 data-v-a376170b="" class="display" style="margin-top: 8px;">Profile</h3>
+            <p data-v-a376170b="">How you show up across Wanderist and your public traveler profile.</p>
+          </div>
+          <div data-v-a376170b="" class="avatar-row">
+            <div data-v-a376170b="" class="avatar">
+              <div data-v-a376170b="" class="topo"></div><svg data-v-a376170b="" data-icon="" name="user" size="30" style="position: relative; z-index: 2;"></svg>
+            </div>
+            <div data-v-a376170b="" class="vstack gap-8">
+              <div data-v-a376170b="" class="hstack gap-8" style="flex-wrap: wrap;"><button data-v-a376170b="" class="btn btn--outline btn--sm"><svg data-v-a376170b="" data-icon="" name="camera" size="14"></svg> upload photo </button><button data-v-a376170b="" class="btn btn--ghost btn--sm">remove</button></div><span data-v-a376170b="" class="muted" style="font-size: 11px;">JPG or PNG · up to 4MB · square works best</span>
+            </div>
+          </div>
+          <div data-v-a376170b="" class="row"><input data-v-a376170b=""><input data-v-a376170b=""></div><input data-v-a376170b=""><textarea data-v-a376170b=""></textarea>
+        </section><!-- Account -->
+        <section data-v-a376170b="" id="account" class="sect">
+          <div data-v-a376170b="" class="sect__head">
+            <div data-v-a376170b="" class="label">// 02 — account</div>
+            <h3 data-v-a376170b="" class="display" style="margin-top: 8px;">Email &amp; password</h3>
+            <p data-v-a376170b="">Used to sign in and for important trip notifications.</p>
+          </div><input data-v-a376170b="">
+          <div data-v-a376170b="" class="opt-row">
+            <div data-v-a376170b="" class="lbl"><b data-v-a376170b="">Password</b>
+              <p data-v-a376170b="">Last changed 3 months ago.</p>
+            </div><button data-v-a376170b="" class="btn btn--outline btn--sm"><svg data-v-a376170b="" data-icon="" name="lock" size="14"></svg> change password </button>
+          </div>
+          <!--v-if-->
+        </section><!-- Connections -->
+        <section data-v-a376170b="" id="connections" class="sect">
+          <div data-v-a376170b="" class="sect__head">
+            <div data-v-a376170b="" class="label">// 03 — connections</div>
+            <h3 data-v-a376170b="" class="display" style="margin-top: 8px;">Connected accounts</h3>
+            <p data-v-a376170b="">Pull in geotagged photos and sign in faster.</p>
+          </div>
+          <div data-v-a376170b="" class="conn">
+            <div data-v-a376170b="" class="conn__logo"><svg data-v-a376170b="" data-icon="" name="instagram" size="20"></svg></div>
+            <div data-v-a376170b="" class="conn__meta"><b data-v-a376170b="">Instagram</b>
+              <p data-v-a376170b="">Auto-import geotagged photos into your entries.</p>
+            </div>
+            <div data-v-a376170b="" class="right"><button data-v-a376170b="" class="btn btn--primary btn--sm"><svg data-v-a376170b="" data-icon="" name="plus" size="14"></svg> connect </button></div>
+          </div>
+          <div data-v-a376170b="" class="conn">
+            <div data-v-a376170b="" class="conn__logo"><svg data-v-a376170b="" data-icon="" name="google" size="20"></svg></div>
+            <div data-v-a376170b="" class="conn__meta"><b data-v-a376170b="">Google</b>
+              <p data-v-a376170b="">Signed in as you@domain.com</p>
+            </div>
+            <div data-v-a376170b="" class="right"><span data-v-a376170b="" class="status-dot">connected</span><button data-v-a376170b="" class="btn btn--ghost btn--sm">disconnect</button></div>
+          </div>
+        </section><!-- Prefs -->
+        <section data-v-a376170b="" id="prefs" class="sect">
+          <div data-v-a376170b="" class="sect__head">
+            <div data-v-a376170b="" class="label">// 04 — preferences</div>
+            <h3 data-v-a376170b="" class="display" style="margin-top: 8px;">Units &amp; map</h3>
+            <p data-v-a376170b="">How distances and your map look across the app.</p>
+          </div>
+          <div data-v-a376170b="" class="opt-row">
+            <div data-v-a376170b="" class="lbl"><b data-v-a376170b="">Distance units</b>
+              <p data-v-a376170b="">Used for trip stats and mileage.</p>
+            </div>
+            <div data-v-a376170b="" class="segmented"><button data-v-a376170b="" class="is-active">miles</button><button data-v-a376170b="" class="">kilometres</button></div>
+          </div>
+          <div data-v-a376170b="" class="opt-row" style="display: block; border-bottom-width: initial; border-bottom-style: none; border-bottom-color: none;">
+            <div data-v-a376170b="" class="lbl" style="margin-bottom: 12px;"><b data-v-a376170b="">Default map style</b>
+              <p data-v-a376170b="">The base layer for your map and pins.</p>
+            </div>
+            <div data-v-a376170b="" class="map-style-grid"><label data-v-a376170b="" class="map-style is-active"><input data-v-a376170b="" type="radio" name="mapstyle" checked="">
+                <div data-v-a376170b="" class="map-style__pv pv-outdoors"></div>
+                <div data-v-a376170b="" class="map-style__l">Outdoors <svg data-v-a376170b="" data-icon="" name="check" size="14" class="check"></svg></div>
+              </label><label data-v-a376170b="" class="map-style"><input data-v-a376170b="" type="radio" name="mapstyle">
+                <div data-v-a376170b="" class="map-style__pv pv-streets"></div>
+                <div data-v-a376170b="" class="map-style__l">Streets
+                  <!--v-if-->
+                </div>
+              </label><label data-v-a376170b="" class="map-style"><input data-v-a376170b="" type="radio" name="mapstyle">
+                <div data-v-a376170b="" class="map-style__pv pv-satellite"></div>
+                <div data-v-a376170b="" class="map-style__l">Satellite
+                  <!--v-if-->
+                </div>
+              </label><label data-v-a376170b="" class="map-style"><input data-v-a376170b="" type="radio" name="mapstyle">
+                <div data-v-a376170b="" class="map-style__pv pv-light"></div>
+                <div data-v-a376170b="" class="map-style__l">Light
+                  <!--v-if-->
+                </div>
+              </label><label data-v-a376170b="" class="map-style"><input data-v-a376170b="" type="radio" name="mapstyle">
+                <div data-v-a376170b="" class="map-style__pv pv-dark"></div>
+                <div data-v-a376170b="" class="map-style__l">Dark
+                  <!--v-if-->
+                </div>
+              </label><label data-v-a376170b="" class="map-style"><input data-v-a376170b="" type="radio" name="mapstyle">
+                <div data-v-a376170b="" class="map-style__pv pv-custom"></div>
+                <div data-v-a376170b="" class="map-style__l">Wanderist violet
+                  <!--v-if-->
+                </div>
+              </label></div>
+          </div>
+        </section><!-- Privacy -->
+        <section data-v-a376170b="" id="privacy" class="sect">
+          <div data-v-a376170b="" class="sect__head">
+            <div data-v-a376170b="" class="label">// 05 — privacy</div>
+            <h3 data-v-a376170b="" class="display" style="margin-top: 8px;">Privacy</h3>
+            <p data-v-a376170b="">Decide what's public and how precise your locations are.</p>
+          </div>
+          <div data-v-a376170b="" class="opt-row">
+            <div data-v-a376170b="" class="lbl"><b data-v-a376170b="">Public traveler profile</b>
+              <p data-v-a376170b="">Let anyone view your published trips at wanderist.app/@danh.</p>
+            </div><label data-v-a376170b="" class="switch"><input data-v-a376170b="" type="checkbox"><span data-v-a376170b=""></span></label>
+          </div>
+          <div data-v-a376170b="" class="opt-row">
+            <div data-v-a376170b="" class="lbl"><b data-v-a376170b="">Precise pin location</b>
+              <p data-v-a376170b="">Off rounds pins to the nearest city so your home isn't exposed.</p>
+            </div><label data-v-a376170b="" class="switch"><input data-v-a376170b="" type="checkbox"><span data-v-a376170b=""></span></label>
+          </div>
+          <div data-v-a376170b="" class="opt-row">
+            <div data-v-a376170b="" class="lbl"><b data-v-a376170b="">Show me on Explore</b>
+              <p data-v-a376170b="">Appear in the community Explore feed for nearby travelers.</p>
+            </div><label data-v-a376170b="" class="switch"><input data-v-a376170b="" type="checkbox"><span data-v-a376170b=""></span></label>
+          </div>
+        </section><!-- Danger -->
+        <section data-v-a376170b="" id="danger" class="sect danger">
+          <div data-v-a376170b="" class="sect__head">
+            <div data-v-a376170b="" class="label" style="color: var(--error-ink);">// danger zone</div>
+            <h3 data-v-a376170b="" class="display" style="margin-top: 8px;">Delete account</h3>
+            <p data-v-a376170b="">Permanently remove your account, trips, entries and photos. This can't be undone.</p>
+          </div>
+          <div data-v-a376170b="" class="opt-row" style="border-bottom-width: initial; border-bottom-style: none; border-bottom-color: none;">
+            <div data-v-a376170b="" class="lbl"><b data-v-a376170b="">Delete this account</b>
+              <p data-v-a376170b="">You'll have 14 days to change your mind before data is erased.</p>
+            </div><button data-v-a376170b="" class="btn btn--sm" style="background: var(--error); color: #fff;"><svg data-v-a376170b="" data-icon="" name="trash" size="14"></svg> delete account </button>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div><!-- Saved toast -->
+  <div data-v-a376170b="" class="saved-bar">
+    <div data-v-a376170b="" class="alert"></div>
+  </div><!-- Delete modal -->
+  <div data-v-a376170b="" class="modal-scrim">
+    <div data-v-a376170b="" class="modal">
+      <div data-v-a376170b="" class="label" style="color: var(--error-ink); margin-bottom: 10px;">// confirm deletion</div>
+      <h3 data-v-a376170b="" class="display">Delete your account?</h3>
+      <p data-v-a376170b="">This removes <b data-v-a376170b="">117 places</b>, <b data-v-a376170b="">9 trips</b> and all photos. Type <b data-v-a376170b="">DELETE</b> to confirm.</p><input data-v-a376170b="">
+      <div data-v-a376170b="" class="hstack gap-12" style="justify-content: flex-end; margin-top: 8px;"><button data-v-a376170b="" class="btn btn--ghost">cancel</button><button data-v-a376170b="" class="btn" disabled="" style="background: var(--error); color: #fff;">delete forever</button></div>
+    </div>
+  </div>
+</div>"
+`;

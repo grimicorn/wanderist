@@ -1,0 +1,149 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Trip Detail page (/trips/[id]) > renders without crashing and matches snapshot 1`] = `
+"<div data-v-a25903e0="" class="content content--wide" style="padding-top: 0px;">
+  <!-- Hero -->
+  <div data-v-a25903e0="" class="thero ph">
+    <div data-v-a25903e0="" class="topo"></div>
+    <div data-v-a25903e0="" class="thero__veil"></div>
+    <div data-v-a25903e0="" class="thero__acts"><button data-v-a25903e0="" class="btn btn--outline btn--sm" style="background: rgba(255, 255, 255, .12); border-color: rgba(255, 255, 255, .4); color: #fff;"><svg data-v-a25903e0="" data-icon="" name="image" size="14"></svg> edit cover </button><button data-v-a25903e0="" class="btn btn--outline btn--sm" style="background: rgba(255, 255, 255, .12); border-color: rgba(255, 255, 255, .4); color: #fff;"><svg data-v-a25903e0="" data-icon="" name="globe" size="14"></svg> share </button></div>
+    <div data-v-a25903e0="" class="thero__in">
+      <div data-v-a25903e0="" class="label">// ongoing · day 6 of 9</div>
+      <h1 data-v-a25903e0="">Iceland, the ring road</h1>
+      <div data-v-a25903e0="" class="thero__meta"><span data-v-a25903e0=""><svg data-v-a25903e0="" data-icon="" name="calendar" size="14"></svg> Jun 9 – Jun 17, 2026</span><span data-v-a25903e0=""><svg data-v-a25903e0="" data-icon="" name="pin" size="14"></svg> 7 stops · 1,332 km loop</span><span data-v-a25903e0=""><svg data-v-a25903e0="" data-icon="" name="journal" size="14"></svg> 4 entries</span><span data-v-a25903e0=""><svg data-v-a25903e0="" data-icon="" name="users" size="14"></svg> with Maya</span></div>
+    </div>
+  </div>
+  <div data-v-a25903e0="" class="tdcols">
+    <!-- Itinerary -->
+    <div data-v-a25903e0="">
+      <div data-v-a25903e0="" class="iti-head">
+        <div data-v-a25903e0="">
+          <div data-v-a25903e0="" class="label">// itinerary</div>
+          <h2 data-v-a25903e0="" class="display" style="font-size: 20px; margin-top: 8px;">Route &amp; stops</h2>
+        </div><button data-v-a25903e0="" class="btn btn--ghost btn--sm"><svg data-v-a25903e0="" data-icon="" name="sliders" size="14"></svg> reorder </button>
+      </div>
+      <div data-v-a25903e0="" class="iti">
+        <div data-v-a25903e0="" class="stop is-done">
+          <div data-v-a25903e0="" class="stop__node">
+            <div data-v-a25903e0="" class="stop__pin"><svg data-v-a25903e0="" data-icon="" name="check" size="18"></svg></div>
+          </div>
+          <div data-v-a25903e0="" class="stop__card">
+            <div data-v-a25903e0="" class="stop__top">
+              <div data-v-a25903e0="">
+                <div data-v-a25903e0="" class="stop__name">Reykjavík</div>
+                <div data-v-a25903e0="" class="stop__sub"><svg data-v-a25903e0="" data-icon="" name="calendar" size="12"></svg> Jun 9–11 · 2 nights <span data-v-a25903e0="" class="tag tag--accent">base</span></div>
+              </div><span data-v-a25903e0="" class="stop__grip"><svg data-v-a25903e0="" data-icon="" name="grip" size="16"></svg></span>
+            </div>
+            <p data-v-a25903e0="" class="stop__note">Landed, picked up the camper. Old harbour at 4am, Hallgrímskirkja, then stocked up before heading east.</p>
+            <div data-v-a25903e0="" class="stop__foot"><span data-v-a25903e0="" class="m"><svg data-v-a25903e0="" data-icon="" name="journal" size="12"></svg> 2 entries</span><span data-v-a25903e0="" class="m"><svg data-v-a25903e0="" data-icon="" name="image" size="12"></svg> 28 photos</span><span data-v-a25903e0="" class="m"><svg data-v-a25903e0="" data-icon="" name="plane" size="12"></svg> arrival</span></div>
+          </div>
+        </div>
+        <div data-v-a25903e0="" class="stop is-done">
+          <div data-v-a25903e0="" class="stop__node">
+            <div data-v-a25903e0="" class="stop__pin">2</div>
+          </div>
+          <div data-v-a25903e0="" class="stop__card">
+            <div data-v-a25903e0="" class="stop__top">
+              <div data-v-a25903e0="">
+                <div data-v-a25903e0="" class="stop__name">Þingvellir &amp; the Golden Circle</div>
+                <div data-v-a25903e0="" class="stop__sub"><svg data-v-a25903e0="" data-icon="" name="calendar" size="12"></svg> Jun 11 · day trip</div>
+              </div><span data-v-a25903e0="" class="stop__grip"><svg data-v-a25903e0="" data-icon="" name="grip" size="16"></svg></span>
+            </div>
+            <p data-v-a25903e0="" class="stop__note">Continental rift, Geysir, Gullfoss. Rained sideways the whole afternoon and it was still worth it.</p>
+            <div data-v-a25903e0="" class="stop__foot"><span data-v-a25903e0="" class="m"><svg data-v-a25903e0="" data-icon="" name="journal" size="12"></svg> 1 entry</span><span data-v-a25903e0="" class="m"><svg data-v-a25903e0="" data-icon="" name="image" size="12"></svg> 19 photos</span><span data-v-a25903e0="" class="m"><svg data-v-a25903e0="" data-icon="" name="ruler" size="12"></svg> 250 km</span></div>
+          </div>
+        </div>
+        <div data-v-a25903e0="" class="stop is-done">
+          <div data-v-a25903e0="" class="stop__node">
+            <div data-v-a25903e0="" class="stop__pin">3</div>
+          </div>
+          <div data-v-a25903e0="" class="stop__card">
+            <div data-v-a25903e0="" class="stop__top">
+              <div data-v-a25903e0="">
+                <div data-v-a25903e0="" class="stop__name">Vík í Mýrdal</div>
+                <div data-v-a25903e0="" class="stop__sub"><svg data-v-a25903e0="" data-icon="" name="calendar" size="12"></svg> Jun 12–13 · 1 night</div>
+              </div><span data-v-a25903e0="" class="stop__grip"><svg data-v-a25903e0="" data-icon="" name="grip" size="16"></svg></span>
+            </div>
+            <p data-v-a25903e0="" class="stop__note">Black sand at Reynisfjara, the church on the hill. Puffins finally showed up near the cliffs.</p>
+            <div data-v-a25903e0="" class="stop__foot"><span data-v-a25903e0="" class="m"><svg data-v-a25903e0="" data-icon="" name="journal" size="12"></svg> 1 entry</span><span data-v-a25903e0="" class="m"><svg data-v-a25903e0="" data-icon="" name="image" size="12"></svg> 14 photos</span><span data-v-a25903e0="" class="m"><svg data-v-a25903e0="" data-icon="" name="ruler" size="12"></svg> 187 km</span></div>
+          </div>
+        </div>
+        <div data-v-a25903e0="" class="stop is-next">
+          <div data-v-a25903e0="" class="stop__node">
+            <div data-v-a25903e0="" class="stop__pin"><svg data-v-a25903e0="" data-icon="" name="pin" size="18"></svg></div>
+          </div>
+          <div data-v-a25903e0="" class="stop__card">
+            <div data-v-a25903e0="" class="stop__top">
+              <div data-v-a25903e0="">
+                <div data-v-a25903e0="" class="stop__name">Jökulsárlón glacier lagoon</div>
+                <div data-v-a25903e0="" class="stop__sub"><span data-v-a25903e0="" class="tag tag--accent">next · today</span> 1h 40m drive ahead</div>
+              </div><span data-v-a25903e0="" class="stop__grip"><svg data-v-a25903e0="" data-icon="" name="grip" size="16"></svg></span>
+            </div>
+            <p data-v-a25903e0="" class="stop__note">Icebergs calving into the lagoon, then Diamond Beach at golden hour. Camp at Höfn after.</p>
+            <div data-v-a25903e0="" class="stop__foot"><span data-v-a25903e0="" class="m"><svg data-v-a25903e0="" data-icon="" name="clock" size="12"></svg> arrive ~2:30pm</span><span data-v-a25903e0="" class="m"><svg data-v-a25903e0="" data-icon="" name="ruler" size="12"></svg> 270 km</span><span data-v-a25903e0="" class="m"><svg data-v-a25903e0="" data-icon="" name="bookmark" size="12"></svg> 3 saved spots</span></div>
+          </div>
+        </div>
+        <div data-v-a25903e0="" class="stop">
+          <div data-v-a25903e0="" class="stop__node">
+            <div data-v-a25903e0="" class="stop__pin">5</div>
+          </div>
+          <div data-v-a25903e0="" class="stop__card">
+            <div data-v-a25903e0="" class="stop__top">
+              <div data-v-a25903e0="">
+                <div data-v-a25903e0="" class="stop__name">Höfn &amp; the eastfjords</div>
+                <div data-v-a25903e0="" class="stop__sub"><svg data-v-a25903e0="" data-icon="" name="calendar" size="12"></svg> Jun 14–15 · 1 night</div>
+              </div><span data-v-a25903e0="" class="stop__grip"><svg data-v-a25903e0="" data-icon="" name="grip" size="16"></svg></span>
+            </div>
+            <div data-v-a25903e0="" class="stop__foot"><span data-v-a25903e0="" class="m"><svg data-v-a25903e0="" data-icon="" name="ruler" size="12"></svg> 180 km</span><span data-v-a25903e0="" class="m"><svg data-v-a25903e0="" data-icon="" name="bookmark" size="12"></svg> langoustine, harbour</span></div>
+          </div>
+        </div>
+        <div data-v-a25903e0="" class="stop">
+          <div data-v-a25903e0="" class="stop__node">
+            <div data-v-a25903e0="" class="stop__pin">6</div>
+          </div>
+          <div data-v-a25903e0="" class="stop__card">
+            <div data-v-a25903e0="" class="stop__top">
+              <div data-v-a25903e0="">
+                <div data-v-a25903e0="" class="stop__name">Mývatn &amp; the north</div>
+                <div data-v-a25903e0="" class="stop__sub"><svg data-v-a25903e0="" data-icon="" name="calendar" size="12"></svg> Jun 16 · geothermal</div>
+              </div><span data-v-a25903e0="" class="stop__grip"><svg data-v-a25903e0="" data-icon="" name="grip" size="16"></svg></span>
+            </div>
+            <div data-v-a25903e0="" class="stop__foot"><span data-v-a25903e0="" class="m"><svg data-v-a25903e0="" data-icon="" name="ruler" size="12"></svg> 360 km</span><span data-v-a25903e0="" class="m"><svg data-v-a25903e0="" data-icon="" name="bookmark" size="12"></svg> nature baths</span></div>
+          </div>
+        </div>
+        <div data-v-a25903e0="" class="stop__add">
+          <div data-v-a25903e0=""></div><button data-v-a25903e0="" class="add-btn"><svg data-v-a25903e0="" data-icon="" name="plus" size="15"></svg> add a stop </button>
+        </div>
+      </div>
+    </div><!-- Rail -->
+    <aside data-v-a25903e0="" class="trail">
+      <div data-v-a25903e0="" class="rail-card" style="padding: 0px; overflow: hidden;">
+        <div data-v-a25903e0="" class="mini-map">
+          <div data-v-a25903e0="" class="topo"></div><span data-v-a25903e0="" class="pin-abs" style="left: 30%; top: 42%;"><svg data-v-a25903e0="" data-icon="" name="pin" size="18" class="pin"></svg></span><span data-v-a25903e0="" class="pin-abs" style="left: 48%; top: 58%;"><svg data-v-a25903e0="" data-icon="" name="pin" size="18" class="pin"></svg></span><span data-v-a25903e0="" class="pin-abs" style="left: 60%; top: 70%;"><svg data-v-a25903e0="" data-icon="" name="pin" size="18" class="pin"></svg></span><span data-v-a25903e0="" class="pin-abs" style="left: 74%; top: 54%;"><svg data-v-a25903e0="" data-icon="" name="pin" size="18" class="pin"></svg></span>
+        </div>
+        <div data-v-a25903e0="" style="padding: 13px 16px;"><a data-v-a25903e0="" class="btn btn--outline btn--sm btn--block"><svg data-v-a25903e0="" data-icon="" name="map" size="14"></svg> open in full map </a></div>
+      </div>
+      <div class="rail-card" data-v-a25903e0="">
+        <h4 class="display" data-v-a25903e0="">Trip facts</h4>
+        <div class="fact" data-v-a25903e0=""><span class="k" data-v-a25903e0="">Status</span><span class="v" style="color:var(--success-ink);" data-v-a25903e0="">Ongoing</span></div>
+        <div class="fact" data-v-a25903e0=""><span class="k" data-v-a25903e0="">Distance</span><span class="v" data-v-a25903e0="">1,332 km</span></div>
+        <div class="fact" data-v-a25903e0=""><span class="k" data-v-a25903e0="">Logged</span><span class="v" data-v-a25903e0="">892 / 1,332 km</span></div>
+        <div class="fact" data-v-a25903e0=""><span class="k" data-v-a25903e0="">Nights</span><span class="v" data-v-a25903e0="">8</span></div>
+        <div class="fact" data-v-a25903e0=""><span class="k" data-v-a25903e0="">Photos</span><span class="v" data-v-a25903e0="">61</span></div>
+        <div class="fact" data-v-a25903e0=""><span class="k" data-v-a25903e0="">Visibility</span><span class="v" data-v-a25903e0="">Private</span></div>
+      </div>
+      <div data-v-a25903e0="" class="rail-card">
+        <h4 data-v-a25903e0="" class="display" style="display: flex; align-items: center; justify-content: space-between;"> Travelling with <button data-v-a25903e0="" class="label label--plain" style="font-size: 10px; border: none none; background: none none; color: var(--accent-ink);">invite</button></h4>
+        <div data-v-a25903e0="" class="companions">
+          <div data-v-a25903e0="" class="companion"><span data-v-a25903e0="" class="companion__av"><svg data-v-a25903e0="" data-icon="" name="user" size="16"></svg></span>
+            <div data-v-a25903e0=""><b data-v-a25903e0="">Maya R.</b><br data-v-a25903e0=""><span data-v-a25903e0="">@mayarambles · editor</span></div>
+          </div>
+          <div data-v-a25903e0="" class="companion"><span data-v-a25903e0="" class="companion__av" style="background: var(--bg-tint); color: var(--muted);"><svg data-v-a25903e0="" data-icon="" name="plus" size="16"></svg></span>
+            <div data-v-a25903e0=""><b data-v-a25903e0="">Invite someone</b><br data-v-a25903e0=""><span data-v-a25903e0="">add a co-traveller</span></div>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </div>
+</div>"
+`;

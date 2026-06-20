@@ -1,0 +1,55 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`AppNewEntry > renders the drawer when open and matches snapshot 1`] = `
+"<div class="drawer is-open" role="dialog" aria-label="New entry">
+  <div class="drawer__scrim"></div>
+  <aside class="drawer__panel">
+    <header class="drawer__head">
+      <div>
+        <div class="label">// new entry</div>
+        <h3 class="display" style="font-size: 18px; margin-top: 6px;">Capture a moment</h3>
+      </div><button class="icon-btn" aria-label="Close"><svg data-icon="" name="x" size="18"></svg></button>
+    </header>
+    <div class="drawer__body">
+      <!-- Photo upload -->
+      <div class="dropzone">
+        <div class="dropzone__grid">
+          <div class="ph dz-thumb">
+            <div class="topo"></div>
+          </div>
+          <div class="ph dz-thumb">
+            <div class="topo"></div>
+          </div><button class="dz-add"><svg data-icon="" name="camera" size="17"></svg><span>add photos</span></button>
+        </div>
+        <p class="dropzone__hint"> Drag photos here, or import geotagged shots from <svg data-icon="" name="instagram" size="13" style="vertical-align: -2px;"></svg> Instagram. </p>
+      </div><!-- Title -->
+      <div class="field"><label class="field__label">Title</label>
+        <div class="field__wrap"><input class="field__input" placeholder="Give this moment a name…"></div>
+      </div><!-- Entry text -->
+      <div class="field"><label class="field__label">Entry</label><textarea class="field__input" rows="5" placeholder="What happened? What did it feel like?"></textarea></div><!-- Location -->
+      <div class="field"><label class="field__label">Location</label>
+        <div class="field__wrap"><input class="field__input"><span class="field__icon"><svg data-icon="" name="pin" size="16"></svg></span></div>
+        <div class="chip-suggest"><span class="chip">Old Harbour</span><span class="chip">Hallgrímskirkja</span><span class="chip">Sun Voyager</span></div>
+      </div><!-- Trip -->
+      <div class="field"><label class="field__label">Trip</label>
+        <div class="pill-pick"><button class="pick is-active">Iceland, ring road</button><button class="pick">Portugal 2026</button><button class="pick">None</button></div>
+      </div><!-- Date & Visibility row -->
+      <div class="drawer__row">
+        <div class="field" style="margin: 0px;"><label class="field__label">Date</label>
+          <div class="field__wrap"><input class="field__input"><span class="field__icon"><svg data-icon="" name="calendar" size="16"></svg></span></div>
+        </div>
+        <div class="field" style="margin: 0px;"><label class="field__label">Visibility</label>
+          <div class="segmented seg-sm"><button class="is-active">Private</button><button class="">Public</button></div>
+        </div>
+      </div><!-- Tags -->
+      <div class="field"><label class="field__label">Tags</label>
+        <div class="tags-input"><span class="tag tag--accent">iceland <button class="tag-x" style="background: none none; border: none none; padding: 0px; cursor: pointer; font-size: 10px;">×</button></span><span class="tag tag--accent">ring road <button class="tag-x" style="background: none none; border: none none; padding: 0px; cursor: pointer; font-size: 10px;">×</button></span><input placeholder="add tag…"></div>
+      </div><!-- Weather -->
+      <div class="field" style="margin-bottom: 4px;"><label class="field__label"> Weather <span class="muted" style="text-transform: none; letter-spacing: 0px;">optional</span></label>
+        <div class="pill-pick"><button class="pick"><svg data-icon="" name="sun" size="14"></svg> Clear</button><button class="pick is-active"><svg data-icon="" name="cloud" size="14"></svg> Overcast</button><button class="pick"><svg data-icon="" name="wind" size="14"></svg> Windy</button></div>
+      </div>
+    </div>
+    <footer class="drawer__foot"><button class="btn btn--ghost btn--sm">save draft</button><span style="flex-grow: 1; flex-shrink: 1; flex-basis: 0%;"></span><button class="btn btn--outline btn--sm">cancel</button><button class="btn btn--primary btn--sm"><svg data-icon="" name="check" size="14"></svg> publish </button></footer>
+  </aside>
+</div>"
+`;

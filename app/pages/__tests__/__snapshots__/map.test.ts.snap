@@ -1,0 +1,94 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Map page (/map) > renders the map stage and matches snapshot 1`] = `
+"<div data-v-346616cd="" class="map-stage" data-mapstyle="outdoors">
+  <header data-v-346616cd="" class="topbar"><span data-v-346616cd="" class="tag tag--accent">117 places · 9 countries</span><button data-v-346616cd="" class="btn btn--primary btn--sm"><svg data-v-346616cd="" data-icon="" name="plus" size="14"></svg> drop a pin </button></header><!-- Map placeholder (Mapbox GL mounts here in production) -->
+  <div data-v-346616cd="" class="map-panel">
+    <div data-v-346616cd="" class="topo map-topo"></div><span data-v-346616cd="" class="map-mount">mapbox gl · #mapPanel</span><span data-v-346616cd="" class="map-attr">© Mapbox © OpenStreetMap</span>
+  </div><!-- Pins --><button data-v-346616cd="" class="pin-abs is-active" style="left: 25%; top: 33%;" aria-label="Reykjavík"><span data-v-346616cd="" class="pin-ring"></span><svg data-v-346616cd="" data-icon="" name="pin" size="26" class="pin"></svg></button><button data-v-346616cd="" class="pin-abs sm" style="left: 44%; top: 52%;" aria-label="Lisbon"><span data-v-346616cd="" class="pin-ring"></span><svg data-v-346616cd="" data-icon="" name="pin" size="18" class="pin"></svg></button><button data-v-346616cd="" class="pin-abs sm" style="left: 47%; top: 36%;" aria-label="London"><span data-v-346616cd="" class="pin-ring"></span><svg data-v-346616cd="" data-icon="" name="pin" size="18" class="pin"></svg></button><button data-v-346616cd="" class="pin-abs sm" style="left: 78%; top: 44%;" aria-label="Tokyo"><span data-v-346616cd="" class="pin-ring"></span><svg data-v-346616cd="" data-icon="" name="pin" size="18" class="pin"></svg></button><button data-v-346616cd="" class="pin-abs sm" style="left: 46%; top: 60%;" aria-label="Marrakech"><span data-v-346616cd="" class="pin-ring"></span><svg data-v-346616cd="" data-icon="" name="pin" size="18" class="pin"></svg></button><button data-v-346616cd="" class="pin-abs sm" style="left: 85%; top: 74%;" aria-label="Sydney"><span data-v-346616cd="" class="pin-ring"></span><svg data-v-346616cd="" data-icon="" name="pin" size="18" class="pin"></svg></button><!-- Places panel -->
+  <div data-v-346616cd="" class="places">
+    <div data-v-346616cd="" class="places__head">
+      <div data-v-346616cd="" class="label">// your places</div>
+      <div data-v-346616cd="" class="places__search"><svg data-v-346616cd="" data-icon="" name="search" size="15"></svg><input data-v-346616cd="" placeholder="Search places…"></div>
+    </div>
+    <div data-v-346616cd="" class="chips"><span data-v-346616cd="" class="chip is-active">All</span><span data-v-346616cd="" class="chip">2026</span><span data-v-346616cd="" class="chip">Journaled</span><span data-v-346616cd="" class="chip">Wishlist</span></div>
+    <div data-v-346616cd="" class="place-list">
+      <div data-v-346616cd="" class="place-item is-active"><span data-v-346616cd="" class="place-item__dot"></span>
+        <div data-v-346616cd="">
+          <div data-v-346616cd="" class="place-item__name">Reykjavík</div>
+          <div data-v-346616cd="" class="place-item__sub">Iceland · current trip</div>
+        </div><span data-v-346616cd="" class="place-item__n">4</span>
+      </div>
+      <div data-v-346616cd="" class="place-item"><span data-v-346616cd="" class="place-item__dot"></span>
+        <div data-v-346616cd="">
+          <div data-v-346616cd="" class="place-item__name">Lisbon</div>
+          <div data-v-346616cd="" class="place-item__sub">Portugal · Jun 2026</div>
+        </div><span data-v-346616cd="" class="place-item__n">12</span>
+      </div>
+      <div data-v-346616cd="" class="place-item"><span data-v-346616cd="" class="place-item__dot"></span>
+        <div data-v-346616cd="">
+          <div data-v-346616cd="" class="place-item__name">London</div>
+          <div data-v-346616cd="" class="place-item__sub">United Kingdom</div>
+        </div><span data-v-346616cd="" class="place-item__n">7</span>
+      </div>
+      <div data-v-346616cd="" class="place-item"><span data-v-346616cd="" class="place-item__dot"></span>
+        <div data-v-346616cd="">
+          <div data-v-346616cd="" class="place-item__name">Tokyo</div>
+          <div data-v-346616cd="" class="place-item__sub">Japan · 2025</div>
+        </div><span data-v-346616cd="" class="place-item__n">9</span>
+      </div>
+      <div data-v-346616cd="" class="place-item"><span data-v-346616cd="" class="place-item__dot"></span>
+        <div data-v-346616cd="">
+          <div data-v-346616cd="" class="place-item__name">Marrakech</div>
+          <div data-v-346616cd="" class="place-item__sub">Morocco · 2025</div>
+        </div><span data-v-346616cd="" class="place-item__n">5</span>
+      </div>
+      <div data-v-346616cd="" class="place-item"><span data-v-346616cd="" class="place-item__dot"></span>
+        <div data-v-346616cd="">
+          <div data-v-346616cd="" class="place-item__name">Sydney</div>
+          <div data-v-346616cd="" class="place-item__sub">Australia · 2024</div>
+        </div><span data-v-346616cd="" class="place-item__n">8</span>
+      </div>
+    </div>
+  </div><!-- Detail card -->
+  <div data-v-346616cd="" class="detail is-open">
+    <div data-v-346616cd="" class="detail__img ph">
+      <div data-v-346616cd="" class="topo" style="opacity: .5;"></div><button data-v-346616cd="" class="icon-btn detail__close" aria-label="Close"><svg data-v-346616cd="" data-icon="" name="x" size="16"></svg></button>
+    </div>
+    <div data-v-346616cd="" class="detail__body">
+      <div data-v-346616cd="" class="detail__loc">Iceland · current trip</div>
+      <div data-v-346616cd="" class="detail__name">Reykjavík</div>
+      <div data-v-346616cd="" class="detail__stats">
+        <div data-v-346616cd="">
+          <div data-v-346616cd="" class="n">4</div>
+          <div data-v-346616cd="" class="l">entries</div>
+        </div>
+        <div data-v-346616cd="">
+          <div data-v-346616cd="" class="n">28</div>
+          <div data-v-346616cd="" class="l">photos</div>
+        </div>
+        <div data-v-346616cd="">
+          <div data-v-346616cd="" class="n">6</div>
+          <div data-v-346616cd="" class="l">days</div>
+        </div>
+      </div>
+      <div data-v-346616cd="" class="hstack gap-8"><a data-v-346616cd="" class="btn btn--primary btn--sm" style="flex-grow: 1; flex-shrink: 1; flex-basis: 0%;"><svg data-v-346616cd="" data-icon="" name="journal" size="14"></svg> open journal </a><button data-v-346616cd="" class="icon-btn" aria-label="Save"><svg data-v-346616cd="" data-icon="" name="heart" size="18"></svg></button></div>
+    </div>
+  </div><!-- Map controls -->
+  <div data-v-346616cd="" class="map-controls">
+    <div data-v-346616cd="" class="layers-pop">
+      <div data-v-346616cd="" class="layers-pop__h">// base map style</div>
+      <div data-v-346616cd="" class="lstyle is-active"><span data-v-346616cd="" class="lstyle__sw sw-outdoors"></span><span data-v-346616cd="" class="lstyle__n">Outdoors</span><svg data-v-346616cd="" data-icon="" name="check" size="14" class="lstyle__c"></svg></div>
+      <div data-v-346616cd="" class="lstyle"><span data-v-346616cd="" class="lstyle__sw sw-streets"></span><span data-v-346616cd="" class="lstyle__n">Streets</span><svg data-v-346616cd="" data-icon="" name="check" size="14" class="lstyle__c"></svg></div>
+      <div data-v-346616cd="" class="lstyle"><span data-v-346616cd="" class="lstyle__sw sw-satellite"></span><span data-v-346616cd="" class="lstyle__n">Satellite</span><svg data-v-346616cd="" data-icon="" name="check" size="14" class="lstyle__c"></svg></div>
+      <div data-v-346616cd="" class="lstyle"><span data-v-346616cd="" class="lstyle__sw sw-light"></span><span data-v-346616cd="" class="lstyle__n">Light</span><svg data-v-346616cd="" data-icon="" name="check" size="14" class="lstyle__c"></svg></div>
+      <div data-v-346616cd="" class="lstyle"><span data-v-346616cd="" class="lstyle__sw sw-dark"></span><span data-v-346616cd="" class="lstyle__n">Dark</span><svg data-v-346616cd="" data-icon="" name="check" size="14" class="lstyle__c"></svg></div>
+      <div data-v-346616cd="" class="lstyle"><span data-v-346616cd="" class="lstyle__sw sw-custom"></span><span data-v-346616cd="" class="lstyle__n">Wanderist violet</span><svg data-v-346616cd="" data-icon="" name="check" size="14" class="lstyle__c"></svg></div>
+    </div><button data-v-346616cd="" class="map-cbtn" aria-label="Map style"><svg data-v-346616cd="" data-icon="" name="layers" size="18"></svg></button>
+    <div data-v-346616cd="" class="zoom"><button data-v-346616cd="" aria-label="Zoom in"><svg data-v-346616cd="" data-icon="" name="plus" size="16"></svg></button><button data-v-346616cd="" aria-label="Zoom out"><svg data-v-346616cd="" class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+          <line data-v-346616cd="" x1="5" y1="12" x2="19" y2="12"></line>
+        </svg></button></div>
+  </div>
+  <div data-v-346616cd="" class="legend">outdoors-v12 · 117 pins</div>
+</div>"
+`;
