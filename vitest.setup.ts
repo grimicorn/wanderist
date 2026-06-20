@@ -19,6 +19,8 @@ Object.assign(globalThis, {
   // Clerk composables
   useClerkAuth: vi.fn(() => ({ isSignedIn: vue.ref(false), isLoaded: vue.ref(true) })),
   useClerkUser: vi.fn(() => ({ user: vue.ref(null) })),
+  // Nuxt page macros
+  definePageMeta: vi.fn(),
   // Pinia
   defineStore: vi.fn(),
 })
