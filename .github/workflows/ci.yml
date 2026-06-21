@@ -55,16 +55,37 @@ jobs:
               - 'package-lock.json'
               - 'package.json'
 
+  list-specs:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      specs: ${{ steps.list.outputs.specs }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # actions/checkout@v4
+        with:
+          persist-credentials: false
+      - id: list
+        run: |
+          specs=$(find e2e -maxdepth 1 -name "*.spec.ts" -exec basename {} .spec.ts \; | sort | jq -R . | jq -sc .)
+          echo "specs=$specs" >> $GITHUB_OUTPUT
+
   e2e:
-    needs: [ci, changed]
+    needs: [ci, changed, list-specs]
     if: |
       always() &&
       needs.ci.result == 'success' &&
       github.event_name == 'pull_request' &&
       needs.changed.outputs.e2e == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        spec: ${{ fromJson(needs.list-specs.outputs.specs) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # actions/checkout@v4
         with:
           persist-credentials: false
       - uses: actions/setup-node@v4
@@ -75,14 +96,29 @@ jobs:
         env:
           HUSKY: 0
       - run: npx playwright install chromium --with-deps
-      - run: npm run e2e
+      - name: Create Neon branch
+        id: neon
+        uses: neondatabase/create-neon-branch@v5
+        with:
+          project_id: ${{ secrets.NEON_PROJECT_ID }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+          branch_name: ci-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.spec }}
+      - name: Run E2E tests (${{ matrix.spec }})
+        run: npx playwright test e2e/${{ matrix.spec }}.spec.ts
         env:
-          E2E_DATABASE_URL: ${{ secrets.E2E_DATABASE_URL }}
+          E2E_DATABASE_URL: ${{ steps.neon.outputs.db_url_with_pooler }}
           NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
           NUXT_CLERK_SECRET_KEY: ${{ secrets.NUXT_CLERK_SECRET_KEY }}
-      - uses: actions/upload-artifact@v4
+      - name: Delete Neon branch
+        if: always()
+        uses: neondatabase/delete-neon-branch@v3
+        with:
+          project_id: ${{ secrets.NEON_PROJECT_ID }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+          branch: ci-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.spec }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # actions/upload-artifact@v4
         if: failure()
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.spec }}
           path: e2e/report/
           retention-days: 7
