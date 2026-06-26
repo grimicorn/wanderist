@@ -1,0 +1,24 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Error page (app/error.vue) > renders without crashing and matches snapshot 1`] = `
+"<div data-v-fa4da55a="" class="nf-wrap">
+  <div data-v-fa4da55a="" class="nf-top"><a data-v-fa4da55a="" class="brand"><svg data-v-fa4da55a="" data-icon="" name="compass" size="22" class="brand__mark"></svg><span data-v-fa4da55a="" class="brand__name">wander<b data-v-fa4da55a="">ist</b></span></a>
+    <div data-v-fa4da55a="" class="theme-toggle"></div>
+  </div>
+  <main data-v-fa4da55a="" class="nf">
+    <div data-v-fa4da55a="" class="topo"></div>
+    <div data-v-fa4da55a="" class="nf__inner">
+      <div data-v-fa4da55a="" class="label" style="justify-content: center; margin-bottom: 18px;"> // error 404 — uncharted </div>
+      <div data-v-fa4da55a="" class="nf__code"><span data-v-fa4da55a="">4</span><span data-v-fa4da55a="" class="nf__o"><svg data-v-fa4da55a="" data-icon="" name="pin" class="pin"></svg></span><span data-v-fa4da55a="">4</span><svg data-v-fa4da55a="" class="route-svg" viewBox="0 0 420 40" fill="none" preserveAspectRatio="none">
+          <path data-v-fa4da55a="" d="M4 30 C 90 6, 150 34, 230 18 S 360 6, 416 22" stroke="currentColor" stroke-width="2" stroke-dasharray="3 7" stroke-linecap="round"></path>
+        </svg></div>
+      <div data-v-fa4da55a="" class="nf__hint">· you are here ·</div>
+      <h1 data-v-fa4da55a="">This place isn't on the map.</h1>
+      <p data-v-fa4da55a=""> The page you're looking for wandered off — or never existed. Let's get you back to familiar ground. </p>
+      <div data-v-fa4da55a="" class="nf__cta"><a data-v-fa4da55a="" class="btn btn--primary btn--lg"><svg data-v-fa4da55a="" data-icon="" name="compass2" size="18"></svg> back to home base </a><button data-v-fa4da55a="" class="btn btn--outline btn--lg"><svg data-v-fa4da55a="" data-icon="" name="arrow-left" size="18"></svg> go back </button></div>
+      <div data-v-fa4da55a="" class="nf__coords">lat 0.0000 · lng 0.0000 · no signal</div>
+    </div>
+  </main>
+  <div data-v-fa4da55a="" class="nf-foot">wanderist · © 2026</div>
+</div>"
+`;

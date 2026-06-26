@@ -6,5 +6,8 @@
     "sentry.server.config.ts",
     "app/stores/**"
   ],
-  "ignoreDependencies": ["@clerk/testing", "@sentry/nuxt", "@vue/test-utils"]
+  "ignoreDependencies": ["@clerk/testing", "@sentry/nuxt", "@vue/test-utils"],
+  "duplicates": {
+    "minOccurrences": 3
+  }
 }

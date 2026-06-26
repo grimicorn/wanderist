@@ -1,0 +1,11 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`InputTextarea > renders a textarea 1`] = `
+"<div class="field">
+  <!--v-if-->
+  <div class="field__wrap"><textarea id="test-id-1" class="field__input" rows="4"></textarea>
+    <!--v-if-->
+  </div>
+  <!--v-if-->
+</div>"
+`;
