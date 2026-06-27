@@ -69,12 +69,8 @@
           "name": "connected_accounts_user_id_users_id_fk",
           "tableFrom": "connected_accounts",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -84,10 +80,7 @@
         "connected_accounts_provider_external_id_unique": {
           "name": "connected_accounts_provider_external_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "provider",
-            "external_id"
-          ]
+          "columns": ["provider", "external_id"]
         }
       },
       "policies": {},
@@ -228,12 +221,8 @@
           "name": "entries_user_id_users_id_fk",
           "tableFrom": "entries",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -241,12 +230,8 @@
           "name": "entries_trip_id_trips_id_fk",
           "tableFrom": "entries",
           "tableTo": "trips",
-          "columnsFrom": [
-            "trip_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["trip_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -254,12 +239,8 @@
           "name": "entries_place_id_places_id_fk",
           "tableFrom": "entries",
           "tableTo": "places",
-          "columnsFrom": [
-            "place_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["place_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -322,12 +303,8 @@
           "name": "entry_photos_entry_id_entries_id_fk",
           "tableFrom": "entry_photos",
           "tableTo": "entries",
-          "columnsFrom": [
-            "entry_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["entry_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -335,12 +312,8 @@
           "name": "entry_photos_media_id_media_id_fk",
           "tableFrom": "entry_photos",
           "tableTo": "media",
-          "columnsFrom": [
-            "media_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["media_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -390,12 +363,8 @@
           "name": "entry_tags_entry_id_entries_id_fk",
           "tableFrom": "entry_tags",
           "tableTo": "entries",
-          "columnsFrom": [
-            "entry_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["entry_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -403,12 +372,8 @@
           "name": "entry_tags_tag_id_tags_id_fk",
           "tableFrom": "entry_tags",
           "tableTo": "tags",
-          "columnsFrom": [
-            "tag_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["tag_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -416,10 +381,7 @@
       "compositePrimaryKeys": {
         "entry_tags_entry_id_tag_id_pk": {
           "name": "entry_tags_entry_id_tag_id_pk",
-          "columns": [
-            "entry_id",
-            "tag_id"
-          ]
+          "columns": ["entry_id", "tag_id"]
         }
       },
       "uniqueConstraints": {},
@@ -473,12 +435,8 @@
           "name": "follows_follower_id_users_id_fk",
           "tableFrom": "follows",
           "tableTo": "users",
-          "columnsFrom": [
-            "follower_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["follower_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -486,12 +444,8 @@
           "name": "follows_followee_id_users_id_fk",
           "tableFrom": "follows",
           "tableTo": "users",
-          "columnsFrom": [
-            "followee_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["followee_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -499,10 +453,7 @@
       "compositePrimaryKeys": {
         "follows_follower_id_followee_id_pk": {
           "name": "follows_follower_id_followee_id_pk",
-          "columns": [
-            "follower_id",
-            "followee_id"
-          ]
+          "columns": ["follower_id", "followee_id"]
         }
       },
       "uniqueConstraints": {},
@@ -567,12 +518,8 @@
           "name": "media_user_id_users_id_fk",
           "tableFrom": "media",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -654,12 +601,8 @@
           "name": "notifications_user_id_users_id_fk",
           "tableFrom": "notifications",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -759,12 +702,8 @@
           "name": "places_user_id_users_id_fk",
           "tableFrom": "places",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -799,9 +738,7 @@
         "tags_name_unique": {
           "name": "tags_name_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "name"
-          ]
+          "columns": ["name"]
         }
       },
       "policies": {},
@@ -913,12 +850,8 @@
           "name": "trip_stops_trip_id_trips_id_fk",
           "tableFrom": "trip_stops",
           "tableTo": "trips",
-          "columnsFrom": [
-            "trip_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["trip_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -926,12 +859,8 @@
           "name": "trip_stops_place_id_places_id_fk",
           "tableFrom": "trip_stops",
           "tableTo": "places",
-          "columnsFrom": [
-            "place_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["place_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1041,12 +970,8 @@
           "name": "trips_user_id_users_id_fk",
           "tableFrom": "trips",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1054,12 +979,8 @@
           "name": "trips_cover_image_id_media_id_fk",
           "tableFrom": "trips",
           "tableTo": "media",
-          "columnsFrom": [
-            "cover_image_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["cover_image_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1146,12 +1067,8 @@
           "name": "user_preferences_user_id_users_id_fk",
           "tableFrom": "user_preferences",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1161,9 +1078,7 @@
         "user_preferences_handle_unique": {
           "name": "user_preferences_handle_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "handle"
-          ]
+          "columns": ["handle"]
         }
       },
       "policies": {},
@@ -1208,9 +1123,7 @@
         "users_email_unique": {
           "name": "users_email_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "email"
-          ]
+          "columns": ["email"]
         }
       },
       "policies": {},
@@ -1222,44 +1135,27 @@
     "public.connected_account_provider": {
       "name": "connected_account_provider",
       "schema": "public",
-      "values": [
-        "instagram",
-        "google"
-      ]
+      "values": ["instagram", "google"]
     },
     "public.distance_unit": {
       "name": "distance_unit",
       "schema": "public",
-      "values": [
-        "mi",
-        "km"
-      ]
+      "values": ["mi", "km"]
     },
     "public.trip_status": {
       "name": "trip_status",
       "schema": "public",
-      "values": [
-        "ongoing",
-        "upcoming",
-        "past"
-      ]
+      "values": ["ongoing", "upcoming", "past"]
     },
     "public.trip_stop_status": {
       "name": "trip_stop_status",
       "schema": "public",
-      "values": [
-        "done",
-        "next",
-        "planned"
-      ]
+      "values": ["done", "next", "planned"]
     },
     "public.visibility": {
       "name": "visibility",
       "schema": "public",
-      "values": [
-        "private",
-        "public"
-      ]
+      "values": ["private", "public"]
     }
   },
   "schemas": {},
