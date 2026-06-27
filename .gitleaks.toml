@@ -1,0 +1,33 @@
+# gitleaks configuration for Wanderist.
+# Extends the built-in default ruleset and layers on project-specific rules
+# for Clerk secret keys and Postgres connection strings.
+# Docs: https://github.com/gitleaks/gitleaks#configuration
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "clerk-secret-key"
+description = "Clerk secret key (sk_live_ / sk_test_)"
+# Matches secret keys only. Publishable keys (pk_live_ / pk_test_) are public by
+# design and are intentionally NOT matched.
+regex = '''sk_(?:live|test)_[A-Za-z0-9_-]{20,}'''
+keywords = ["sk_live_", "sk_test_"]
+
+[[rules]]
+id = "postgres-connection-string"
+description = "Postgres connection string with embedded credentials"
+# Matches postgres:// and postgresql:// URIs that carry a user:password
+# component. URIs without credentials are not flagged.
+regex = '''postgres(?:ql)?://[^\s:/@]+:[^\s:/@]+@[^\s/]+'''
+keywords = ["postgres://", "postgresql://"]
+
+[allowlist]
+description = "Ignore example env files and test fixtures"
+# Fixture paths are scoped to dedicated fixtures directories so real secrets
+# accidentally committed into test or e2e source files are still flagged.
+paths = [
+  '''.*\.example$''',
+  '''(^|/)tests/fixtures/''',
+  '''(^|/)e2e/fixtures/''',
+]
