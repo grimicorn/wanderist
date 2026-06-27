@@ -21,6 +21,7 @@ import {
   TRIP_STOP_STATUS,
   CONNECTED_ACCOUNT_PROVIDER,
   DISTANCE_UNIT,
+  ON_DELETE,
   tripStatusEnum,
   visibilityEnum,
   tripStopStatusEnum,
@@ -217,11 +218,6 @@ describe("column presence", () => {
 //   - cascade   → NOT NULL ownership FKs and owned child / join rows
 //   - set null  → nullable optional cross-references
 // ---------------------------------------------------------------------------
-
-const ON_DELETE = {
-  CASCADE: "cascade",
-  SET_NULL: "set null",
-} as const;
 
 type OnDeleteAction = (typeof ON_DELETE)[keyof typeof ON_DELETE];
 
