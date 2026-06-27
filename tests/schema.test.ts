@@ -264,6 +264,15 @@ function foreignKeyIdsFromPolicy(): ReadonlyArray<string> {
   );
 }
 
+function isColumnNullable(table: PgTable, columnName: string): boolean {
+  const { columns } = getTableConfig(table);
+  const column = columns.find((candidate) => candidate.name === columnName);
+  if (!column) {
+    return false;
+  }
+  return !column.notNull;
+}
+
 const ON_DELETE_POLICY: ReadonlyArray<{
   label: string;
   table: PgTable;
@@ -396,6 +405,19 @@ describe("ON DELETE policy", () => {
     );
     for (const columnCount of referencingColumnCounts) {
       expect(columnCount).toBe(FK_REFERENCING_COLUMN_COUNT);
+    }
+  });
+
+  it("every set-null FK targets a nullable column", () => {
+    // ON DELETE SET NULL on a NOT NULL column is a latent fault: deleting the
+    // referenced row makes Postgres write NULL into a NOT NULL column and the
+    // DELETE throws. Asserting nullability here catches a later `.notNull()`
+    // that would otherwise pass every action-only assertion above.
+    const setNullColumns = ON_DELETE_POLICY.filter(
+      (entry) => entry.expected === ON_DELETE.SET_NULL,
+    );
+    for (const entry of setNullColumns) {
+      expect(isColumnNullable(entry.table, entry.column)).toBe(true);
     }
   });
 
