@@ -250,6 +250,24 @@ function schemaTables(): ReadonlyArray<PgTable> {
   );
 }
 
+// A stable `<table>.<column>` identifier for each FK so the policy can be
+// compared as a set rather than a count — a duplicate policy entry masking a
+// missing FK, or a typo'd column name, both surface as a set mismatch.
+function foreignKeyIdsFromSchema(): ReadonlyArray<string> {
+  return schemaTables().flatMap((table) => {
+    const { name, foreignKeys } = getTableConfig(table);
+    return foreignKeys.flatMap((foreignKey) =>
+      foreignKey.reference().columns.map((column) => `${name}.${column.name}`),
+    );
+  });
+}
+
+function foreignKeyIdsFromPolicy(): ReadonlyArray<string> {
+  return ON_DELETE_POLICY.map(
+    (entry) => `${getTableConfig(entry.table).name}.${entry.column}`,
+  );
+}
+
 const ON_DELETE_POLICY: ReadonlyArray<{
   label: string;
   table: PgTable;
@@ -386,10 +404,10 @@ describe("ON DELETE policy", () => {
   });
 
   it("covers every foreign key in the schema (no FK left unasserted)", () => {
-    const totalForeignKeys = schemaTables().reduce(
-      (count, table) => count + getTableConfig(table).foreignKeys.length,
-      0,
-    );
-    expect(ON_DELETE_POLICY).toHaveLength(totalForeignKeys);
+    const schemaForeignKeys = [...foreignKeyIdsFromSchema()].sort();
+    const policyForeignKeys = [...foreignKeyIdsFromPolicy()].sort();
+    // Set equality (not just count parity): catches an unasserted FK, a
+    // duplicate policy entry masking a missing one, and a typo'd column name.
+    expect(policyForeignKeys).toEqual(schemaForeignKeys);
   });
 });
