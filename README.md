@@ -99,6 +99,42 @@ Auto-fix:
 npm run lint:fix
 ```
 
+## Security scanning
+
+A deterministic scanner layer runs both locally and in CI.
+
+### Secret detection (gitleaks)
+
+[gitleaks](https://github.com/gitleaks/gitleaks) scans for committed secrets. The
+rules live in [.gitleaks.toml](.gitleaks.toml): the built-in default ruleset plus
+custom rules for Clerk secret keys (`sk_live_` / `sk_test_`) and Postgres
+connection strings with embedded credentials. Example env files and test fixtures
+are allowlisted.
+
+A husky `pre-commit` hook scans staged changes and blocks the commit on any
+finding. Install it (and all other hooks) with:
+
+```bash
+npm install
+```
+
+To run the same staged scan manually:
+
+```bash
+gitleaks git --staged --redact --no-banner --config .gitleaks.toml
+```
+
+Install the gitleaks binary locally with `brew install gitleaks` (macOS) or from the
+[releases page](https://github.com/gitleaks/gitleaks/releases). In CI the pinned
+binary is downloaded (and checksum-verified) before it runs — pull requests scan
+the PR commit range, pushes scan full history, and any finding fails the build.
+
+### Dependency vulnerabilities
+
+CI runs `npm audit` and fails the build only on **high** or **critical**
+advisories; moderate and low are printed as a summary but do not fail.
+[Dependabot](.github/dependabot.yml) opens grouped minor/patch update PRs weekly.
+
 ## Build & Preview
 
 ```bash
