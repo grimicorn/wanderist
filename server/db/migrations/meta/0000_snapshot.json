@@ -1,5 +1,5 @@
 {
-  "id": "4589ba54-5786-4eac-a493-f7a181bd4098",
+  "id": "4a31e5ea-01a1-406f-83c5-2c9ee7b206c6",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -71,7 +71,7 @@
           "tableTo": "users",
           "columnsFrom": ["user_id"],
           "columnsTo": ["id"],
-          "onDelete": "no action",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
@@ -223,7 +223,7 @@
           "tableTo": "users",
           "columnsFrom": ["user_id"],
           "columnsTo": ["id"],
-          "onDelete": "no action",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         },
         "entries_trip_id_trips_id_fk": {
@@ -232,7 +232,7 @@
           "tableTo": "trips",
           "columnsFrom": ["trip_id"],
           "columnsTo": ["id"],
-          "onDelete": "no action",
+          "onDelete": "set null",
           "onUpdate": "no action"
         },
         "entries_place_id_places_id_fk": {
@@ -241,7 +241,7 @@
           "tableTo": "places",
           "columnsFrom": ["place_id"],
           "columnsTo": ["id"],
-          "onDelete": "no action",
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },
@@ -305,7 +305,7 @@
           "tableTo": "entries",
           "columnsFrom": ["entry_id"],
           "columnsTo": ["id"],
-          "onDelete": "no action",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         },
         "entry_photos_media_id_media_id_fk": {
@@ -314,7 +314,7 @@
           "tableTo": "media",
           "columnsFrom": ["media_id"],
           "columnsTo": ["id"],
-          "onDelete": "no action",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
@@ -365,7 +365,7 @@
           "tableTo": "entries",
           "columnsFrom": ["entry_id"],
           "columnsTo": ["id"],
-          "onDelete": "no action",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         },
         "entry_tags_tag_id_tags_id_fk": {
@@ -374,7 +374,7 @@
           "tableTo": "tags",
           "columnsFrom": ["tag_id"],
           "columnsTo": ["id"],
-          "onDelete": "no action",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
@@ -437,7 +437,7 @@
           "tableTo": "users",
           "columnsFrom": ["follower_id"],
           "columnsTo": ["id"],
-          "onDelete": "no action",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         },
         "follows_followee_id_users_id_fk": {
@@ -446,7 +446,7 @@
           "tableTo": "users",
           "columnsFrom": ["followee_id"],
           "columnsTo": ["id"],
-          "onDelete": "no action",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
@@ -520,7 +520,7 @@
           "tableTo": "users",
           "columnsFrom": ["user_id"],
           "columnsTo": ["id"],
-          "onDelete": "no action",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
@@ -603,7 +603,7 @@
           "tableTo": "users",
           "columnsFrom": ["user_id"],
           "columnsTo": ["id"],
-          "onDelete": "no action",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
@@ -704,7 +704,7 @@
           "tableTo": "users",
           "columnsFrom": ["user_id"],
           "columnsTo": ["id"],
-          "onDelete": "no action",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
@@ -852,7 +852,7 @@
           "tableTo": "trips",
           "columnsFrom": ["trip_id"],
           "columnsTo": ["id"],
-          "onDelete": "no action",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         },
         "trip_stops_place_id_places_id_fk": {
@@ -861,7 +861,7 @@
           "tableTo": "places",
           "columnsFrom": ["place_id"],
           "columnsTo": ["id"],
-          "onDelete": "no action",
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },
@@ -972,7 +972,7 @@
           "tableTo": "users",
           "columnsFrom": ["user_id"],
           "columnsTo": ["id"],
-          "onDelete": "no action",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         },
         "trips_cover_image_id_media_id_fk": {
@@ -981,7 +981,7 @@
           "tableTo": "media",
           "columnsFrom": ["cover_image_id"],
           "columnsTo": ["id"],
-          "onDelete": "no action",
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },
@@ -1069,7 +1069,7 @@
           "tableTo": "users",
           "columnsFrom": ["user_id"],
           "columnsTo": ["id"],
-          "onDelete": "no action",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },

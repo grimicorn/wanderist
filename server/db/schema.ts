@@ -97,7 +97,7 @@ export const media = pgTable(
     id: text("id").primaryKey(),
     userId: text("user_id")
       .notNull()
-      .references(() => users.id),
+      .references(() => users.id, { onDelete: "cascade" }),
     url: text("url").notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
@@ -114,7 +114,7 @@ export const places = pgTable(
     id: text("id").primaryKey(),
     userId: text("user_id")
       .notNull()
-      .references(() => users.id),
+      .references(() => users.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     subtitle: text("subtitle"),
     country: text("country"),
@@ -140,12 +140,14 @@ export const trips = pgTable(
     id: text("id").primaryKey(),
     userId: text("user_id")
       .notNull()
-      .references(() => users.id),
+      .references(() => users.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     status: tripStatusEnum("status").notNull().default(TRIP_STATUS.UPCOMING),
     startDate: timestamp("start_date"),
     endDate: timestamp("end_date"),
-    coverImageId: text("cover_image_id").references(() => media.id),
+    coverImageId: text("cover_image_id").references(() => media.id, {
+      onDelete: "set null",
+    }),
     distanceKm: doublePrecision("distance_km"),
     visibility: visibilityEnum("visibility")
       .notNull()
@@ -169,8 +171,10 @@ export const tripStops = pgTable(
     id: text("id").primaryKey(),
     tripId: text("trip_id")
       .notNull()
-      .references(() => trips.id),
-    placeId: text("place_id").references(() => places.id),
+      .references(() => trips.id, { onDelete: "cascade" }),
+    placeId: text("place_id").references(() => places.id, {
+      onDelete: "set null",
+    }),
     name: text("name").notNull(),
     sortOrder: integer("sort_order").notNull().default(0),
     arriveDate: timestamp("arrive_date"),
@@ -197,9 +201,13 @@ export const entries = pgTable(
     id: text("id").primaryKey(),
     userId: text("user_id")
       .notNull()
-      .references(() => users.id),
-    tripId: text("trip_id").references(() => trips.id),
-    placeId: text("place_id").references(() => places.id),
+      .references(() => users.id, { onDelete: "cascade" }),
+    tripId: text("trip_id").references(() => trips.id, {
+      onDelete: "set null",
+    }),
+    placeId: text("place_id").references(() => places.id, {
+      onDelete: "set null",
+    }),
     title: text("title").notNull(),
     body: text("body"),
     occurredAt: timestamp("occurred_at"),
@@ -237,10 +245,10 @@ export const entryTags = pgTable(
   {
     entryId: text("entry_id")
       .notNull()
-      .references(() => entries.id),
+      .references(() => entries.id, { onDelete: "cascade" }),
     tagId: text("tag_id")
       .notNull()
-      .references(() => tags.id),
+      .references(() => tags.id, { onDelete: "cascade" }),
   },
   (table) => [
     primaryKey({ columns: [table.entryId, table.tagId] }),
@@ -260,10 +268,10 @@ export const entryPhotos = pgTable(
     id: text("id").primaryKey(),
     entryId: text("entry_id")
       .notNull()
-      .references(() => entries.id),
+      .references(() => entries.id, { onDelete: "cascade" }),
     mediaId: text("media_id")
       .notNull()
-      .references(() => media.id),
+      .references(() => media.id, { onDelete: "cascade" }),
     sortOrder: integer("sort_order").notNull().default(0),
   },
   (table) => [index("entry_photos_entry_id_idx").on(table.entryId)],
@@ -278,10 +286,10 @@ export const follows = pgTable(
   {
     followerId: text("follower_id")
       .notNull()
-      .references(() => users.id),
+      .references(() => users.id, { onDelete: "cascade" }),
     followeeId: text("followee_id")
       .notNull()
-      .references(() => users.id),
+      .references(() => users.id, { onDelete: "cascade" }),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
@@ -306,7 +314,7 @@ export const notifications = pgTable(
     id: text("id").primaryKey(),
     userId: text("user_id")
       .notNull()
-      .references(() => users.id),
+      .references(() => users.id, { onDelete: "cascade" }),
     type: text("type").notNull(),
     tone: text("tone"),
     body: text("body").notNull(),
@@ -328,7 +336,7 @@ export const connectedAccounts = pgTable(
     id: text("id").primaryKey(),
     userId: text("user_id")
       .notNull()
-      .references(() => users.id),
+      .references(() => users.id, { onDelete: "cascade" }),
     provider: connectedAccountProviderEnum("provider").notNull(),
     externalId: text("external_id").notNull(),
     accessToken: text("access_token"),
@@ -351,7 +359,7 @@ export const connectedAccounts = pgTable(
 export const userPreferences = pgTable("user_preferences", {
   userId: text("user_id")
     .primaryKey()
-    .references(() => users.id),
+    .references(() => users.id, { onDelete: "cascade" }),
   distanceUnit: distanceUnitEnum("distance_unit")
     .notNull()
     .default(DISTANCE_UNIT.MI),

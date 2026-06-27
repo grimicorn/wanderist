@@ -1,4 +1,7 @@
 import { describe, it, expect } from "vitest";
+import { is } from "drizzle-orm";
+import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
+import * as schema from "../server/db/schema";
 import {
   users,
   media,
@@ -201,5 +204,192 @@ describe("column presence", () => {
     expect(userPreferences.publicProfile).toBeDefined();
     expect(userPreferences.handle).toBeDefined();
     expect(userPreferences.bio).toBeDefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ON DELETE policy — assert the referential-action encoded on each FK so the
+// build fails if the policy regresses (e.g. a cascade silently becomes the
+// Drizzle default of "no action"). Read directly from the Drizzle table config
+// rather than the generated SQL so the assertion tracks the source of truth.
+//
+// Policy:
+//   - cascade   → NOT NULL ownership FKs and owned child / join rows
+//   - set null  → nullable optional cross-references
+// ---------------------------------------------------------------------------
+
+const ON_DELETE = {
+  CASCADE: "cascade",
+  SET_NULL: "set null",
+} as const;
+
+type OnDeleteAction = (typeof ON_DELETE)[keyof typeof ON_DELETE];
+
+// The policy is keyed by a single referencing column. The assertion below
+// guards that every FK in the schema is single-column so this 1:1 mapping
+// (and the FK-count coverage check) stays valid if a composite FK is added.
+const FK_REFERENCING_COLUMN_COUNT = 1;
+
+function onDeleteForColumn(
+  table: PgTable,
+  columnName: string,
+): string | undefined {
+  const { foreignKeys } = getTableConfig(table);
+  const match = foreignKeys.find((foreignKey) =>
+    foreignKey.reference().columns.some((column) => column.name === columnName),
+  );
+  if (!match) {
+    return undefined;
+  }
+  return match.onDelete;
+}
+
+function schemaTables(): ReadonlyArray<PgTable> {
+  return Object.values(schema).filter((value): value is PgTable =>
+    is(value, PgTable),
+  );
+}
+
+const ON_DELETE_POLICY: ReadonlyArray<{
+  label: string;
+  table: PgTable;
+  column: string;
+  expected: OnDeleteAction;
+}> = [
+  {
+    label: "media.userId",
+    table: media,
+    column: "user_id",
+    expected: ON_DELETE.CASCADE,
+  },
+  {
+    label: "places.userId",
+    table: places,
+    column: "user_id",
+    expected: ON_DELETE.CASCADE,
+  },
+  {
+    label: "trips.userId",
+    table: trips,
+    column: "user_id",
+    expected: ON_DELETE.CASCADE,
+  },
+  {
+    label: "trips.coverImageId",
+    table: trips,
+    column: "cover_image_id",
+    expected: ON_DELETE.SET_NULL,
+  },
+  {
+    label: "tripStops.tripId",
+    table: tripStops,
+    column: "trip_id",
+    expected: ON_DELETE.CASCADE,
+  },
+  {
+    label: "tripStops.placeId",
+    table: tripStops,
+    column: "place_id",
+    expected: ON_DELETE.SET_NULL,
+  },
+  {
+    label: "entries.userId",
+    table: entries,
+    column: "user_id",
+    expected: ON_DELETE.CASCADE,
+  },
+  {
+    label: "entries.tripId",
+    table: entries,
+    column: "trip_id",
+    expected: ON_DELETE.SET_NULL,
+  },
+  {
+    label: "entries.placeId",
+    table: entries,
+    column: "place_id",
+    expected: ON_DELETE.SET_NULL,
+  },
+  {
+    label: "entryTags.entryId",
+    table: entryTags,
+    column: "entry_id",
+    expected: ON_DELETE.CASCADE,
+  },
+  {
+    label: "entryTags.tagId",
+    table: entryTags,
+    column: "tag_id",
+    expected: ON_DELETE.CASCADE,
+  },
+  {
+    label: "entryPhotos.entryId",
+    table: entryPhotos,
+    column: "entry_id",
+    expected: ON_DELETE.CASCADE,
+  },
+  {
+    label: "entryPhotos.mediaId",
+    table: entryPhotos,
+    column: "media_id",
+    expected: ON_DELETE.CASCADE,
+  },
+  {
+    label: "follows.followerId",
+    table: follows,
+    column: "follower_id",
+    expected: ON_DELETE.CASCADE,
+  },
+  {
+    label: "follows.followeeId",
+    table: follows,
+    column: "followee_id",
+    expected: ON_DELETE.CASCADE,
+  },
+  {
+    label: "notifications.userId",
+    table: notifications,
+    column: "user_id",
+    expected: ON_DELETE.CASCADE,
+  },
+  {
+    label: "connectedAccounts.userId",
+    table: connectedAccounts,
+    column: "user_id",
+    expected: ON_DELETE.CASCADE,
+  },
+  {
+    label: "userPreferences.userId",
+    table: userPreferences,
+    column: "user_id",
+    expected: ON_DELETE.CASCADE,
+  },
+];
+
+describe("ON DELETE policy", () => {
+  it.each(ON_DELETE_POLICY)(
+    "$label uses ON DELETE $expected",
+    ({ table, column, expected }) => {
+      expect(onDeleteForColumn(table, column)).toBe(expected);
+    },
+  );
+
+  it("every foreign key in the schema is single-column", () => {
+    const referencingColumnCounts = schemaTables().flatMap((table) =>
+      getTableConfig(table).foreignKeys.map(
+        (foreignKey) => foreignKey.reference().columns.length,
+      ),
+    );
+    for (const columnCount of referencingColumnCounts) {
+      expect(columnCount).toBe(FK_REFERENCING_COLUMN_COUNT);
+    }
+  });
+
+  it("covers every foreign key in the schema (no FK left unasserted)", () => {
+    const totalForeignKeys = schemaTables().reduce(
+      (count, table) => count + getTableConfig(table).foreignKeys.length,
+      0,
+    );
+    expect(ON_DELETE_POLICY).toHaveLength(totalForeignKeys);
   });
 });
