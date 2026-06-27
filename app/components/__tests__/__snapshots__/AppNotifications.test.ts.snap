@@ -1,0 +1,45 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`AppNotifications > renders the panel when open and matches snapshot 1`] = `
+"<div class="notif is-open" role="dialog" aria-label="Notifications">
+  <div class="notif__head"><b>Notifications</b><button class="notif__mark">mark all read</button></div>
+  <div class="notif__list">
+    <div class="notif__item is-unread"><span class="notif__ico notif__ico--info"><svg data-icon="" name="instagram" size="16"></svg></span>
+      <div class="notif__body">
+        <!-- eslint-disable-next-line vue/no-v-html -->
+        <p class="notif__title">12 geotagged photos from Lisbon are ready to import</p><span class="notif__time">2h</span>
+      </div><span class="notif__dot"></span>
+    </div>
+    <div class="notif__item is-unread"><span class="notif__ico notif__ico--accent"><svg data-icon="" name="heart" size="16"></svg></span>
+      <div class="notif__body">
+        <!-- eslint-disable-next-line vue/no-v-html -->
+        <p class="notif__title"><b>elsa_far</b> liked your entry "Harbor at 4am"</p><span class="notif__time">5h</span>
+      </div><span class="notif__dot"></span>
+    </div>
+    <div class="notif__item is-unread"><span class="notif__ico notif__ico--accent"><svg data-icon="" name="message" size="16"></svg></span>
+      <div class="notif__body">
+        <!-- eslint-disable-next-line vue/no-v-html -->
+        <p class="notif__title"><b>marco.travels</b> commented on "Tram 28, again"</p><span class="notif__time">Yesterday</span>
+      </div><span class="notif__dot"></span>
+    </div>
+    <div class="notif__item"><span class="notif__ico notif__ico--success"><svg data-icon="" name="check-circle" size="16"></svg></span>
+      <div class="notif__body">
+        <!-- eslint-disable-next-line vue/no-v-html -->
+        <p class="notif__title">Your trip "Iceland, the ring road" is now public</p><span class="notif__time">2d</span>
+      </div><span class="notif__dot"></span>
+    </div>
+    <div class="notif__item"><span class="notif__ico notif__ico--accent"><svg data-icon="" name="users" size="16"></svg></span>
+      <div class="notif__body">
+        <!-- eslint-disable-next-line vue/no-v-html -->
+        <p class="notif__title"><b>yuki</b> started following you</p><span class="notif__time">4d</span>
+      </div><span class="notif__dot"></span>
+    </div>
+    <div class="notif__item"><span class="notif__ico notif__ico--warning"><svg data-icon="" name="alert-triangle" size="16"></svg></span>
+      <div class="notif__body">
+        <!-- eslint-disable-next-line vue/no-v-html -->
+        <p class="notif__title">Your trial ends in 3 days — add a payment method</p><span class="notif__time">5d</span>
+      </div><span class="notif__dot"></span>
+    </div>
+  </div><a class="notif__foot"> View all activity <svg data-icon="" name="arrow-right" size="14"></svg></a>
+</div>"
+`;

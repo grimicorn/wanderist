@@ -1,0 +1,51 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`AppAlert > renders an info alert by default 1`] = `
+"<div class="alert alert--info" role="alert"><svg data-icon="" name="info" size="18" class="alert__ico"></svg>
+  <div class="alert__body">
+    <!--v-if-->
+    <p class="alert__msg">Something happened</p>
+  </div>
+  <!--v-if-->
+</div>"
+`;
+
+exports[`AppAlert > renders each intent variant 1`] = `
+"<div class="alert alert--error" role="alert"><svg data-icon="" name="alert-circle" size="18" class="alert__ico"></svg>
+  <div class="alert__body">
+    <!--v-if-->
+    <p class="alert__msg">error message</p>
+  </div>
+  <!--v-if-->
+</div>"
+`;
+
+exports[`AppAlert > renders each intent variant 2`] = `
+"<div class="alert alert--warning" role="alert"><svg data-icon="" name="alert-triangle" size="18" class="alert__ico"></svg>
+  <div class="alert__body">
+    <!--v-if-->
+    <p class="alert__msg">warning message</p>
+  </div>
+  <!--v-if-->
+</div>"
+`;
+
+exports[`AppAlert > renders each intent variant 3`] = `
+"<div class="alert alert--success" role="alert"><svg data-icon="" name="check-circle" size="18" class="alert__ico"></svg>
+  <div class="alert__body">
+    <!--v-if-->
+    <p class="alert__msg">success message</p>
+  </div>
+  <!--v-if-->
+</div>"
+`;
+
+exports[`AppAlert > renders each intent variant 4`] = `
+"<div class="alert alert--info" role="alert"><svg data-icon="" name="info" size="18" class="alert__ico"></svg>
+  <div class="alert__body">
+    <!--v-if-->
+    <p class="alert__msg">info message</p>
+  </div>
+  <!--v-if-->
+</div>"
+`;

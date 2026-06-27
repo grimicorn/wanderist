@@ -1,0 +1,171 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Pricing page (/pricing) > renders without crashing and matches snapshot 1`] = `
+"<div data-v-330b0f26="">
+  <!-- NAV -->
+  <nav data-v-330b0f26="" class="mk-nav"><a data-v-330b0f26="" class="brand"><svg data-v-330b0f26="" data-icon="" name="compass" size="26" class="brand__mark"></svg><span data-v-330b0f26="" class="brand__name">wander<b data-v-330b0f26="">ist</b></span></a>
+    <div data-v-330b0f26="" class="links"><a data-v-330b0f26="">Product</a><a data-v-330b0f26="">Plans</a><a data-v-330b0f26="">Sign in</a>
+      <div data-v-330b0f26="" class="theme-toggle"></div>
+    </div>
+  </nav><!-- HEADER -->
+  <header data-v-330b0f26="" class="cmp-head" data-reveal="">
+    <div data-v-330b0f26="" class="topo topo--fade"></div>
+    <div data-v-330b0f26="" class="cmp-head__in">
+      <div data-v-330b0f26="" class="label" style="justify-content: center;"> // compare plans </div>
+      <h1 data-v-330b0f26="">Every feature,<br data-v-330b0f26=""><b data-v-330b0f26="">side by side.</b></h1>
+      <p data-v-330b0f26="">Find the plan that fits how you travel. Switch or cancel anytime.</p>
+      <div data-v-330b0f26="" class="billing"><button data-v-330b0f26="" class="is-active"> Monthly </button><button data-v-330b0f26="" class=""> Yearly <span data-v-330b0f26="" class="save">−25%</span></button></div>
+    </div>
+  </header><!-- TABLE -->
+  <div data-v-330b0f26="" class="table-wrap" data-reveal="">
+    <table data-v-330b0f26="" class="cmp">
+      <thead data-v-330b0f26="">
+        <tr data-v-330b0f26="">
+          <th data-v-330b0f26="" class="thd thd--feat"><span data-v-330b0f26="" class="thd__name">Features</span></th>
+          <th data-v-330b0f26="" class="thd">
+            <div data-v-330b0f26="" class="thd__name">Drifter</div>
+            <div data-v-330b0f26="" class="thd__price"> $0<span data-v-330b0f26="" class="thd__per">/forever</span></div>
+            <div data-v-330b0f26="" class="thd__cta"><a data-v-330b0f26="" class="btn btn--outline btn--sm btn--block">start</a></div>
+          </th>
+          <th data-v-330b0f26="" class="thd thd--pop">
+            <div data-v-330b0f26="" class="thd__name accent-text">Wanderer</div>
+            <div data-v-330b0f26="" class="thd__price">$8<span data-v-330b0f26="" class="thd__per">/mo</span></div>
+            <div data-v-330b0f26="" class="thd__cta"><a data-v-330b0f26="" class="btn btn--primary btn--sm btn--block">free trial</a></div>
+          </th>
+          <th data-v-330b0f26="" class="thd">
+            <div data-v-330b0f26="" class="thd__name">Nomad</div>
+            <div data-v-330b0f26="" class="thd__price">$16<span data-v-330b0f26="" class="thd__per">/mo</span></div>
+            <div data-v-330b0f26="" class="thd__cta"><a data-v-330b0f26="" class="btn btn--outline btn--sm btn--block">free trial</a></div>
+          </th>
+        </tr>
+      </thead>
+      <tbody data-v-330b0f26="">
+        <tr data-v-330b0f26="" class="cat-row">
+          <td data-v-330b0f26="" colspan="4">Places &amp; trips</td>
+        </tr>
+        <tr data-v-330b0f26="" class="feat-row">
+          <td data-v-330b0f26="">Places pinned</td>
+          <td data-v-330b0f26="">25</td>
+          <td data-v-330b0f26="" class="pop">Unlimited</td>
+          <td data-v-330b0f26="">Unlimited</td>
+        </tr>
+        <tr data-v-330b0f26="" class="feat-row">
+          <td data-v-330b0f26="">Active trips</td>
+          <td data-v-330b0f26="">1</td>
+          <td data-v-330b0f26="" class="pop">Unlimited</td>
+          <td data-v-330b0f26="">Unlimited</td>
+        </tr>
+        <tr data-v-330b0f26="" class="feat-row">
+          <td data-v-330b0f26="">Journal entries</td>
+          <td data-v-330b0f26=""><svg data-v-330b0f26="" class="ck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle;">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg></td>
+          <td data-v-330b0f26="" class="pop"><svg data-v-330b0f26="" class="ck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle;">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg></td>
+          <td data-v-330b0f26=""><svg data-v-330b0f26="" class="ck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle;">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg></td>
+        </tr>
+        <tr data-v-330b0f26="" class="feat-row">
+          <td data-v-330b0f26="">GPX route import / export</td>
+          <td data-v-330b0f26=""><span data-v-330b0f26="" class="dash">—</span></td>
+          <td data-v-330b0f26="" class="pop"><span data-v-330b0f26="" class="dash">—</span></td>
+          <td data-v-330b0f26=""><svg data-v-330b0f26="" class="ck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle;">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg></td>
+        </tr>
+        <tr data-v-330b0f26="" class="cat-row">
+          <td data-v-330b0f26="" colspan="4">Photos &amp; media</td>
+        </tr>
+        <tr data-v-330b0f26="" class="feat-row">
+          <td data-v-330b0f26="">Photo storage</td>
+          <td data-v-330b0f26="">100</td>
+          <td data-v-330b0f26="" class="pop">Unlimited</td>
+          <td data-v-330b0f26="">Unlimited</td>
+        </tr>
+        <tr data-v-330b0f26="" class="feat-row">
+          <td data-v-330b0f26="">Instagram sync</td>
+          <td data-v-330b0f26=""><span data-v-330b0f26="" class="dash">—</span></td>
+          <td data-v-330b0f26="" class="pop"><svg data-v-330b0f26="" class="ck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle;">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg></td>
+          <td data-v-330b0f26=""><svg data-v-330b0f26="" class="ck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle;">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg></td>
+        </tr>
+        <tr data-v-330b0f26="" class="feat-row">
+          <td data-v-330b0f26="">Original-resolution backup</td>
+          <td data-v-330b0f26=""><span data-v-330b0f26="" class="dash">—</span></td>
+          <td data-v-330b0f26="" class="pop"><span data-v-330b0f26="" class="dash">—</span></td>
+          <td data-v-330b0f26=""><svg data-v-330b0f26="" class="ck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle;">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg></td>
+        </tr>
+        <tr data-v-330b0f26="" class="cat-row">
+          <td data-v-330b0f26="" colspan="4">Maps</td>
+        </tr>
+        <tr data-v-330b0f26="" class="feat-row">
+          <td data-v-330b0f26="">Map styles</td>
+          <td data-v-330b0f26="">1</td>
+          <td data-v-330b0f26="" class="pop">All</td>
+          <td data-v-330b0f26="">All</td>
+        </tr>
+        <tr data-v-330b0f26="" class="feat-row">
+          <td data-v-330b0f26="">Offline maps</td>
+          <td data-v-330b0f26=""><span data-v-330b0f26="" class="dash">—</span></td>
+          <td data-v-330b0f26="" class="pop"><svg data-v-330b0f26="" class="ck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle;">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg></td>
+          <td data-v-330b0f26=""><svg data-v-330b0f26="" class="ck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle;">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg></td>
+        </tr>
+        <tr data-v-330b0f26="" class="feat-row">
+          <td data-v-330b0f26="">Year-in-review &amp; stats</td>
+          <td data-v-330b0f26=""><span data-v-330b0f26="" class="dash">—</span></td>
+          <td data-v-330b0f26="" class="pop"><svg data-v-330b0f26="" class="ck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle;">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg></td>
+          <td data-v-330b0f26=""><svg data-v-330b0f26="" class="ck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle;">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg></td>
+        </tr>
+        <tr data-v-330b0f26="" class="cat-row">
+          <td data-v-330b0f26="" colspan="4">Sharing &amp; support</td>
+        </tr>
+        <tr data-v-330b0f26="" class="feat-row">
+          <td data-v-330b0f26="">Public traveler profile</td>
+          <td data-v-330b0f26=""><span data-v-330b0f26="" class="dash">—</span></td>
+          <td data-v-330b0f26="" class="pop"><span data-v-330b0f26="" class="dash">—</span></td>
+          <td data-v-330b0f26=""><svg data-v-330b0f26="" class="ck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle;">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg></td>
+        </tr>
+        <tr data-v-330b0f26="" class="feat-row">
+          <td data-v-330b0f26="">Collaborative trips</td>
+          <td data-v-330b0f26=""><span data-v-330b0f26="" class="dash">—</span></td>
+          <td data-v-330b0f26="" class="pop"><span data-v-330b0f26="" class="dash">—</span></td>
+          <td data-v-330b0f26=""><svg data-v-330b0f26="" class="ck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle;">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg></td>
+        </tr>
+        <tr data-v-330b0f26="" class="feat-row">
+          <td data-v-330b0f26="">Support</td>
+          <td data-v-330b0f26="">Community</td>
+          <td data-v-330b0f26="" class="pop">Email</td>
+          <td data-v-330b0f26="">Priority</td>
+        </tr>
+      </tbody>
+      <tfoot data-v-330b0f26="">
+        <tr data-v-330b0f26="" class="tfoot-cta">
+          <td data-v-330b0f26=""></td>
+          <td data-v-330b0f26=""><a data-v-330b0f26="" class="btn btn--outline btn--sm">get started</a></td>
+          <td data-v-330b0f26="" class="pop"><a data-v-330b0f26="" class="btn btn--primary btn--sm">start free trial</a></td>
+          <td data-v-330b0f26=""><a data-v-330b0f26="" class="btn btn--outline btn--sm">start free trial</a></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>"
+`;

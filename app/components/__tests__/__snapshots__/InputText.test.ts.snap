@@ -1,0 +1,17 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`InputText > applies is-error class in error state 1`] = `
+"<div class="field is-error">
+  <!--v-if-->
+  <div class="field__wrap"><input id="test-id-5" class="field__input" type="text"><span class="field__icon"><svg data-icon="" name="alert-circle" size="16"></svg></span></div>
+  <p class="field__hint">Required</p>
+</div>"
+`;
+
+exports[`InputText > renders a text input by default 1`] = `
+"<div class="field">
+  <!--v-if-->
+  <div class="field__wrap"><input id="test-id-1" class="field__input" type="text"><span class="field__icon"><!--v-if--></span></div>
+  <!--v-if-->
+</div>"
+`;
