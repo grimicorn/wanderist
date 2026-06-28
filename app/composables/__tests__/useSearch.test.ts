@@ -23,7 +23,7 @@ const SAMPLE_API_RESPONSE = {
     },
   ],
   trips: [{ id: "t-1", name: "Iceland Ring Road", status: "past" }],
-  entries: [{ id: "e-1", title: "Harbor at 4am", body: "Cold morning" }],
+  entries: [{ id: "e-1", title: "Harbor at 4am" }],
   people: [
     {
       id: "u-2",
@@ -304,5 +304,36 @@ describe("useSearch", () => {
   it("exposes a reactive query ref that is initially empty", () => {
     const { query } = useSearch();
     expect(query.value).toBe("");
+  });
+
+  it("sets isLoading synchronously when a non-empty query is received (before debounce fires)", () => {
+    mockApiFetch.mockResolvedValue(SAMPLE_API_RESPONSE);
+    const { search, isLoading } = useSearch();
+
+    search("reyk");
+
+    // Timer not yet fired — loading should already be true
+    expect(isLoading.value).toBe(true);
+    expect(mockApiFetch).not.toHaveBeenCalled();
+  });
+
+  it("clears stale error synchronously when a new search starts", async () => {
+    mockApiFetch.mockRejectedValueOnce(new Error("Network error"));
+    const { search, error } = useSearch();
+    await searchAndFlush(search, "reyk");
+    expect(error.value).toBeTruthy();
+
+    // Start a new search — error should clear before the debounce fires
+    mockApiFetch.mockResolvedValue(SAMPLE_API_RESPONSE);
+    search("tokyo");
+    expect(error.value).toBeNull();
+  });
+
+  it("does not set isLoading when search is called with an empty string", () => {
+    const { search, isLoading } = useSearch();
+
+    search("");
+
+    expect(isLoading.value).toBe(false);
   });
 });

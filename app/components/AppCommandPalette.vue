@@ -57,7 +57,7 @@
         <div v-else-if="searchError && query" class="cmdk__error" role="alert">
           {{ searchError }}
         </div>
-        <div v-else-if="query" class="cmdk__empty">
+        <div v-else-if="query && !searchIsLoading" class="cmdk__empty">
           No matches for &ldquo;{{ query }}&rdquo;. Try a place, trip or
           @handle.
         </div>
@@ -133,7 +133,13 @@ const emit = defineEmits<{ close: [] }>();
 const activeIndex = ref(0);
 const inputRef = ref<HTMLInputElement | null>(null);
 
-const { query, results, error: searchError, search } = useSearch();
+const {
+  query,
+  results,
+  isLoading: searchIsLoading,
+  error: searchError,
+  search,
+} = useSearch();
 
 const visibleGroups = computed<SearchGroup[]>(() => {
   const trimmed = query.value.trim();

@@ -123,9 +123,7 @@ describe("searchEntries", () => {
   });
 
   it("returns entries matching the pattern for the given user", async () => {
-    const expectedRows = [
-      { id: "e-1", title: "Harbor at 4am", body: "Cold morning" },
-    ];
+    const expectedRows = [{ id: "e-1", title: "Harbor at 4am" }];
     const chain = makeQueryChain(expectedRows);
     mockGetDb.mockReturnValue(chain as unknown as ReturnType<typeof getDb>);
 

@@ -109,7 +109,7 @@ describe("GET /api/search", () => {
         },
       ],
       trips: [{ id: "t-1", name: "Japan 2025", status: "past" }],
-      entries: [{ id: "e-1", title: "Shinjuku station", body: null }],
+      entries: [{ id: "e-1", title: "Shinjuku station" }],
       people: [
         {
           id: "u-2",

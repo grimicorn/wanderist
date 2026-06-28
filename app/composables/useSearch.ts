@@ -36,7 +36,6 @@ interface TripResult {
 interface EntryResult {
   id: string;
   title: string;
-  body: string | null;
 }
 
 interface PersonResult {
@@ -138,13 +137,16 @@ export function useSearch() {
   let activeRequestId = 0;
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
+  onScopeDispose(() => {
+    if (debounceTimer !== null) {
+      clearTimeout(debounceTimer);
+    }
+  });
+
   async function executeSearch(
     searchQuery: string,
     requestId: number,
   ): Promise<void> {
-    isLoading.value = true;
-    error.value = null;
-
     try {
       const response = await apiFetch<SearchApiResponse>(
         `/api/search?q=${encodeURIComponent(searchQuery)}`,
@@ -184,6 +186,11 @@ export function useSearch() {
       isLoading.value = false;
       return;
     }
+
+    // Set loading state synchronously so consumers don't flash empty/error
+    // state during the debounce window or in-flight request.
+    isLoading.value = true;
+    error.value = null;
 
     const requestId = activeRequestId;
 

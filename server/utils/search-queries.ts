@@ -21,7 +21,6 @@ export interface TripResult {
 export interface EntryResult {
   id: string;
   title: string;
-  body: string | null;
 }
 
 export interface PersonResult {
@@ -92,7 +91,6 @@ export async function searchEntries(
     .select({
       id: entries.id,
       title: entries.title,
-      body: entries.body,
     })
     .from(entries)
     .where(
