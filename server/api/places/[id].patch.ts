@@ -9,52 +9,77 @@ import {
 import { getDb } from "../../db/index";
 import { places } from "../../db/schema";
 
+type PlaceUpdates = Partial<typeof places.$inferInsert>;
+
+function applyOptionalString(
+  updates: PlaceUpdates,
+  body: Record<string, unknown>,
+  field: keyof Pick<PlaceUpdates, "subtitle" | "country" | "category">,
+): void {
+  const value = optionalString(body[field], field);
+  if (value !== undefined) {
+    updates[field] = value;
+  }
+}
+
+function applyOptionalName(
+  updates: PlaceUpdates,
+  body: Record<string, unknown>,
+): void {
+  const name = optionalString(body.name, "name");
+  if (name === undefined) {
+    return;
+  }
+  const trimmedName = name.trim();
+  if (trimmedName === "") {
+    throw createError({
+      statusCode: 400,
+      statusMessage: "name must not be empty when provided",
+    });
+  }
+  updates.name = trimmedName;
+}
+
+function applyCoordinates(
+  updates: PlaceUpdates,
+  body: Record<string, unknown>,
+): void {
+  const latitude = optionalLatitude(body.latitude);
+  const longitude = optionalLongitude(body.longitude);
+
+  const hasLatitude = latitude !== undefined;
+  const hasLongitude = longitude !== undefined;
+
+  if (hasLatitude !== hasLongitude) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: "latitude and longitude must be provided together",
+    });
+  }
+
+  if (hasLatitude) {
+    updates.latitude = latitude;
+  }
+
+  if (hasLongitude) {
+    updates.longitude = longitude;
+  }
+}
+
 export default defineEventHandler(async (event) => {
   const id = requireRouterParam(event, "id");
 
   await assertOwnership(event, places, places.id, places.userId, id);
 
   const database = getDb();
-  const body = await readBody(event);
+  const body = (await readBody(event)) as Record<string, unknown>;
+  const updates: PlaceUpdates = {};
 
-  const updates: Partial<typeof places.$inferInsert> = {};
-
-  const name = optionalString(body?.name, "name");
-  if (name !== undefined) {
-    const trimmedName = name.trim();
-    if (trimmedName === "") {
-      throw createError({
-        statusCode: 400,
-        statusMessage: "name must not be empty when provided",
-      });
-    }
-    updates.name = trimmedName;
-  }
-
-  const subtitle = optionalString(body?.subtitle, "subtitle");
-  if (subtitle !== undefined) {
-    updates.subtitle = subtitle;
-  }
-
-  const country = optionalString(body?.country, "country");
-  if (country !== undefined) {
-    updates.country = country;
-  }
-
-  const category = optionalString(body?.category, "category");
-  if (category !== undefined) {
-    updates.category = category;
-  }
-
-  const latitude = optionalLatitude(body?.latitude);
-  if (latitude !== undefined) {
-    updates.latitude = latitude;
-  }
-
-  const longitude = optionalLongitude(body?.longitude);
-  if (longitude !== undefined) {
-    updates.longitude = longitude;
-  }
+  applyOptionalName(updates, body);
+  applyOptionalString(updates, body, "subtitle");
+  applyOptionalString(updates, body, "country");
+  applyOptionalString(updates, body, "category");
+  applyCoordinates(updates, body);
 
   if (Object.keys(updates).length === 0) {
     throw createError({

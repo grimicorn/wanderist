@@ -120,6 +120,28 @@ describe("POST /api/places", () => {
     expect(result).toEqual(createdPlace);
   });
 
+  it("throws 400 when only latitude is provided without longitude", async () => {
+    mockEnsureUser.mockResolvedValue("user-1");
+    mockReadBody.mockResolvedValue({ name: "Paris", latitude: 48.8566 });
+
+    const defaultHandler = "default" in handler ? handler.default : handler;
+
+    await expect(
+      (defaultHandler as (event: unknown) => unknown)({}),
+    ).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  it("throws 400 when only longitude is provided without latitude", async () => {
+    mockEnsureUser.mockResolvedValue("user-1");
+    mockReadBody.mockResolvedValue({ name: "Paris", longitude: 2.3522 });
+
+    const defaultHandler = "default" in handler ? handler.default : handler;
+
+    await expect(
+      (defaultHandler as (event: unknown) => unknown)({}),
+    ).rejects.toMatchObject({ statusCode: 400 });
+  });
+
   it("throws 401 when not authenticated", async () => {
     const unauthorizedError = createError({
       statusCode: 401,

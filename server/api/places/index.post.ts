@@ -26,6 +26,13 @@ export default defineEventHandler(async (event) => {
   const latitude = optionalLatitude(body?.latitude);
   const longitude = optionalLongitude(body?.longitude);
 
+  if ((latitude === undefined) !== (longitude === undefined)) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: "latitude and longitude must be provided together",
+    });
+  }
+
   const id = generateId();
 
   const inserted = await database

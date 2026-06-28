@@ -42,12 +42,13 @@ describe("usePlacesStore", () => {
 
     it("sets isLoading true during fetch", async () => {
       let capturedLoading = false;
+      const store = usePlacesStore();
+
       mockApiFetch.mockImplementation(async () => {
-        capturedLoading = true;
+        capturedLoading = store.isLoading;
         return [];
       });
 
-      const store = usePlacesStore();
       await store.fetchPlaces();
 
       expect(capturedLoading).toBe(true);

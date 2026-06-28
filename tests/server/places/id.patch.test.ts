@@ -153,6 +153,20 @@ describe("PATCH /api/places/:id", () => {
     ).rejects.toMatchObject({ statusCode: 400 });
   });
 
+  it("throws 400 when only latitude is provided without longitude", async () => {
+    mockRequireRouterParam.mockReturnValue("place-1");
+    mockReadBody.mockResolvedValue({ latitude: 48.8566 });
+    mockAssertOwnership.mockResolvedValue(undefined);
+    const mockDb = makeDbWithUpdate({});
+    mockGetDb.mockReturnValue(mockDb as unknown as ReturnType<typeof getDb>);
+
+    const defaultHandler = "default" in handler ? handler.default : handler;
+
+    await expect(
+      (defaultHandler as (event: unknown) => unknown)({}),
+    ).rejects.toMatchObject({ statusCode: 400 });
+  });
+
   it("throws 404 when place is not owned", async () => {
     mockRequireRouterParam.mockReturnValue("place-1");
     mockReadBody.mockResolvedValue({ name: "Berlin" });
