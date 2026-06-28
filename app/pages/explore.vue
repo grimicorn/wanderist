@@ -7,7 +7,7 @@
       <button class="icon-btn" aria-label="Alerts">
         <AppIcon name="bell" :size="18" />
       </button>
-      <button class="btn btn--primary btn--sm">
+      <button class="btn btn--primary btn--sm" @click="openNewEntry?.()">
         <AppIcon name="plus" :size="14" />
         new entry
       </button>
@@ -214,6 +214,11 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed } from "vue";
+
+const openNewEntry = inject<(() => void) | undefined>(
+  "openNewEntry",
+  undefined,
+);
 
 definePageMeta({ layout: "app", middleware: "auth" });
 useHead({ title: "Wanderist — Explore" });
