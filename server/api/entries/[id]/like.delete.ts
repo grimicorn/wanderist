@@ -5,6 +5,7 @@ import {
 } from "../../../utils/db-helpers";
 import { getDb } from "../../../db/index";
 import { entries } from "../../../db/schema";
+import { loadEntryRelations } from "../../../utils/entry-helpers";
 
 const MIN_LIKE_COUNT = 0;
 
@@ -19,11 +20,12 @@ export default defineEventHandler(async (event) => {
     id,
   );
 
-  if (entry.likeCount <= MIN_LIKE_COUNT) {
-    return entry;
-  }
-
   const database = getDb();
+
+  if (entry.likeCount <= MIN_LIKE_COUNT) {
+    const relations = await loadEntryRelations(database, id);
+    return { ...entry, ...relations };
+  }
 
   const updated = await database
     .update(entries)
@@ -33,5 +35,7 @@ export default defineEventHandler(async (event) => {
     .where(eq(entries.id, id))
     .returning();
 
-  return updated[0];
+  const relations = await loadEntryRelations(database, id);
+
+  return { ...updated[0], ...relations };
 });

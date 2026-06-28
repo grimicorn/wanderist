@@ -5,66 +5,19 @@ import {
   requireRouterParam,
 } from "../../utils/db-helpers";
 import { getDb } from "../../db/index";
+import { entries, entryPhotos, entryTags } from "../../db/schema";
 import {
-  entries,
-  entryPhotos,
-  entryTags,
-  tags,
-  VISIBILITY,
-} from "../../db/schema";
-import { loadEntryRelations } from "../../utils/entry-helpers";
+  generateId,
+  parseOccurredAt,
+  parseStringArray,
+  upsertTags,
+  loadEntryRelations,
+  VALID_VISIBILITY,
+  type EntryVisibility,
+} from "../../utils/entry-helpers";
 
 type EntryUpdates = Partial<typeof entries.$inferInsert>;
-type Visibility = (typeof VISIBILITY)[keyof typeof VISIBILITY];
-
-const VALID_VISIBILITY = Object.values(VISIBILITY) as Visibility[];
-
-function generateId(): string {
-  return crypto.randomUUID();
-}
-
-function parseOccurredAt(value: unknown): Date | undefined {
-  if (value === undefined || value === null) {
-    return undefined;
-  }
-  if (typeof value !== "string" && typeof value !== "number") {
-    throw createError({
-      statusCode: 400,
-      statusMessage: "occurredAt must be a valid date string",
-    });
-  }
-  const date = new Date(value);
-  if (isNaN(date.getTime())) {
-    throw createError({
-      statusCode: 400,
-      statusMessage: "occurredAt must be a valid date string",
-    });
-  }
-  return date;
-}
-
-function parseStringArray(
-  value: unknown,
-  fieldName: string,
-): string[] | undefined {
-  if (value === undefined || value === null) {
-    return undefined;
-  }
-  if (!Array.isArray(value)) {
-    throw createError({
-      statusCode: 400,
-      statusMessage: `${fieldName} must be an array when provided`,
-    });
-  }
-  const allStrings = value.every((item) => typeof item === "string");
-  if (!allStrings) {
-    throw createError({
-      statusCode: 400,
-      statusMessage: `${fieldName} must be an array of strings`,
-    });
-  }
-  return value as string[];
-}
+type DbClient = ReturnType<typeof getDb>;
 
 function applyTitle(
   updates: EntryUpdates,
@@ -92,13 +45,13 @@ function applyVisibility(
   if (visibility === undefined || visibility === null) {
     return;
   }
-  if (!VALID_VISIBILITY.includes(visibility as Visibility)) {
+  if (!VALID_VISIBILITY.includes(visibility as EntryVisibility)) {
     throw createError({
       statusCode: 400,
       statusMessage: `visibility must be one of: ${VALID_VISIBILITY.join(", ")}`,
     });
   }
-  updates.visibility = visibility as Visibility;
+  updates.visibility = visibility as EntryVisibility;
 }
 
 function applyOccurredAt(
@@ -111,55 +64,35 @@ function applyOccurredAt(
   updates.occurredAt = parseOccurredAt(body.occurredAt);
 }
 
-async function upsertTags(
-  database: ReturnType<typeof getDb>,
-  tagNames: string[],
-): Promise<string[]> {
-  const tagIds: string[] = [];
-  for (const name of tagNames) {
-    const trimmedName = name.trim();
-    if (trimmedName === "") {
-      continue;
-    }
-    const existing = await database
-      .insert(tags)
-      .values({ id: generateId(), name: trimmedName })
-      .onConflictDoUpdate({ target: tags.name, set: { name: trimmedName } })
-      .returning({ id: tags.id });
-    tagIds.push(existing[0].id);
-  }
-  return tagIds;
-}
-
 async function replaceEntryTags(
-  database: ReturnType<typeof getDb>,
+  tx: DbClient,
   entryId: string,
   tagNames: string[],
 ): Promise<void> {
-  await database.delete(entryTags).where(eq(entryTags.entryId, entryId));
+  await tx.delete(entryTags).where(eq(entryTags.entryId, entryId));
 
-  const tagIds = await upsertTags(database, tagNames);
+  const tagIds = await upsertTags(tx, tagNames);
   if (tagIds.length === 0) {
     return;
   }
 
-  await database
+  await tx
     .insert(entryTags)
     .values(tagIds.map((tagId) => ({ entryId, tagId })));
 }
 
 async function replaceEntryPhotos(
-  database: ReturnType<typeof getDb>,
+  tx: DbClient,
   entryId: string,
   mediaIds: string[],
 ): Promise<void> {
-  await database.delete(entryPhotos).where(eq(entryPhotos.entryId, entryId));
+  await tx.delete(entryPhotos).where(eq(entryPhotos.entryId, entryId));
 
   if (mediaIds.length === 0) {
     return;
   }
 
-  await database.insert(entryPhotos).values(
+  await tx.insert(entryPhotos).values(
     mediaIds.map((mediaId, index) => ({
       id: generateId(),
       entryId,
@@ -216,35 +149,39 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  let updated = null;
+  return database.transaction(async (tx) => {
+    const txClient = tx as unknown as DbClient;
 
-  if (hasScalarUpdates) {
-    const rows = await database
-      .update(entries)
-      .set(updates)
-      .where(eq(entries.id, id))
-      .returning();
-    updated = rows[0];
-  }
+    let updated: typeof entries.$inferSelect | null = null;
 
-  await Promise.all([
-    hasTagUpdates
-      ? replaceEntryTags(database, id, tagNames)
-      : Promise.resolve(),
-    hasPhotoUpdates
-      ? replaceEntryPhotos(database, id, photoMediaIds)
-      : Promise.resolve(),
-  ]);
+    if (hasScalarUpdates) {
+      const rows = await txClient
+        .update(entries)
+        .set(updates)
+        .where(eq(entries.id, id))
+        .returning();
+      updated = rows[0];
+    }
 
-  if (!updated) {
-    const rows = await database
-      .select()
-      .from(entries)
-      .where(eq(entries.id, id));
-    updated = rows[0];
-  }
+    await Promise.all([
+      tagNames !== undefined
+        ? replaceEntryTags(txClient, id, tagNames)
+        : Promise.resolve(),
+      photoMediaIds !== undefined
+        ? replaceEntryPhotos(txClient, id, photoMediaIds)
+        : Promise.resolve(),
+    ]);
 
-  const relations = await loadEntryRelations(database, id);
+    if (!updated) {
+      const rows = await txClient
+        .select()
+        .from(entries)
+        .where(eq(entries.id, id));
+      updated = rows[0];
+    }
 
-  return { ...updated, ...relations };
+    const relations = await loadEntryRelations(txClient, id);
+
+    return { ...updated, ...relations };
+  });
 });

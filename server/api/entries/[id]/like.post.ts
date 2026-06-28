@@ -5,6 +5,7 @@ import {
 } from "../../../utils/db-helpers";
 import { getDb } from "../../../db/index";
 import { entries } from "../../../db/schema";
+import { loadEntryRelations } from "../../../utils/entry-helpers";
 
 export default defineEventHandler(async (event) => {
   const id = requireRouterParam(event, "id");
@@ -19,5 +20,7 @@ export default defineEventHandler(async (event) => {
     .where(eq(entries.id, id))
     .returning();
 
-  return updated[0];
+  const relations = await loadEntryRelations(database, id);
+
+  return { ...updated[0], ...relations };
 });

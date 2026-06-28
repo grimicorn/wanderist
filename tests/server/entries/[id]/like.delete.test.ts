@@ -21,6 +21,10 @@ vi.mock("../../../../server/db/index", () => ({
   getDb: vi.fn(),
 }));
 
+vi.mock("../../../../server/utils/entry-helpers", () => ({
+  loadEntryRelations: vi.fn().mockResolvedValue({ photos: [], tags: [] }),
+}));
+
 vi.mock("drizzle-orm", async (importOriginal) => {
   const original = await importOriginal<typeof import("drizzle-orm")>();
   return {
@@ -66,7 +70,7 @@ describe("DELETE /api/entries/:id/like", () => {
     const defaultHandler = "default" in handler ? handler.default : handler;
     const result = await (defaultHandler as (event: unknown) => unknown)({});
 
-    expect(result).toEqual(entryAfter);
+    expect(result).toMatchObject(entryAfter);
     expect(mockDb.update).toHaveBeenCalledTimes(1);
   });
 
@@ -82,11 +86,14 @@ describe("DELETE /api/entries/:id/like", () => {
       entryAtZero as unknown as Awaited<ReturnType<typeof loadOwnedOrThrow>>,
     );
 
+    const mockDb = makeDbForUpdate(entryAtZero);
+    mockGetDb.mockReturnValue(mockDb as unknown as ReturnType<typeof getDb>);
+
     const defaultHandler = "default" in handler ? handler.default : handler;
     const result = await (defaultHandler as (event: unknown) => unknown)({});
 
-    expect(result).toEqual(entryAtZero);
-    expect(mockGetDb).not.toHaveBeenCalled();
+    expect(result).toMatchObject(entryAtZero);
+    expect(mockDb.update).not.toHaveBeenCalled();
   });
 
   it("throws 400 when id param is missing", async () => {

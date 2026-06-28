@@ -68,13 +68,28 @@ function buildEntriesQuery(filters?: FetchEntriesFilters): string {
   ];
 
   const params = new URLSearchParams(
-    paramPairs
-      .filter((pair): pair is [string, string] => pair[1] !== undefined)
-      .map(([key, value]) => [key, value]),
+    paramPairs.filter(
+      (pair): pair is [string, string] => pair[1] !== undefined,
+    ),
   );
 
   const queryString = params.toString();
   return queryString ? `/api/entries?${queryString}` : "/api/entries";
+}
+
+function replaceLikeCount(
+  list: Entry[],
+  id: string,
+  likeCount: number,
+): Entry[] {
+  return list.map((entry) =>
+    entry.id === id ? { ...entry, likeCount } : entry,
+  );
+}
+
+function setError(error: Ref<string | null>, caught: unknown): void {
+  error.value =
+    caught instanceof Error ? caught.message : "An unexpected error occurred";
 }
 
 export const useEntriesStore = defineStore("entries", () => {
@@ -96,76 +111,100 @@ export const useEntriesStore = defineStore("entries", () => {
       );
       entries.value = result.entries;
       return result;
-    } catch (fetchError) {
-      error.value =
-        fetchError instanceof Error
-          ? fetchError.message
-          : "Failed to load entries";
-      throw fetchError;
+    } catch (caught) {
+      setError(error, caught);
+      throw caught;
     } finally {
       isLoading.value = false;
     }
   }
 
   async function fetchEntry(id: string): Promise<Entry> {
-    return apiFetch<Entry>(`/api/entries/${id}`);
+    try {
+      return await apiFetch<Entry>(`/api/entries/${id}`);
+    } catch (caught) {
+      setError(error, caught);
+      throw caught;
+    }
   }
 
   async function createEntry(input: CreateEntryInput): Promise<Entry> {
-    const created = await apiFetch<Entry>("/api/entries", {
-      method: "POST",
-      body: input,
-    });
+    try {
+      const created = await apiFetch<Entry>("/api/entries", {
+        method: "POST",
+        body: input,
+      });
 
-    entries.value = [...entries.value, created];
+      // Prepend so the newest entry appears first, matching server sort order
+      // (occurredAt desc nulls last, createdAt desc).
+      entries.value = [created, ...entries.value];
 
-    return created;
+      return created;
+    } catch (caught) {
+      setError(error, caught);
+      throw caught;
+    }
   }
 
   async function updateEntry(
     id: string,
     input: UpdateEntryInput,
   ): Promise<Entry> {
-    const updated = await apiFetch<Entry>(`/api/entries/${id}`, {
-      method: "PATCH",
-      body: input,
-    });
+    try {
+      const updated = await apiFetch<Entry>(`/api/entries/${id}`, {
+        method: "PATCH",
+        body: input,
+      });
 
-    entries.value = entries.value.map((entry) =>
-      entry.id === id ? updated : entry,
-    );
+      entries.value = entries.value.map((entry) =>
+        entry.id === id ? updated : entry,
+      );
 
-    return updated;
+      return updated;
+    } catch (caught) {
+      setError(error, caught);
+      throw caught;
+    }
   }
 
   async function deleteEntry(id: string): Promise<void> {
-    await apiFetch(`/api/entries/${id}`, { method: "DELETE" });
-
-    entries.value = entries.value.filter((entry) => entry.id !== id);
+    try {
+      await apiFetch(`/api/entries/${id}`, { method: "DELETE" });
+      entries.value = entries.value.filter((entry) => entry.id !== id);
+    } catch (caught) {
+      setError(error, caught);
+      throw caught;
+    }
   }
 
   async function likeEntry(id: string): Promise<Entry> {
-    const updated = await apiFetch<Entry>(`/api/entries/${id}/like`, {
-      method: "POST",
-    });
+    try {
+      const updated = await apiFetch<Entry>(`/api/entries/${id}/like`, {
+        method: "POST",
+      });
 
-    entries.value = entries.value.map((entry) =>
-      entry.id === id ? { ...entry, likeCount: updated.likeCount } : entry,
-    );
+      entries.value = replaceLikeCount(entries.value, id, updated.likeCount);
 
-    return updated;
+      return updated;
+    } catch (caught) {
+      setError(error, caught);
+      throw caught;
+    }
   }
 
   async function unlikeEntry(id: string): Promise<Entry> {
-    const updated = await apiFetch<Entry>(`/api/entries/${id}/like`, {
-      method: "DELETE",
-    });
+    try {
+      const updated = await apiFetch<Entry>(`/api/entries/${id}/like`, {
+        method: "DELETE",
+      });
 
-    entries.value = entries.value.map((entry) =>
-      entry.id === id ? { ...entry, likeCount: updated.likeCount } : entry,
-    );
+      entries.value = replaceLikeCount(entries.value, id, updated.likeCount);
 
-    return updated;
+      return updated;
+    } catch (caught) {
+      setError(error, caught);
+      throw caught;
+    }
   }
 
   return {

@@ -39,7 +39,41 @@ vi.mock("../../../server/db/index", () => ({
 }));
 
 vi.mock("../../../server/utils/entry-helpers", () => ({
+  generateId: vi.fn().mockReturnValue("generated-id"),
+  parseOccurredAt: vi.fn((value: unknown) => {
+    if (value === undefined || value === null) {
+      return undefined;
+    }
+    const date = new Date(value as string);
+    if (isNaN(date.getTime())) {
+      const error = new Error("bad date") as Error & {
+        statusCode: number;
+        statusMessage: string;
+      };
+      error.statusCode = 400;
+      error.statusMessage = "occurredAt must be a valid date string";
+      throw error;
+    }
+    return date;
+  }),
+  parseStringArray: vi.fn((value: unknown, fieldName: string) => {
+    if (value === undefined || value === null) {
+      return undefined;
+    }
+    if (!Array.isArray(value)) {
+      const error = new Error("not array") as Error & {
+        statusCode: number;
+        statusMessage: string;
+      };
+      error.statusCode = 400;
+      error.statusMessage = `${fieldName} must be an array when provided`;
+      throw error;
+    }
+    return value as string[];
+  }),
+  upsertTags: vi.fn().mockResolvedValue([]),
   loadEntryRelations: vi.fn().mockResolvedValue({ photos: [], tags: [] }),
+  VALID_VISIBILITY: ["private", "public"],
 }));
 
 vi.mock("drizzle-orm", async (importOriginal) => {
@@ -61,33 +95,28 @@ function makeDbForPatch(updatedEntry: Record<string, unknown>) {
   const returningMock = vi.fn().mockResolvedValue([updatedEntry]);
   const whereMock = vi.fn().mockReturnValue({ returning: returningMock });
   const setMock = vi.fn().mockReturnValue({ where: whereMock });
-  const updateMock = vi.fn().mockReturnValue({ set: setMock });
-
-  const tagsReturningMock = vi.fn().mockResolvedValue([{ id: "tag-1" }]);
-  const tagsOnConflictMock = vi
-    .fn()
-    .mockReturnValue({ returning: tagsReturningMock });
 
   const selectWhereMock = vi.fn().mockResolvedValue([updatedEntry]);
   const selectFromMock = vi.fn().mockReturnValue({ where: selectWhereMock });
-  const selectMock = vi.fn().mockReturnValue({ from: selectFromMock });
+
+  const txClient = {
+    update: vi.fn().mockReturnValue({ set: setMock }),
+    delete: vi.fn().mockReturnValue({
+      where: vi.fn().mockResolvedValue(undefined),
+    }),
+    insert: vi.fn().mockReturnValue({
+      values: vi.fn().mockResolvedValue([]),
+    }),
+    select: vi.fn().mockReturnValue({ from: selectFromMock }),
+  };
 
   return {
-    update: updateMock,
-    delete: vi.fn().mockImplementation(() => ({
-      where: vi.fn().mockResolvedValue(undefined),
-    })),
-    insert: vi.fn().mockImplementation(() => ({
-      values: vi.fn().mockImplementation((values: unknown) => {
-        const valuesArr = values as unknown[];
-        const firstItem = valuesArr[0] as Record<string, unknown>;
-        if (valuesArr.length > 0 && typeof firstItem.name === "string") {
-          return { onConflictDoUpdate: tagsOnConflictMock };
-        }
-        return Promise.resolve([]);
-      }),
-    })),
-    select: selectMock,
+    transaction: vi
+      .fn()
+      .mockImplementation(async (callback: (tx: unknown) => Promise<unknown>) =>
+        callback(txClient),
+      ),
+    _txClient: txClient,
   };
 }
 
@@ -205,6 +234,6 @@ describe("PATCH /api/entries/:id", () => {
     const result = await (defaultHandler as (event: unknown) => unknown)({});
 
     expect(result).toMatchObject(updatedEntry);
-    expect(mockDb.update).toHaveBeenCalledTimes(1);
+    expect(mockDb._txClient.update).toHaveBeenCalledTimes(1);
   });
 });

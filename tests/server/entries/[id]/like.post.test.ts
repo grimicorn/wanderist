@@ -21,6 +21,10 @@ vi.mock("../../../../server/db/index", () => ({
   getDb: vi.fn(),
 }));
 
+vi.mock("../../../../server/utils/entry-helpers", () => ({
+  loadEntryRelations: vi.fn().mockResolvedValue({ photos: [], tags: [] }),
+}));
+
 vi.mock("drizzle-orm", async (importOriginal) => {
   const original = await importOriginal<typeof import("drizzle-orm")>();
   return { ...original, eq: vi.fn(original.eq), sql: original.sql };
@@ -61,7 +65,7 @@ describe("POST /api/entries/:id/like", () => {
     const defaultHandler = "default" in handler ? handler.default : handler;
     const result = await (defaultHandler as (event: unknown) => unknown)({});
 
-    expect(result).toEqual(entryAfter);
+    expect(result).toMatchObject(entryAfter);
     expect(mockDb.update).toHaveBeenCalledTimes(1);
   });
 

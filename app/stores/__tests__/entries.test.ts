@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import * as vue from "vue";
 
 const mockApiFetch = vi.fn();
 vi.stubGlobal("useApiClient", () => ({ apiFetch: mockApiFetch }));
 
 const { createPinia, setActivePinia, defineStore } = await import("pinia");
+const { ref } = await import("vue");
+vi.stubGlobal("ref", ref);
 vi.stubGlobal("defineStore", defineStore);
 
 const { useEntriesStore } = await import("../entries");
@@ -98,6 +99,14 @@ describe("useEntriesStore", () => {
       expect(mockApiFetch).toHaveBeenCalledWith("/api/entries?tripId=trip-1");
     });
 
+    it("appends placeId query param when provided", async () => {
+      mockApiFetch.mockResolvedValue({ entries: [], tab: "timeline", page: 1 });
+      const store = useEntriesStore();
+      await store.fetchEntries({ placeId: "place-1" });
+
+      expect(mockApiFetch).toHaveBeenCalledWith("/api/entries?placeId=place-1");
+    });
+
     it("appends tab query param when provided", async () => {
       mockApiFetch.mockResolvedValue({ entries: [], tab: "photos", page: 1 });
       const store = useEntriesStore();
@@ -138,6 +147,14 @@ describe("useEntriesStore", () => {
       expect(result).toEqual(BASE_ENTRY);
       expect(mockApiFetch).toHaveBeenCalledWith("/api/entries/e-1");
     });
+
+    it("sets error and rethrows on failure", async () => {
+      mockApiFetch.mockRejectedValue(new Error("Not found"));
+      const store = useEntriesStore();
+
+      await expect(store.fetchEntry("missing")).rejects.toThrow("Not found");
+      expect(store.error).toBe("Not found");
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -145,7 +162,7 @@ describe("useEntriesStore", () => {
   // ---------------------------------------------------------------------------
 
   describe("createEntry", () => {
-    it("creates an entry and appends it to the list", async () => {
+    it("creates an entry and prepends it to the list", async () => {
       mockApiFetch.mockResolvedValue(BASE_ENTRY);
 
       const store = useEntriesStore();
@@ -167,7 +184,7 @@ describe("useEntriesStore", () => {
       });
     });
 
-    it("appends to existing entries", async () => {
+    it("prepends to existing entries so newest appears first", async () => {
       const second = { ...BASE_ENTRY, id: "e-2", title: "Second" };
       mockApiFetch
         .mockResolvedValueOnce({
@@ -182,7 +199,18 @@ describe("useEntriesStore", () => {
       await store.createEntry({ title: "Second" });
 
       expect(store.entries).toHaveLength(2);
-      expect(store.entries[1]).toEqual(second);
+      expect(store.entries[0]).toEqual(second);
+      expect(store.entries[1]).toEqual(BASE_ENTRY);
+    });
+
+    it("sets error and rethrows on failure", async () => {
+      mockApiFetch.mockRejectedValue(new Error("Validation failed"));
+      const store = useEntriesStore();
+
+      await expect(store.createEntry({ title: "Bad" })).rejects.toThrow(
+        "Validation failed",
+      );
+      expect(store.error).toBe("Validation failed");
     });
   });
 
@@ -242,6 +270,16 @@ describe("useEntriesStore", () => {
       expect(store.entries[0]).toEqual(updatedEntry1);
       expect(store.entries[1]).toEqual(entry2);
     });
+
+    it("sets error and rethrows on failure", async () => {
+      mockApiFetch.mockRejectedValue(new Error("Not found"));
+      const store = useEntriesStore();
+
+      await expect(
+        store.updateEntry("missing", { title: "x" }),
+      ).rejects.toThrow("Not found");
+      expect(store.error).toBe("Not found");
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -275,6 +313,14 @@ describe("useEntriesStore", () => {
       expect(mockApiFetch).toHaveBeenCalledWith("/api/entries/e-1", {
         method: "DELETE",
       });
+    });
+
+    it("sets error and rethrows on failure", async () => {
+      mockApiFetch.mockRejectedValue(new Error("Forbidden"));
+      const store = useEntriesStore();
+
+      await expect(store.deleteEntry("e-1")).rejects.toThrow("Forbidden");
+      expect(store.error).toBe("Forbidden");
     });
   });
 
@@ -310,6 +356,14 @@ describe("useEntriesStore", () => {
       expect(mockApiFetch).toHaveBeenCalledWith("/api/entries/e-1/like", {
         method: "POST",
       });
+    });
+
+    it("sets error and rethrows on failure", async () => {
+      mockApiFetch.mockRejectedValue(new Error("Not found"));
+      const store = useEntriesStore();
+
+      await expect(store.likeEntry("missing")).rejects.toThrow("Not found");
+      expect(store.error).toBe("Not found");
     });
   });
 
@@ -347,6 +401,14 @@ describe("useEntriesStore", () => {
       expect(mockApiFetch).toHaveBeenCalledWith("/api/entries/e-1/like", {
         method: "DELETE",
       });
+    });
+
+    it("sets error and rethrows on failure", async () => {
+      mockApiFetch.mockRejectedValue(new Error("Not found"));
+      const store = useEntriesStore();
+
+      await expect(store.unlikeEntry("missing")).rejects.toThrow("Not found");
+      expect(store.error).toBe("Not found");
     });
   });
 });

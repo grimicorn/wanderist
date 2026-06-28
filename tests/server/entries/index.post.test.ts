@@ -16,6 +16,40 @@ vi.mock("../../../server/db/index", () => ({
 }));
 
 vi.mock("../../../server/utils/entry-helpers", () => ({
+  generateId: vi.fn().mockReturnValue("generated-id"),
+  parseOccurredAt: vi.fn((value: unknown) => {
+    if (value === undefined || value === null) {
+      return undefined;
+    }
+    const date = new Date(value as string);
+    if (isNaN(date.getTime())) {
+      const error = new Error("bad date") as Error & {
+        statusCode: number;
+        statusMessage: string;
+      };
+      error.statusCode = 400;
+      error.statusMessage = "occurredAt must be a valid date string";
+      throw error;
+    }
+    return date;
+  }),
+  parseVisibility: vi.fn().mockReturnValue("private"),
+  parseRequiredStringArray: vi.fn((value: unknown, fieldName: string) => {
+    if (value === undefined || value === null) {
+      return [];
+    }
+    if (!Array.isArray(value)) {
+      const error = new Error("not array") as Error & {
+        statusCode: number;
+        statusMessage: string;
+      };
+      error.statusCode = 400;
+      error.statusMessage = `${fieldName} must be an array when provided`;
+      throw error;
+    }
+    return value as string[];
+  }),
+  upsertTags: vi.fn().mockResolvedValue([]),
   loadEntryRelations: vi.fn().mockResolvedValue({ photos: [], tags: [] }),
 }));
 
@@ -29,29 +63,16 @@ function makeDbForCreate(createdEntry: Record<string, unknown>) {
   const returningMock = vi.fn().mockResolvedValue([createdEntry]);
   const valuesMock = vi.fn().mockReturnValue({ returning: returningMock });
 
-  const tagsReturningMock = vi.fn().mockResolvedValue([{ id: "tag-1" }]);
-  const tagsOnConflictMock = vi
-    .fn()
-    .mockReturnValue({ returning: tagsReturningMock });
-  const tagsValuesMock = vi
-    .fn()
-    .mockReturnValue({ onConflictDoUpdate: tagsOnConflictMock });
-
-  const photoInsertValuesMock = vi.fn().mockResolvedValue([]);
+  const txClient = {
+    insert: vi.fn().mockImplementation(() => ({ values: valuesMock })),
+  };
 
   return {
-    insert: vi.fn().mockImplementation((table: unknown) => {
-      const tableName = (
-        (table as Record<string, unknown>)["_"] as Record<string, unknown>
-      )?.["name"];
-      if (tableName === "tags") {
-        return { values: tagsValuesMock };
-      }
-      if (tableName === "entry_tags" || tableName === "entry_photos") {
-        return { values: photoInsertValuesMock };
-      }
-      return { values: valuesMock };
-    }),
+    transaction: vi
+      .fn()
+      .mockImplementation(async (callback: (tx: unknown) => Promise<unknown>) =>
+        callback(txClient),
+      ),
   };
 }
 
