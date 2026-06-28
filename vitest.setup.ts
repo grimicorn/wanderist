@@ -31,6 +31,24 @@ Object.assign(globalThis, {
   definePageMeta: vi.fn(),
   // Pinia — use the real defineStore so stores work in component tests
   defineStore,
-  // Nuxt auto-import for useApiClient composable (used by trips store)
+  // App composables — stubs for environments that don't import them explicitly
   useApiClient: vi.fn(() => ({ apiFetch: vi.fn().mockResolvedValue([]) })),
+  usePreferences: vi.fn(() => ({
+    preferences: vue.ref({
+      distanceUnit: "mi",
+      defaultMapStyle: "outdoors",
+      publicProfile: false,
+      preciseLocation: false,
+      showOnExplore: true,
+      displayName: null,
+      handle: null,
+      homeBase: null,
+      bio: null,
+    }),
+    isLoading: vue.ref(false),
+    loadError: vue.ref(null),
+    saveError: vue.ref(null),
+    fetchPreferences: vi.fn().mockResolvedValue(undefined),
+    savePreferences: vi.fn().mockResolvedValue(true),
+  })),
 });

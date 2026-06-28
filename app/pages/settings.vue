@@ -2,13 +2,20 @@
   <div>
     <AppTopbar title="Account" crumb="Settings">
       <button class="btn btn--ghost btn--sm">discard</button>
-      <button class="btn btn--primary btn--sm" @click="saveChanges">
+      <button
+        class="btn btn--primary btn--sm"
+        :disabled="!!loadError"
+        @click="saveChanges"
+      >
         <AppIcon name="check" :size="14" />
         save changes
       </button>
     </AppTopbar>
 
     <div class="content content--wide">
+      <div v-if="loadError" class="load-error">
+        <AppAlert intent="error" :title="loadError" />
+      </div>
       <div class="set-layout">
         <!-- Side nav -->
         <nav class="set-nav">
@@ -297,8 +304,13 @@
       </div>
     </div>
 
+    <!-- Error toast -->
+    <div v-if="showErrorBar" class="saved-bar show">
+      <AppAlert intent="error" :title="saveError ?? 'Failed to save'" />
+    </div>
+
     <!-- Saved toast -->
-    <div class="saved-bar" :class="{ show: showSaved }">
+    <div v-else class="saved-bar" :class="{ show: showSaved }">
       <AppAlert intent="success" title="Settings saved" />
     </div>
 
@@ -339,6 +351,9 @@
 </template>
 
 <script setup lang="ts">
+import type { Ref } from "vue";
+import { usePreferences } from "~/composables/usePreferences";
+
 definePageMeta({ layout: "app", middleware: "auth" });
 useHead({ title: "Wanderist — Settings" });
 
@@ -351,22 +366,28 @@ const sections = [
   { id: "danger", label: "Danger zone" },
 ];
 
+const { user } = useClerkUser();
+const { preferences, loadError, saveError, fetchPreferences, savePreferences } =
+  usePreferences();
+
+// Local editable copies — populated once preferences load.
 const profile = reactive({
-  name: "Dan H.",
-  handle: "danh",
-  homeBase: "St. Louis, USA",
-  bio: "Chasing cold coffee and warm light. 117 places and counting.",
-  email: "you@domain.com",
+  name: "",
+  handle: "",
+  homeBase: "",
+  bio: "",
+  email: "",
 });
 
 const privacy = reactive({
-  publicProfile: true,
+  publicProfile: false,
   preciseLocation: false,
   showOnExplore: true,
 });
 
 const units = ref<"mi" | "km">("mi");
 const mapStyle = ref("outdoors");
+
 const mapStyles = [
   { value: "outdoors", label: "Outdoors" },
   { value: "streets", label: "Streets" },
@@ -376,18 +397,123 @@ const mapStyles = [
   { value: "custom", label: "Wanderist violet" },
 ];
 
+function populateFromPreferences(): void {
+  profile.name = preferences.value.displayName ?? "";
+  profile.handle = preferences.value.handle ?? "";
+  profile.homeBase = preferences.value.homeBase ?? "";
+  profile.bio = preferences.value.bio ?? "";
+  privacy.publicProfile = preferences.value.publicProfile;
+  privacy.preciseLocation = preferences.value.preciseLocation;
+  privacy.showOnExplore = preferences.value.showOnExplore;
+  units.value = preferences.value.distanceUnit as "mi" | "km";
+  mapStyle.value = preferences.value.defaultMapStyle ?? "outdoors";
+}
+
+function populateEmailFromClerk(): void {
+  if (!user.value) {
+    return;
+  }
+  const primaryEmail = user.value.emailAddresses.find(
+    (address) => address.id === user.value!.primaryEmailAddressId,
+  );
+  profile.email = primaryEmail?.emailAddress ?? "";
+}
+
+watch(
+  user,
+  () => {
+    populateEmailFromClerk();
+  },
+  { immediate: true },
+);
+
+// Populate from defaults immediately (before the API call) so the form is not
+// blank on first render. After fetch resolves, repopulate with server data.
+// `hasPopulatedFromServer` then blocks the watch so user edits are not
+// overwritten by incidental state updates after the initial load.
+const hasPopulatedFromServer = ref(false);
+
+watch(
+  preferences,
+  () => {
+    if (hasPopulatedFromServer.value) {
+      return;
+    }
+    populateFromPreferences();
+  },
+  { immediate: true },
+);
+
+onMounted(async () => {
+  await fetchPreferences();
+  // `fetchPreferences` updates `preferences.value`; the watcher above fires
+  // before this continuation resumes (Vue flushes on the next microtask).
+  // Mark the flag here so the watcher stops overwriting user edits after load.
+  hasPopulatedFromServer.value = true;
+});
+
+const TOAST_DURATION_MS = 2200;
+
 const showPasswordFields = ref(false);
 const showSaved = ref(false);
+const showErrorBar = ref(false);
+const savedTimer = ref<ReturnType<typeof setTimeout> | null>(null);
+const errorTimer = ref<ReturnType<typeof setTimeout> | null>(null);
 const deleteModal = ref(false);
 const deleteConfirm = ref("");
 const activeSection = ref("profile");
 const sectionsRef = ref<HTMLElement | null>(null);
 
-function saveChanges() {
-  showSaved.value = true;
-  setTimeout(() => {
-    showSaved.value = false;
-  }, 2200);
+onUnmounted(() => {
+  if (savedTimer.value !== null) {
+    clearTimeout(savedTimer.value);
+  }
+  if (errorTimer.value !== null) {
+    clearTimeout(errorTimer.value);
+  }
+});
+
+function showToast(
+  visible: Ref<boolean>,
+  timer: Ref<ReturnType<typeof setTimeout> | null>,
+): void {
+  if (timer.value !== null) {
+    clearTimeout(timer.value);
+  }
+  visible.value = true;
+  timer.value = setTimeout(() => {
+    visible.value = false;
+  }, TOAST_DURATION_MS);
+}
+
+function nullableString(value: string): string | null {
+  const trimmed = value.trim();
+  return trimmed === "" ? null : trimmed;
+}
+
+async function saveChanges(): Promise<void> {
+  if (loadError.value) {
+    return;
+  }
+
+  const succeeded = await savePreferences({
+    displayName: nullableString(profile.name),
+    handle: nullableString(profile.handle),
+    homeBase: nullableString(profile.homeBase),
+    bio: nullableString(profile.bio),
+    publicProfile: privacy.publicProfile,
+    preciseLocation: privacy.preciseLocation,
+    showOnExplore: privacy.showOnExplore,
+    distanceUnit: units.value,
+    defaultMapStyle: mapStyle.value,
+  });
+
+  if (!succeeded) {
+    showToast(showErrorBar, errorTimer);
+    return;
+  }
+
+  showToast(showSaved, savedTimer);
 }
 
 function scrollTo(id: string) {
@@ -416,6 +542,9 @@ if (import.meta.client) {
 </script>
 
 <style scoped>
+.load-error {
+  margin-bottom: 16px;
+}
 .set-layout {
   display: grid;
   grid-template-columns: 184px 1fr;

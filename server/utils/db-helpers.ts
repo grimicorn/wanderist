@@ -92,3 +92,86 @@ export function optionalString(
 
   return value;
 }
+
+/**
+ * Validates that `value`, if present, is a finite number. Returns the value
+ * cast to `number | undefined`. Throws 400 if the value is present but not a
+ * finite number. NaN and Infinity are rejected.
+ */
+export function optionalNumber(
+  value: unknown,
+  fieldName: string,
+): number | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+
+  if (typeof value !== "number" || !isFinite(value)) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: `${fieldName} must be a finite number when provided`,
+    });
+  }
+
+  return value;
+}
+
+/**
+ * Extracts a named route parameter from the event and throws 400 if it is
+ * missing. Use in place of the repeated `getRouterParam` + null guard in
+ * individual route handlers.
+ */
+export function requireRouterParam(event: H3Event, name: string): string {
+  const value = getRouterParam(event, name);
+
+  if (!value) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: `${name} is required`,
+    });
+  }
+
+  return value;
+}
+
+/**
+ * Validates that `value`, if present, is a latitude in the range [-90, 90].
+ * Throws 400 if out of range or not a finite number.
+ */
+export function optionalLatitude(value: unknown): number | undefined {
+  const latitude = optionalNumber(value, "latitude");
+
+  if (latitude === undefined) {
+    return undefined;
+  }
+
+  if (latitude < -90 || latitude > 90) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: "latitude must be between -90 and 90",
+    });
+  }
+
+  return latitude;
+}
+
+/**
+ * Validates that `value`, if present, is a longitude in the range [-180, 180].
+ * Throws 400 if out of range or not a finite number.
+ */
+export function optionalLongitude(value: unknown): number | undefined {
+  const longitude = optionalNumber(value, "longitude");
+
+  if (longitude === undefined) {
+    return undefined;
+  }
+
+  if (longitude < -180 || longitude > 180) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: "longitude must be between -180 and 180",
+    });
+  }
+
+  return longitude;
+}

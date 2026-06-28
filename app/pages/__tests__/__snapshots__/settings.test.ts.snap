@@ -4,6 +4,7 @@ exports[`Settings page (/settings) > renders without crashing and matches snapsh
 "<div data-v-a376170b="">
   <header data-v-a376170b="" class="topbar"><button data-v-a376170b="" class="btn btn--ghost btn--sm">discard</button><button data-v-a376170b="" class="btn btn--primary btn--sm"><svg data-v-a376170b="" data-icon="" name="check" size="14"></svg> save changes </button></header>
   <div data-v-a376170b="" class="content content--wide">
+    <!--v-if-->
     <div data-v-a376170b="" class="set-layout">
       <!-- Side nav -->
       <nav data-v-a376170b="" class="set-nav"><a data-v-a376170b="" href="#profile" class="is-active">Profile</a><a data-v-a376170b="" href="#account" class="">Email &amp; password</a><a data-v-a376170b="" href="#connections" class="">Connections</a><a data-v-a376170b="" href="#prefs" class="">Units &amp; map</a><a data-v-a376170b="" href="#privacy" class="">Privacy</a><a data-v-a376170b="" href="#danger" class="">Danger zone</a></nav>
@@ -142,7 +143,8 @@ exports[`Settings page (/settings) > renders without crashing and matches snapsh
         </section>
       </div>
     </div>
-  </div><!-- Saved toast -->
+  </div><!-- Error toast -->
+  <!-- Saved toast -->
   <div data-v-a376170b="" class="saved-bar">
     <div data-v-a376170b="" class="alert"></div>
   </div><!-- Delete modal -->
