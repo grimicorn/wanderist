@@ -1,7 +1,9 @@
 <template>
   <div class="map-stage" :data-mapstyle="mapStyle">
     <AppTopbar title="Map" crumb="Home">
-      <span class="tag tag--accent">117 places · 9 countries</span>
+      <span class="tag tag--accent"
+        >{{ placesStore.places.length }} places</span
+      >
       <button class="btn btn--primary btn--sm">
         <AppIcon name="plus" :size="14" />
         drop a pin
@@ -15,22 +17,20 @@
       <span class="map-attr">© Mapbox © OpenStreetMap</span>
     </div>
 
-    <!-- Pins -->
-    <button
-      v-for="place in places"
-      :key="place.id"
-      class="pin-abs"
-      :class="{
-        'is-active': selectedPlace?.id === place.id,
-        sm: !place.featured,
-      }"
-      :style="{ left: place.left, top: place.top }"
-      :aria-label="place.name"
-      @click="selectPlace(place)"
-    >
-      <span class="pin-ring" />
-      <AppIcon name="pin" :size="place.featured ? 26 : 18" class="pin" />
-    </button>
+    <!-- Pins — lat/lng-to-pixel mapping is handled by Mapbox (#15).
+         Until that lands, pins with no pixel coordinates are not rendered. -->
+    <template v-for="place in placesStore.places" :key="place.id">
+      <button
+        v-if="place.latitude !== null && place.longitude !== null"
+        class="pin-abs sm"
+        :class="{ 'is-active': selectedPlace?.id === place.id }"
+        :aria-label="place.name"
+        @click="selectPlace(place)"
+      >
+        <span class="pin-ring" />
+        <AppIcon name="pin" :size="18" class="pin" />
+      </button>
+    </template>
 
     <!-- Places panel -->
     <div class="places">
@@ -64,7 +64,7 @@
             <div class="place-item__name">{{ place.name }}</div>
             <div class="place-item__sub">{{ place.subtitle }}</div>
           </div>
-          <span class="place-item__n">{{ place.count }}</span>
+          <span class="place-item__n">{{ place.category ?? "" }}</span>
         </div>
       </div>
     </div>
@@ -83,20 +83,20 @@
           </button>
         </div>
         <div class="detail__body">
-          <div class="detail__loc">{{ selectedPlace.subtitle }}</div>
+          <div class="detail__loc">{{ selectedPlace.subtitle ?? "" }}</div>
           <div class="detail__name">{{ selectedPlace.name }}</div>
           <div class="detail__stats">
             <div>
-              <div class="n">{{ selectedPlace.entries }}</div>
-              <div class="l">entries</div>
+              <div class="n">{{ selectedPlace.country ?? "" }}</div>
+              <div class="l">country</div>
             </div>
             <div>
-              <div class="n">{{ selectedPlace.photos }}</div>
-              <div class="l">photos</div>
+              <div class="n">{{ selectedPlace.category ?? "" }}</div>
+              <div class="l">category</div>
             </div>
             <div>
-              <div class="n">{{ selectedPlace.days }}</div>
-              <div class="l">days</div>
+              <div class="n">{{ selectedPlace.latitude ?? "—" }}</div>
+              <div class="l">lat</div>
             </div>
           </div>
           <div class="hstack gap-8">
@@ -157,98 +157,25 @@
       </div>
     </div>
 
-    <div class="legend">{{ mapStyleLegend }} · 117 pins</div>
+    <div class="legend">
+      {{ mapStyleLegend }} · {{ placesStore.places.length }} pins
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { ref, computed, onMounted } from "vue";
+import { usePlacesStore } from "~/stores/places";
+import type { Place } from "~/stores/places";
 
 definePageMeta({ layout: "app", middleware: "auth" });
 useHead({ title: "Wanderist — Map" });
 
-interface Place {
-  id: string;
-  name: string;
-  subtitle: string;
-  count: number;
-  entries: number;
-  photos: number;
-  days: number;
-  featured?: boolean;
-  left: string;
-  top: string;
-}
+const placesStore = usePlacesStore();
 
-const places: Place[] = [
-  {
-    id: "reykjavik",
-    name: "Reykjavík",
-    subtitle: "Iceland · current trip",
-    count: 4,
-    entries: 4,
-    photos: 28,
-    days: 6,
-    featured: true,
-    left: "25%",
-    top: "33%",
-  },
-  {
-    id: "lisbon",
-    name: "Lisbon",
-    subtitle: "Portugal · Jun 2026",
-    count: 12,
-    entries: 6,
-    photos: 12,
-    days: 3,
-    left: "44%",
-    top: "52%",
-  },
-  {
-    id: "london",
-    name: "London",
-    subtitle: "United Kingdom",
-    count: 7,
-    entries: 3,
-    photos: 7,
-    days: 2,
-    left: "47%",
-    top: "36%",
-  },
-  {
-    id: "tokyo",
-    name: "Tokyo",
-    subtitle: "Japan · 2025",
-    count: 9,
-    entries: 5,
-    photos: 40,
-    days: 9,
-    left: "78%",
-    top: "44%",
-  },
-  {
-    id: "marrakech",
-    name: "Marrakech",
-    subtitle: "Morocco · 2025",
-    count: 5,
-    entries: 2,
-    photos: 18,
-    days: 4,
-    left: "46%",
-    top: "60%",
-  },
-  {
-    id: "sydney",
-    name: "Sydney",
-    subtitle: "Australia · 2024",
-    count: 8,
-    entries: 4,
-    photos: 33,
-    days: 7,
-    left: "85%",
-    top: "74%",
-  },
-];
+onMounted(async () => {
+  await placesStore.fetchPlaces();
+});
 
 const filters = ["All", "2026", "Journaled", "Wishlist"];
 const mapStyles = [
@@ -268,20 +195,21 @@ const mapStyleLabels: Record<string, string> = {
   custom: "wanderist-violet",
 };
 
-const selectedPlace = ref<Place | null>(places[0]);
+const selectedPlace = ref<Place | null>(null);
 const activeFilter = ref("All");
 const search = ref("");
 const mapStyle = ref("outdoors");
 const layersPopOpen = ref(false);
 
 const filteredPlaces = computed(() => {
-  const q = search.value.trim().toLowerCase();
-  if (!q) {
-    return places;
+  const query = search.value.trim().toLowerCase();
+  if (!query) {
+    return placesStore.places;
   }
-  return places.filter(
-    (p) =>
-      p.name.toLowerCase().includes(q) || p.subtitle.toLowerCase().includes(q),
+  return placesStore.places.filter(
+    (place) =>
+      place.name.toLowerCase().includes(query) ||
+      (place.subtitle ?? "").toLowerCase().includes(query),
   );
 });
 

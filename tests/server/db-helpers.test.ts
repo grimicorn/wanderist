@@ -43,6 +43,7 @@ import {
   assertOwnership,
   requireString,
   optionalString,
+  optionalNumber,
 } from "../../server/utils/db-helpers";
 
 const mockRequireUser = vi.mocked(requireUser);
@@ -310,6 +311,64 @@ describe("optionalString", () => {
     expect(() => optionalString(123, "location")).toThrow(
       expect.objectContaining({
         statusMessage: expect.stringContaining("location"),
+      }),
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// optionalNumber
+// ---------------------------------------------------------------------------
+
+describe("optionalNumber", () => {
+  it("returns the number when provided", () => {
+    expect(optionalNumber(3.14, "latitude")).toBe(3.14);
+  });
+
+  it("returns 0 when value is 0", () => {
+    expect(optionalNumber(0, "latitude")).toBe(0);
+  });
+
+  it("returns negative numbers", () => {
+    expect(optionalNumber(-90, "latitude")).toBe(-90);
+  });
+
+  it("returns undefined for undefined", () => {
+    expect(optionalNumber(undefined, "latitude")).toBeUndefined();
+  });
+
+  it("returns undefined for null", () => {
+    expect(optionalNumber(null, "latitude")).toBeUndefined();
+  });
+
+  it("throws 400 when value is a string", () => {
+    expect(() => optionalNumber("48.8", "latitude")).toThrow(
+      expect.objectContaining({ statusCode: 400 }),
+    );
+  });
+
+  it("throws 400 when value is NaN", () => {
+    expect(() => optionalNumber(NaN, "latitude")).toThrow(
+      expect.objectContaining({ statusCode: 400 }),
+    );
+  });
+
+  it("throws 400 when value is Infinity", () => {
+    expect(() => optionalNumber(Infinity, "latitude")).toThrow(
+      expect.objectContaining({ statusCode: 400 }),
+    );
+  });
+
+  it("throws 400 when value is -Infinity", () => {
+    expect(() => optionalNumber(-Infinity, "latitude")).toThrow(
+      expect.objectContaining({ statusCode: 400 }),
+    );
+  });
+
+  it("includes the field name in the error message", () => {
+    expect(() => optionalNumber("bad", "longitude")).toThrow(
+      expect.objectContaining({
+        statusMessage: expect.stringContaining("longitude"),
       }),
     );
   });

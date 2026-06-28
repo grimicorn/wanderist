@@ -92,3 +92,26 @@ export function optionalString(
 
   return value;
 }
+
+/**
+ * Validates that `value`, if present, is a finite number. Returns the value
+ * cast to `number | undefined`. Throws 400 if the value is present but not a
+ * finite number. NaN and Infinity are rejected.
+ */
+export function optionalNumber(
+  value: unknown,
+  fieldName: string,
+): number | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+
+  if (typeof value !== "number" || !isFinite(value)) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: `${fieldName} must be a finite number when provided`,
+    });
+  }
+
+  return value;
+}
