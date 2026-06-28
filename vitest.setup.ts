@@ -33,6 +33,11 @@ Object.assign(globalThis, {
   defineStore,
   // App composables — stubs for environments that don't import them explicitly
   useApiClient: vi.fn(() => ({ apiFetch: vi.fn().mockResolvedValue([]) })),
+  useEntryDraft: vi.fn(() => ({
+    saveDraft: vi.fn(),
+    loadDraft: vi.fn().mockReturnValue(null),
+    clearDraft: vi.fn(),
+  })),
   useMediaUpload: vi.fn(() => ({
     upload: vi.fn().mockResolvedValue({
       id: "media-1",

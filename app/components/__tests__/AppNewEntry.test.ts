@@ -2,15 +2,20 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mount } from "@vue/test-utils";
 import { ref } from "vue";
 import AppNewEntry from "../AppNewEntry.vue";
+import type { EntryDraft } from "~/composables/useEntryDraft";
 
 const iconStub = { template: "<svg data-icon />" };
 
-// ── Store stubs ────────────────────────────────────────────────────────────────
+// ── Store + composable stubs ──────────────────────────────────────────────────
 
 const mockCreateEntry = vi.fn();
 const mockFetchEntries = vi.fn();
 const mockFetchTrips = vi.fn();
 const mockFetchPlaces = vi.fn();
+const mockUpload = vi.fn();
+const mockSaveDraft = vi.fn();
+const mockClearDraft = vi.fn();
+const mockLoadDraft = vi.fn<[], EntryDraft | null>();
 
 const tripsStoreTrips = ref<
   Array<{ id: string; name: string; status: string }>
@@ -37,11 +42,15 @@ vi.stubGlobal("usePlacesStore", () => ({
   isLoading: ref(false),
 }));
 
-const mockUpload = vi.fn();
 vi.stubGlobal("useMediaUpload", () => ({
   upload: mockUpload,
   isUploading: ref(false),
-  error: ref(null),
+}));
+
+vi.stubGlobal("useEntryDraft", () => ({
+  saveDraft: mockSaveDraft,
+  loadDraft: mockLoadDraft,
+  clearDraft: mockClearDraft,
 }));
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -68,6 +77,7 @@ describe("AppNewEntry", () => {
     vi.clearAllMocks();
     tripsStoreTrips.value = [];
     placesStorePlaces.value = [];
+    mockLoadDraft.mockReturnValue(null);
   });
 
   it("renders nothing when closed", () => {
@@ -155,7 +165,6 @@ describe("AppNewEntry", () => {
 
   it("removes a tag when its remove button is clicked", async () => {
     const wrapper = mountOpen();
-    // Add a tag first
     const tagInput = wrapper.find(".tags-input input");
     await tagInput.setValue("iceland");
     await tagInput.trigger("keydown.enter");
@@ -191,6 +200,25 @@ describe("AppNewEntry", () => {
     const wrapper = mountOpen();
     const activePick = wrapper.find(".pill-pick .pick.is-active");
     expect(activePick.text()).toBe("Iceland Ring Road");
+  });
+
+  it("does not clobber an explicit 'None' selection when trips load", async () => {
+    tripsStoreTrips.value = [];
+    const wrapper = mountOpen();
+
+    // User explicitly selects None before trips arrive
+    const nonePick = wrapper.find(".pill-pick .pick.is-active");
+    await nonePick.trigger("click");
+
+    // Simulate trips loading after the selection
+    tripsStoreTrips.value = [
+      { id: "trip-1", name: "Iceland Ring Road", status: "ongoing" },
+    ];
+    await wrapper.vm.$nextTick();
+
+    // None should still be selected
+    const activePick = wrapper.find(".pill-pick .pick.is-active");
+    expect(activePick.text()).toBe("None");
   });
 
   it("renders location suggestion chips from the places store", () => {
@@ -253,6 +281,22 @@ describe("AppNewEntry", () => {
     expect(wrapper.emitted("close")).toBeTruthy();
   });
 
+  it("clears the draft from storage on successful publish", async () => {
+    mockCreateEntry.mockResolvedValue({ id: "new-entry-1" });
+    mockFetchEntries.mockResolvedValue({
+      entries: [],
+      tab: "timeline",
+      page: 1,
+    });
+
+    const wrapper = mountOpen();
+    await wrapper.find(".btn--primary").trigger("click");
+    await wrapper.vm.$nextTick();
+    await wrapper.vm.$nextTick();
+
+    expect(mockClearDraft).toHaveBeenCalledOnce();
+  });
+
   it("shows publish error when createEntry throws", async () => {
     mockCreateEntry.mockRejectedValue(new Error("Server error"));
 
@@ -265,14 +309,37 @@ describe("AppNewEntry", () => {
     expect(wrapper.emitted("close")).toBeFalsy();
   });
 
-  it("saves draft to localStorage when save draft is clicked", async () => {
-    const setItemSpy = vi.spyOn(Storage.prototype, "setItem");
+  it("calls saveDraft composable when save draft is clicked", async () => {
     const wrapper = mountOpen();
     await wrapper.find(".btn--ghost").trigger("click");
-    expect(setItemSpy).toHaveBeenCalledWith(
-      "wanderist:new-entry-draft",
-      expect.any(String),
+    expect(mockSaveDraft).toHaveBeenCalledOnce();
+    expect(mockSaveDraft).toHaveBeenCalledWith(
+      expect.objectContaining({ uploadedPhotos: expect.any(Array) }),
     );
-    setItemSpy.mockRestore();
+  });
+
+  it("restores saved draft when drawer opens", async () => {
+    const draft: EntryDraft = {
+      title: "Restored title",
+      body: "Some body text",
+      location: "Lisbon",
+      tripId: "trip-saved",
+      date: "2026-06-01",
+      visibility: "public",
+      tags: ["portugal"],
+      weather: "clear",
+      uploadedPhotos: [],
+    };
+    mockLoadDraft.mockReturnValue(draft);
+
+    const wrapper = mountOpen();
+    await wrapper.vm.$nextTick();
+
+    const titleInput = wrapper.find(
+      '.field__input[placeholder="Give this moment a name…"]',
+    );
+    expect((titleInput.element as HTMLInputElement).value).toBe(
+      "Restored title",
+    );
   });
 });

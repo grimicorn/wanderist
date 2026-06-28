@@ -110,7 +110,7 @@
               :key="trip.value"
               class="pick"
               :class="{ 'is-active': form.tripId === trip.value }"
-              @click="form.tripId = trip.value"
+              @click="selectTrip(trip.value)"
             >
               {{ trip.label }}
             </button>
@@ -204,7 +204,7 @@
         <button
           class="btn btn--ghost btn--sm"
           :disabled="isPublishing"
-          @click="saveDraft"
+          @click="handleSaveDraft"
         >
           save draft
         </button>
@@ -233,7 +233,7 @@
 import { ref, computed, watch } from "vue";
 import type { Trip } from "~/stores/trips";
 
-const DRAFT_STORAGE_KEY = "wanderist:new-entry-draft";
+const MAX_LOCATION_SUGGESTIONS = 5;
 
 const WEATHER_OPTIONS = [
   { value: "clear", label: "Clear", icon: "sun" },
@@ -265,7 +265,9 @@ const emit = defineEmits<{ close: [] }>();
 const entriesStore = useEntriesStore();
 const tripsStore = useTripsStore();
 const placesStore = usePlacesStore();
-const { upload, isUploading, error: uploadError } = useMediaUpload();
+const { upload, isUploading } = useMediaUpload();
+const uploadError = ref<string | null>(null);
+const { saveDraft, loadDraft, clearDraft } = useEntryDraft();
 
 const fileInputRef = ref<HTMLInputElement | null>(null);
 const uploadedPhotos = ref<Array<{ id: string; url: string }>>([]);
@@ -273,8 +275,14 @@ const tagInput = ref("");
 const isPublishing = ref(false);
 const publishError = ref<string | null>(null);
 
-function todayIsoDate(): string {
-  return new Date().toISOString().slice(0, 10);
+// One-shot flag: true once the default tripId has been applied, so a later
+// trips-store update does not clobber an explicit "None" selection.
+const tripDefaulted = ref(false);
+
+function localIsoDate(): string {
+  const now = new Date();
+  const offsetMs = now.getTimezoneOffset() * 60_000;
+  return new Date(now.getTime() - offsetMs).toISOString().slice(0, 10);
 }
 
 function defaultTripId(trips: Trip[]): string {
@@ -288,7 +296,7 @@ function buildInitialForm(trips: Trip[]): FormState {
     body: "",
     location: "",
     tripId: defaultTripId(trips),
-    date: todayIsoDate(),
+    date: localIsoDate(),
     visibility: "private",
     tags: [],
     weather: "",
@@ -306,8 +314,16 @@ const tripOptions = computed<TripOption[]>(() => {
 });
 
 const locationSuggestions = computed<string[]>(() =>
-  placesStore.places.map((place) => place.name).slice(0, 5),
+  placesStore.places
+    .map((place) => place.name)
+    .slice(0, MAX_LOCATION_SUGGESTIONS),
 );
+
+function selectTrip(tripId: string): void {
+  form.value.tripId = tripId;
+  // Mark as explicitly chosen so the tripList watch no longer overrides it
+  tripDefaulted.value = true;
+}
 
 watch(
   () => props.open,
@@ -316,10 +332,35 @@ watch(
       return;
     }
 
-    form.value = buildInitialForm(tripsStore.tripList);
-    uploadedPhotos.value = [];
+    tripDefaulted.value = false;
+
+    const draft = loadDraft();
+
+    if (draft) {
+      form.value = {
+        title: draft.title,
+        body: draft.body,
+        location: draft.location,
+        tripId: draft.tripId,
+        date: draft.date,
+        visibility: draft.visibility,
+        tags: draft.tags,
+        weather: draft.weather,
+      };
+      uploadedPhotos.value = draft.uploadedPhotos ?? [];
+      // Treat a restored draft's tripId as already-defaulted so it is preserved
+      tripDefaulted.value = true;
+    } else {
+      form.value = buildInitialForm(tripsStore.tripList);
+      uploadedPhotos.value = [];
+      if (form.value.tripId !== NO_TRIP_VALUE) {
+        tripDefaulted.value = true;
+      }
+    }
+
     tagInput.value = "";
     publishError.value = null;
+    uploadError.value = null;
 
     if (!tripsStore.tripList.length) {
       tripsStore.fetchTrips();
@@ -329,15 +370,21 @@ watch(
       placesStore.fetchPlaces();
     }
   },
+  { immediate: true },
 );
 
-// Keep the default tripId in sync if trips load after the drawer opens
+// Apply a default tripId once trips arrive if none has been set yet
 watch(
   () => tripsStore.tripList,
   (trips) => {
-    if (form.value.tripId === NO_TRIP_VALUE && trips.length) {
-      form.value.tripId = defaultTripId(trips);
+    if (tripDefaulted.value) {
+      return;
     }
+    if (!trips.length) {
+      return;
+    }
+    form.value.tripId = defaultTripId(trips);
+    tripDefaulted.value = true;
   },
 );
 
@@ -359,26 +406,40 @@ function triggerFileInput(): void {
   fileInputRef.value?.click();
 }
 
+async function uploadOne(
+  file: File,
+): Promise<{ id: string; url: string } | null> {
+  try {
+    return await upload(file);
+  } catch {
+    return null;
+  }
+}
+
 async function handleFileChange(event: Event): Promise<void> {
   const input = event.target as HTMLInputElement;
   const files = Array.from(input.files ?? []);
+  const failedNames: string[] = [];
 
   for (const file of files) {
-    try {
-      const result = await upload(file);
+    const result = await uploadOne(file);
+    if (result) {
       uploadedPhotos.value = [...uploadedPhotos.value, result];
-    } catch {
-      // uploadError ref is set by the composable; no additional handling needed here
+    } else {
+      failedNames.push(file.name);
     }
+  }
+
+  if (failedNames.length) {
+    uploadError.value = `Failed to upload: ${failedNames.join(", ")}`;
   }
 
   // Reset input value so the same file can be re-selected after removal
   input.value = "";
 }
 
-function saveDraft(): void {
-  const draft = { ...form.value, uploadedPhotos: uploadedPhotos.value };
-  localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
+function handleSaveDraft(): void {
+  saveDraft({ ...form.value, uploadedPhotos: uploadedPhotos.value });
 }
 
 async function publish(): Promise<void> {
@@ -400,7 +461,7 @@ async function publish(): Promise<void> {
     });
 
     // Clear any saved draft now that it has been published
-    localStorage.removeItem(DRAFT_STORAGE_KEY);
+    clearDraft();
 
     // Refresh the entries list so the journal page shows the new entry
     await entriesStore.fetchEntries();

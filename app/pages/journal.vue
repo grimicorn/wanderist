@@ -28,6 +28,7 @@
           aria-label="Write a new entry"
           @click="openNewEntry?.()"
           @keydown.enter="openNewEntry?.()"
+          @keydown.space.prevent="openNewEntry?.()"
         >
           <span class="compose__av">
             <AppIcon name="user" :size="18" />

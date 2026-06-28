@@ -91,6 +91,7 @@ const projectGlobals = {
   useAccountActions: "readonly",
   usePreferences: "readonly",
   useMediaUpload: "readonly",
+  useEntryDraft: "readonly",
   useEntriesStore: "readonly",
   useTripsStore: "readonly",
   usePlacesStore: "readonly",
