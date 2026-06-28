@@ -301,8 +301,8 @@
     </div>
 
     <!-- Error toast -->
-    <div v-if="saveError" class="saved-bar show">
-      <AppAlert intent="error" :title="saveError" />
+    <div v-if="showErrorBar" class="saved-bar show">
+      <AppAlert intent="error" :title="saveError ?? 'Failed to save'" />
     </div>
 
     <!-- Saved toast -->
@@ -414,23 +414,6 @@ function populateEmailFromClerk(): void {
   profile.email = primaryEmail?.emailAddress ?? "";
 }
 
-// Populate once from whatever preferences are in state at mount time, then
-// fetch the real values. Once we have real server data, populate again and
-// lock the watch so later preference syncs (e.g. from other tabs) do not
-// reset fields the user is actively editing.
-const hasLoadedFromServer = ref(false);
-
-watch(
-  preferences,
-  () => {
-    if (hasLoadedFromServer.value) {
-      return;
-    }
-    populateFromPreferences();
-  },
-  { immediate: true },
-);
-
 watch(
   user,
   () => {
@@ -439,23 +422,39 @@ watch(
   { immediate: true },
 );
 
+// Track whether we have populated from the server's response. Until the fetch
+// resolves, the form shows defaults; once it resolves the watch fires and
+// populates from real data. After that we stop watching so user edits are not
+// overwritten by incidental state updates.
+const hasPopulatedFromServer = ref(false);
+
+watch(
+  preferences,
+  () => {
+    if (hasPopulatedFromServer.value) {
+      return;
+    }
+    populateFromPreferences();
+  },
+  { immediate: true },
+);
+
 onMounted(async () => {
   await fetchPreferences();
-  // fetchPreferences() updates preferences.value; the watch above fires and
-  // populates the form. Mark as loaded so subsequent preference changes do
-  // not overwrite the user's in-progress edits.
-  hasLoadedFromServer.value = true;
+  hasPopulatedFromServer.value = true;
 });
 
 const showPasswordFields = ref(false);
 const showSaved = ref(false);
+const showErrorBar = ref(false);
 const deleteModal = ref(false);
 const deleteConfirm = ref("");
 const activeSection = ref("profile");
 const sectionsRef = ref<HTMLElement | null>(null);
 
 function nullableString(value: string): string | null {
-  return value.trim() === "" ? null : value;
+  const trimmed = value.trim();
+  return trimmed === "" ? null : trimmed;
 }
 
 async function saveChanges(): Promise<void> {
@@ -472,6 +471,10 @@ async function saveChanges(): Promise<void> {
   });
 
   if (!succeeded) {
+    setTimeout(() => {
+      showErrorBar.value = false;
+    }, 2200);
+    showErrorBar.value = true;
     return;
   }
 

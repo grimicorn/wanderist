@@ -22,6 +22,18 @@ const STRING_FIELD_MAX_LENGTHS: Record<string, number> = {
   bio: 500,
 };
 
+export type PreferencesDto = {
+  distanceUnit: string;
+  defaultMapStyle: string | null;
+  publicProfile: boolean;
+  preciseLocation: boolean;
+  showOnExplore: boolean;
+  displayName: string | null;
+  handle: string | null;
+  homeBase: string | null;
+  bio: string | null;
+};
+
 function isValidMapStyle(value: unknown): value is ValidMapStyle {
   return (
     typeof value === "string" &&
@@ -148,6 +160,32 @@ function validatePatch(body: Record<string, unknown>): PatchResult {
   return patch;
 }
 
+function rowToDto(row: Record<string, unknown>): PreferencesDto {
+  return {
+    distanceUnit: row.distanceUnit as string,
+    defaultMapStyle: (row.defaultMapStyle as string | null) ?? null,
+    publicProfile: row.publicProfile as boolean,
+    preciseLocation: row.preciseLocation as boolean,
+    showOnExplore: row.showOnExplore as boolean,
+    displayName: (row.displayName as string | null) ?? null,
+    handle: (row.handle as string | null) ?? null,
+    homeBase: (row.homeBase as string | null) ?? null,
+    bio: (row.bio as string | null) ?? null,
+  };
+}
+
+function isPostgresUniqueError(error: unknown): boolean {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+  const errorObj = error as Record<string, unknown>;
+  if (errorObj.code === "23505") {
+    return true;
+  }
+  const message = typeof errorObj.message === "string" ? errorObj.message : "";
+  return message.includes("unique") || message.includes("duplicate");
+}
+
 export default defineEventHandler(async (event) => {
   const userId = await ensureUser(event);
   const body = (await readBody(event)) as Record<string, unknown>;
@@ -179,7 +217,7 @@ export default defineEventHandler(async (event) => {
         set: patch,
       });
   } catch (error: unknown) {
-    if (isUniqueConstraintError(error)) {
+    if (isPostgresUniqueError(error) && patch.handle !== undefined) {
       throw createError({
         statusCode: 409,
         statusMessage: "handle is already taken",
@@ -192,19 +230,28 @@ export default defineEventHandler(async (event) => {
   }
 
   const rows = await database
-    .select()
+    .select({
+      distanceUnit: userPreferences.distanceUnit,
+      defaultMapStyle: userPreferences.defaultMapStyle,
+      publicProfile: userPreferences.publicProfile,
+      preciseLocation: userPreferences.preciseLocation,
+      showOnExplore: userPreferences.showOnExplore,
+      displayName: userPreferences.displayName,
+      handle: userPreferences.handle,
+      homeBase: userPreferences.homeBase,
+      bio: userPreferences.bio,
+    })
     .from(userPreferences)
     .where(eq(userPreferences.userId, userId))
     .limit(1);
 
-  return rows[0];
-});
-
-function isUniqueConstraintError(error: unknown): boolean {
-  if (!error || typeof error !== "object") {
-    return false;
+  const row = rows[0];
+  if (!row) {
+    throw createError({
+      statusCode: 500,
+      statusMessage: "Failed to retrieve updated preferences",
+    });
   }
-  const errorObj = error as Record<string, unknown>;
-  const message = typeof errorObj.message === "string" ? errorObj.message : "";
-  return message.includes("unique") || message.includes("duplicate");
-}
+
+  return rowToDto(row as unknown as Record<string, unknown>);
+});

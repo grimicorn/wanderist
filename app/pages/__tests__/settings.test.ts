@@ -182,7 +182,35 @@ describe("Settings page (/settings)", () => {
     expect(wrapper.find(".saved-bar").classes()).toContain("show");
   });
 
-  it("does not show saved toast when save fails", async () => {
+  it("save button calls savePreferences with the correct payload", async () => {
+    const { usePreferences } = await import("~/composables/usePreferences");
+    const savePreferencesMock = vi.fn().mockResolvedValue(true);
+    vi.mocked(usePreferences).mockReturnValueOnce(
+      makePreferencesMock({ savePreferences: savePreferencesMock }),
+    );
+
+    const wrapper = mount(SettingsPage, globalConfig);
+    await wrapper.find(".btn--primary").trigger("click");
+    await wrapper.vm.$nextTick();
+    await wrapper.vm.$nextTick();
+
+    expect(savePreferencesMock).toHaveBeenCalledTimes(1);
+    const payload = savePreferencesMock.mock.calls[0][0] as Record<
+      string,
+      unknown
+    >;
+    // Verify key fields are sent; name comes from the mock ("Dan H.") which
+    // is not null so should be sent as-is after nullableString trims it.
+    expect(payload).toMatchObject({
+      distanceUnit: "mi",
+      defaultMapStyle: "outdoors",
+      publicProfile: true,
+      preciseLocation: false,
+      showOnExplore: true,
+    });
+  });
+
+  it("shows error toast (not success toast) when save fails", async () => {
     const { usePreferences } = await import("~/composables/usePreferences");
     const savePreferencesMock = vi.fn().mockResolvedValue(false);
     vi.mocked(usePreferences).mockReturnValueOnce(
@@ -196,6 +224,10 @@ describe("Settings page (/settings)", () => {
     await wrapper.find(".btn--primary").trigger("click");
     await wrapper.vm.$nextTick();
     await wrapper.vm.$nextTick();
-    expect(wrapper.find(".saved-bar").classes()).not.toContain("show");
+    // The error bar has show class; the success bar is hidden via v-else
+    const allSavedBars = wrapper.findAll(".saved-bar");
+    expect(allSavedBars[0].classes()).toContain("show");
+    // Only one bar is rendered at a time (v-if / v-else)
+    expect(allSavedBars).toHaveLength(1);
   });
 });

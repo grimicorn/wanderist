@@ -182,8 +182,8 @@ const patchPreferences =
     ? (patchHandler.default as (event: unknown) => unknown)
     : patchHandler;
 
+// The PATCH endpoint returns a DTO without userId (only the 9 preference fields).
 const updatedRow = {
-  userId: "user-1",
   distanceUnit: "km",
   defaultMapStyle: "dark",
   publicProfile: true,
