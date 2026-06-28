@@ -3,7 +3,7 @@
     <AppTopbar title="Journal" crumb="Home">
       <div class="feed-tabs">
         <button
-          v-for="tab in feedTabs"
+          v-for="tab in FEED_TABS"
           :key="tab"
           :class="{ 'is-active': activeTab === tab }"
           @click="activeTab = tab"
@@ -56,159 +56,81 @@
           </div>
         </div>
 
-        <div class="day-div"><span class="label">// today · iceland</span></div>
-
-        <!-- Post 1 -->
-        <article class="post">
-          <div class="post__head">
-            <span class="post__av">
-              <AppIcon name="user" :size="18" />
-            </span>
-            <div class="post__who">
-              <b>Dan H.</b>
-              <div class="post__meta">
-                <AppIcon name="pin" :size="11" />
-                Reykjavík, Iceland · 4:12am
-              </div>
-            </div>
-            <button
-              class="post__menu icon-btn"
-              style="border: none"
-              aria-label="More"
-            >
-              <AppIcon
-                name="chevron"
-                :size="16"
-                style="transform: rotate(90deg)"
-              />
-            </button>
-          </div>
-          <div class="post__media grid">
-            <div class="ph">
-              <div class="topo" style="opacity: 0.4" />
-              <span class="ph__tag">harbor · 01</span>
-            </div>
-            <div class="ph"><div class="topo" style="opacity: 0.4" /></div>
-            <div class="ph">
-              <div class="topo" style="opacity: 0.4" />
-              <span class="more-badge">+4</span>
-            </div>
-          </div>
-          <div class="post__body">
-            <div class="post__actions">
-              <button
-                class="like"
-                :class="{ liked: posts[0].liked }"
-                @click="toggleLike(0)"
-              >
-                <AppIcon name="heart" :size="17" />
-                <span class="cnt">{{ posts[0].likes }}</span>
-              </button>
-              <button>
-                <AppIcon name="journal" :size="17" />
-                3
-              </button>
-              <button style="margin-left: auto">
-                <AppIcon name="star" :size="17" />
-              </button>
-            </div>
-            <h3 class="post__title">Harbor at 4am</h3>
-            <p class="post__text">
-              Cold morning, the whole harbor still asleep. Found coffee at a
-              window and watched the boats come in. The light up here doesn't
-              behave like light anywhere else.
-            </p>
-            <div class="tag-row">
-              <span class="tag tag--accent">iceland</span>
-              <span class="tag">ring road</span>
-              <span class="tag">day 6</span>
-            </div>
-          </div>
-        </article>
-
-        <div class="day-div">
-          <span class="label">// jun 8 · portugal</span>
+        <!-- Loading state -->
+        <div v-if="entriesStore.isLoading" class="feed-state">
+          <span class="label">// loading…</span>
         </div>
 
-        <!-- Post 2 -->
-        <article class="post">
-          <div class="post__head">
-            <span class="post__av">
-              <AppIcon name="user" :size="18" />
-            </span>
-            <div class="post__who">
-              <b>Dan H.</b>
-              <div class="post__meta">
-                <AppIcon name="pin" :size="11" />
-                Lisbon, Portugal · 6:40pm
-              </div>
+        <!-- Error state -->
+        <div v-else-if="entriesStore.error" class="feed-state" role="alert">
+          <span class="label">// {{ entriesStore.error }}</span>
+        </div>
+
+        <!-- Timeline tab: entries grouped by day -->
+        <template v-else-if="activeTab === 'Timeline'">
+          <template v-for="group in dayGroups" :key="group.key">
+            <div class="day-div">
+              <span class="label">// {{ group.label }}</span>
             </div>
-            <button
-              class="post__menu icon-btn"
-              style="border: none"
-              aria-label="More"
+            <JournalEntry
+              v-for="entry in group.entries"
+              :key="entry.id"
+              :entry="entry"
+              :is-liked="likedEntryIds.has(entry.id)"
+              @toggle-like="handleToggleLike"
+            />
+          </template>
+          <div v-if="dayGroups.length === 0" class="feed-state">
+            <span class="label">// no entries yet</span>
+          </div>
+        </template>
+
+        <!-- By trip tab: entries grouped by trip -->
+        <template v-else-if="activeTab === 'By trip'">
+          <template v-for="group in tripGroups" :key="group.key">
+            <div class="day-div">
+              <span class="label">// {{ group.tripName }}</span>
+            </div>
+            <JournalEntry
+              v-for="entry in group.entries"
+              :key="entry.id"
+              :entry="entry"
+              :is-liked="likedEntryIds.has(entry.id)"
+              @toggle-like="handleToggleLike"
+            />
+          </template>
+          <div v-if="tripGroups.length === 0" class="feed-state">
+            <span class="label">// no entries yet</span>
+          </div>
+        </template>
+
+        <!-- Photos tab: photo grid of entries with media -->
+        <template v-else-if="activeTab === 'Photos'">
+          <div v-if="photoEntries.length === 0" class="feed-state">
+            <span class="label">// no photos yet</span>
+          </div>
+          <div v-else class="photo-grid">
+            <div
+              v-for="entry in photoEntries"
+              :key="entry.id"
+              class="photo-grid__item ph"
             >
-              <AppIcon
-                name="chevron"
-                :size="16"
-                style="transform: rotate(90deg)"
-              />
-            </button>
-          </div>
-          <div class="post__media single">
-            <div class="ph">
               <div class="topo" style="opacity: 0.4" />
-              <span class="ph__tag">viewpoint · alfama</span>
+              <span class="ph__tag">{{ entry.title }}</span>
             </div>
           </div>
-          <div class="post__body">
-            <div class="post__actions">
-              <button
-                class="like"
-                :class="{ liked: posts[1].liked }"
-                @click="toggleLike(1)"
-              >
-                <AppIcon name="heart" :size="17" />
-                <span class="cnt">{{ posts[1].likes }}</span>
-              </button>
-              <button>
-                <AppIcon name="journal" :size="17" />
-                7
-              </button>
-              <button style="margin-left: auto">
-                <AppIcon name="star" :size="17" />
-              </button>
-            </div>
-            <h3 class="post__title">Tram 28, again</h3>
-            <p class="post__text">
-              Took the long way through Alfama. Pastéis first, then up to the
-              viewpoint I keep coming back to. Imported these straight from
-              Instagram.
-            </p>
-            <div class="tag-row">
-              <span class="tag tag--accent">portugal</span>
-              <span class="tag">
-                <AppIcon
-                  name="instagram"
-                  :size="11"
-                  style="vertical-align: -1px"
-                />
-                imported
-              </span>
-              <span class="tag">12 photos</span>
-            </div>
-          </div>
-        </article>
+        </template>
       </div>
 
       <!-- Right rail -->
       <aside class="rail">
-        <div class="rail-card">
+        <!-- Active trip card -->
+        <div v-if="activeTrip" class="rail-card">
           <h4 class="display">
             Active trip
             <NuxtLink
               class="label label--plain"
-              to="/home"
+              :to="`/trips/${activeTrip.id}`"
               style="font-size: 10px"
               >stats</NuxtLink
             >
@@ -232,7 +154,7 @@
               margin-top: 10px;
             "
           >
-            Iceland, the ring road
+            {{ activeTrip.name }}
           </div>
           <div
             class="progress"
@@ -245,13 +167,13 @@
             "
           >
             <span
-              style="
-                display: block;
-                height: 100%;
-                width: 64%;
-                background: var(--accent);
-                border-radius: 99px;
-              "
+              :style="{
+                display: 'block',
+                height: '100%',
+                width: activeTripProgressPercent + '%',
+                background: 'var(--accent)',
+                borderRadius: '99px',
+              }"
             />
           </div>
           <div
@@ -262,33 +184,46 @@
               color: var(--muted);
             "
           >
-            <span>day 6 of 9</span>
-            <span>4 entries</span>
+            <span>{{ activeTripDayLabel }}</span>
+            <span>{{ entryCountLabel(activeTripEntryCount) }}</span>
           </div>
         </div>
 
+        <!-- Trips list -->
         <div class="rail-card">
           <h4 class="display">Trips</h4>
-          <div v-for="trip in sideTrips" :key="trip.name" class="trip-pill">
+          <div
+            v-for="trip in tripsStore.tripList"
+            :key="trip.id"
+            class="trip-pill"
+          >
             <span class="trip-pill__sw" style="background: var(--bg-tint)">
               <span class="topo" style="opacity: 0.6" />
             </span>
             <div>
               <div class="trip-pill__name">{{ trip.name }}</div>
-              <div class="trip-pill__sub">{{ trip.sub }}</div>
+              <div class="trip-pill__sub">{{ formatTripSub(trip) }}</div>
             </div>
+          </div>
+          <div v-if="tripsStore.tripList.length === 0" class="label">
+            // no trips yet
           </div>
         </div>
 
-        <div class="rail-card onthisday">
-          <h4 class="display">On this day · 2024</h4>
+        <!-- On this day -->
+        <div v-if="onThisDayEntries.length > 0" class="rail-card onthisday">
+          <h4 class="display">On this day · {{ onThisDayYear }}</h4>
           <div class="ph">
             <div class="topo" style="opacity: 0.4" />
-            <span class="ph__tag">sydney · 2024</span>
+            <span v-if="onThisDayEntries[0]" class="ph__tag">{{
+              onThisDayEntries[0].title
+            }}</span>
           </div>
           <div class="post__meta" style="font-size: 11px">
             <AppIcon name="pin" :size="11" />
-            Sydney, Australia — two years ago today.
+            {{ onThisDayEntries[0]?.title }} —
+            {{ onThisDayYearsAgo }}
+            {{ onThisDayYearsAgo === 1 ? "year" : "years" }} ago today.
           </div>
         </div>
       </aside>
@@ -297,35 +232,164 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, inject, onMounted, ref, toRef } from "vue";
+import { useEntriesStore } from "~/stores/entries";
+import { useTripsStore } from "~/stores/trips";
+import type { Trip } from "~/stores/trips";
+import type { Entry } from "~/stores/entries";
+import { FEED_TABS, useJournalFeed } from "~/composables/useJournalFeed";
+
+definePageMeta({ layout: "app", middleware: "auth" });
+useHead({ title: "Wanderist — Journal" });
 
 const openNewEntry = inject<(() => void) | undefined>(
   "openNewEntry",
   undefined,
 );
 
-definePageMeta({ layout: "app", middleware: "auth" });
-useHead({ title: "Wanderist — Journal" });
+const entriesStore = useEntriesStore();
+const tripsStore = useTripsStore();
+const { apiFetch } = useApiClient();
 
-const feedTabs = ["Timeline", "By trip", "Photos"];
-const activeTab = ref("Timeline");
+const { activeTab, dayGroups, tripGroups, photoEntries } = useJournalFeed(
+  toRef(entriesStore, "entries"),
+  computed(() => tripsStore.tripList),
+);
 
-const posts = ref([
-  { likes: 24, liked: false },
-  { likes: 41, liked: true },
-]);
+// "On this day" state
+const onThisDayEntries = ref<Entry[]>([]);
 
-const sideTrips = [
-  { name: "Iceland 2026", sub: "4 entries · ongoing" },
-  { name: "Portugal 2026", sub: "6 entries" },
-  { name: "Japan 2025", sub: "9 entries" },
-];
+const onThisDayYear = computed<number | null>(() => {
+  const first = onThisDayEntries.value[0];
+  if (!first?.occurredAt) {
+    return null;
+  }
+  return new Date(first.occurredAt).getUTCFullYear();
+});
 
-function toggleLike(index: number) {
-  const post = posts.value[index];
-  post.liked = !post.liked;
-  post.likes += post.liked ? 1 : -1;
+const onThisDayYearsAgo = computed<number>(() => {
+  if (!onThisDayYear.value) {
+    return 0;
+  }
+  return new Date().getUTCFullYear() - onThisDayYear.value;
+});
+
+// Active trip (the single "ongoing" trip)
+const activeTrip = computed<Trip | null>(
+  () => tripsStore.tripList.find((trip) => trip.status === "ongoing") ?? null,
+);
+
+const activeTripEntryCount = computed<number>(() => {
+  if (!activeTrip.value) {
+    return 0;
+  }
+  return entriesStore.entries.filter(
+    (entry) => entry.tripId === activeTrip.value!.id,
+  ).length;
+});
+
+const activeTripProgressPercent = computed<number>(() => {
+  const trip = activeTrip.value;
+  if (!trip?.startDate || !trip.endDate) {
+    return 0;
+  }
+  const start = new Date(trip.startDate).getTime();
+  const end = new Date(trip.endDate).getTime();
+  const now = Date.now();
+  const total = end - start;
+  if (total <= 0) {
+    return 0;
+  }
+  return Math.min(100, Math.max(0, Math.round(((now - start) / total) * 100)));
+});
+
+const MS_PER_DAY = 1000 * 60 * 60 * 24;
+
+const activeTripDayLabel = computed<string>(() => {
+  const trip = activeTrip.value;
+  if (!trip?.startDate) {
+    return "ongoing";
+  }
+  const start = new Date(trip.startDate).getTime();
+  const rawDayNumber = Math.floor((Date.now() - start) / MS_PER_DAY) + 1;
+
+  if (!trip.endDate) {
+    return `day ${Math.max(1, rawDayNumber)}`;
+  }
+
+  const end = new Date(trip.endDate).getTime();
+  const totalDays = Math.ceil((end - start) / MS_PER_DAY);
+  const dayNumber = Math.min(Math.max(1, rawDayNumber), totalDays);
+  return `day ${dayNumber} of ${totalDays}`;
+});
+
+function entryCountLabel(count: number): string {
+  return count === 1 ? "1 entry" : `${count} entries`;
 }
+
+function formatTripSub(trip: Trip): string {
+  const entryCount = entriesStore.entries.filter(
+    (entry) => entry.tripId === trip.id,
+  ).length;
+  return `${entryCountLabel(entryCount)} · ${trip.status}`;
+}
+
+// Local set tracking which entry IDs the user has liked this session.
+// The server is the source of truth for likeCount; this tracks the liked
+// state so the heart button shows correctly without a per-user DB column.
+const likedEntryIds = ref<Set<string>>(new Set());
+
+function setLiked(entryId: string, liked: boolean): void {
+  if (liked) {
+    likedEntryIds.value.add(entryId);
+    return;
+  }
+  likedEntryIds.value.delete(entryId);
+}
+
+async function handleToggleLike(entry: Entry): Promise<void> {
+  const wasLiked = likedEntryIds.value.has(entry.id);
+  const persist = wasLiked ? entriesStore.unlikeEntry : entriesStore.likeEntry;
+
+  setLiked(entry.id, !wasLiked);
+  try {
+    await persist(entry.id);
+  } catch {
+    // Rollback optimistic update on failure
+    setLiked(entry.id, wasLiked);
+  }
+}
+
+async function loadOnThisDay(): Promise<void> {
+  try {
+    const result = await apiFetch<{ entries: Entry[] }>(
+      "/api/entries/on-this-day",
+    );
+    onThisDayEntries.value = Array.isArray(result?.entries)
+      ? result.entries
+      : [];
+  } catch {
+    // Non-fatal: "on this day" is optional context. Hide the block on error.
+    onThisDayEntries.value = [];
+  }
+}
+
+onMounted(() => {
+  // Fetch all three independently and concurrently; failures are non-fatal.
+  Promise.allSettled([
+    entriesStore
+      .fetchEntries()
+      .catch((error: unknown) =>
+        console.error("[journal] failed to load entries", error),
+      ),
+    tripsStore
+      .fetchTrips()
+      .catch((error: unknown) =>
+        console.error("[journal] failed to load trips", error),
+      ),
+    loadOnThisDay(),
+  ]);
+});
 </script>
 
 <style scoped>
@@ -342,6 +406,11 @@ function toggleLike(index: number) {
   flex-direction: column;
   gap: 18px;
   min-width: 0;
+}
+
+.feed-state {
+  padding: 24px 0;
+  text-align: center;
 }
 
 .compose {
@@ -533,6 +602,17 @@ function toggleLike(index: number) {
   flex: 1;
   height: 1px;
   background: var(--line);
+}
+
+.photo-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.photo-grid__item {
+  aspect-ratio: 1;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
 }
 
 .rail {
