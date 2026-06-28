@@ -3,6 +3,24 @@ import { ref, readonly } from "vue";
 import { mount } from "@vue/test-utils";
 import SettingsPage from "../settings.vue";
 
+const mockChangePassword = vi.fn().mockResolvedValue(true);
+const mockUploadAvatar = vi.fn().mockResolvedValue(null);
+const mockRemoveAvatar = vi.fn().mockResolvedValue(true);
+const mockDeleteAccount = vi.fn().mockResolvedValue(true);
+const mockAccountIsLoading = ref(false);
+const mockAccountError = ref<string | null>(null);
+
+vi.mock("~/composables/useAccountActions", () => ({
+  useAccountActions: vi.fn(() => ({
+    isLoading: readonly(mockAccountIsLoading),
+    error: readonly(mockAccountError),
+    changePassword: mockChangePassword,
+    uploadAvatar: mockUploadAvatar,
+    removeAvatar: mockRemoveAvatar,
+    deleteAccount: mockDeleteAccount,
+  })),
+}));
+
 const defaultPreferencesData = {
   distanceUnit: "mi" as const,
   defaultMapStyle: "outdoors",
@@ -225,6 +243,77 @@ describe("Settings page (/settings)", () => {
     await wrapper.vm.$nextTick();
 
     expect(savePreferencesMock).not.toHaveBeenCalled();
+  });
+
+  it("shows password error when passwords do not match", async () => {
+    const wrapper = mount(SettingsPage, globalConfig);
+
+    // Open password fields
+    const changePasswordBtn = wrapper
+      .findAll(".opt-row .btn--outline")
+      .find((btn) => btn.text().includes("change password"));
+    await changePasswordBtn?.trigger("click");
+    await wrapper.vm.$nextTick();
+
+    // In Vue 3 with <script setup>, the component proxy auto-unwraps refs on
+    // assignment — setting vm.foo = "bar" writes through to the underlying ref.
+    const vm = wrapper.vm as unknown as Record<string, string>;
+    vm.passwordNew = "newpassword1";
+    vm.passwordConfirm = "different123";
+
+    const updatePasswordBtn = wrapper
+      .findAll(".btn--primary")
+      .find((btn) => btn.text().includes("update password"));
+    await updatePasswordBtn?.trigger("click");
+    await wrapper.vm.$nextTick();
+
+    expect(mockChangePassword).not.toHaveBeenCalled();
+    expect(wrapper.find(".account-field-error").exists()).toBe(true);
+  });
+
+  it("calls changePassword with correct value and hides fields on success", async () => {
+    const wrapper = mount(SettingsPage, globalConfig);
+
+    const changePasswordBtn = wrapper
+      .findAll(".opt-row .btn--outline")
+      .find((btn) => btn.text().includes("change password"));
+    await changePasswordBtn?.trigger("click");
+    await wrapper.vm.$nextTick();
+
+    const vm = wrapper.vm as unknown as Record<string, string>;
+    vm.passwordNew = "validpassword";
+    vm.passwordConfirm = "validpassword";
+
+    const updatePasswordBtn = wrapper
+      .findAll(".btn--primary")
+      .find((btn) => btn.text().includes("update password"));
+    await updatePasswordBtn?.trigger("click");
+    await wrapper.vm.$nextTick();
+    await wrapper.vm.$nextTick();
+
+    expect(mockChangePassword).toHaveBeenCalledWith("validpassword");
+  });
+
+  it("calls deleteAccount when delete forever is clicked with DELETE typed", async () => {
+    const wrapper = mount(SettingsPage, globalConfig);
+
+    // Open delete modal
+    await wrapper.find(".danger .btn").trigger("click");
+    await wrapper.vm.$nextTick();
+
+    // Set deleteConfirm via the component proxy (ref is auto-unwrapped on set)
+    const vm = wrapper.vm as unknown as Record<string, string>;
+    vm.deleteConfirm = "DELETE";
+    await wrapper.vm.$nextTick();
+
+    const deleteBtn = wrapper
+      .findAll(".modal .btn")
+      .find((btn) => btn.text().includes("delete forever"));
+    await deleteBtn?.trigger("click");
+    await wrapper.vm.$nextTick();
+    await wrapper.vm.$nextTick();
+
+    expect(mockDeleteAccount).toHaveBeenCalledTimes(1);
   });
 
   it("shows error toast (not success toast) when save fails", async () => {

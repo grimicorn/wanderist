@@ -91,6 +91,9 @@ export const users = pgTable("users", {
     .defaultNow()
     .notNull()
     .$onUpdate(() => new Date()),
+  // Soft-delete: set when the user requests deletion; the row and all FK children
+  // are permanently removed after DELETE_GRACE_PERIOD_DAYS days by a scheduled job.
+  deletedAt: timestamp("deleted_at"),
 });
 
 // ---------------------------------------------------------------------------

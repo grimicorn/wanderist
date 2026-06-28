@@ -31,6 +31,14 @@ Object.assign(globalThis, {
   defineStore: vi.fn(),
   // App composables — stubs for environments that don't import them explicitly
   useApiClient: vi.fn(() => ({ apiFetch: vi.fn() })),
+  useAccountActions: vi.fn(() => ({
+    isLoading: vue.readonly(vue.ref(false)),
+    error: vue.readonly(vue.ref(null)),
+    changePassword: vi.fn().mockResolvedValue(true),
+    uploadAvatar: vi.fn().mockResolvedValue(null),
+    removeAvatar: vi.fn().mockResolvedValue(true),
+    deleteAccount: vi.fn().mockResolvedValue(true),
+  })),
   usePreferences: vi.fn(() => ({
     preferences: vue.ref({
       distanceUnit: "mi",

@@ -43,24 +43,55 @@
             </div>
             <div class="avatar-row">
               <div class="avatar">
-                <div class="topo" />
+                <div v-if="!avatarUrl" class="topo" />
                 <AppIcon
+                  v-if="!avatarUrl"
                   name="user"
                   :size="30"
                   style="position: relative; z-index: 2"
                 />
+                <img
+                  v-else
+                  :src="avatarUrl"
+                  alt="Your avatar"
+                  class="avatar__img"
+                />
               </div>
               <div class="vstack gap-8">
                 <div class="hstack gap-8" style="flex-wrap: wrap">
-                  <button class="btn btn--outline btn--sm">
+                  <input
+                    ref="avatarInputRef"
+                    type="file"
+                    accept="image/jpeg,image/png"
+                    style="display: none"
+                    @change="onAvatarFileSelected"
+                  />
+                  <button
+                    class="btn btn--outline btn--sm"
+                    :disabled="isAccountLoading"
+                    @click="triggerAvatarUpload"
+                  >
                     <AppIcon name="camera" :size="14" />
                     upload photo
                   </button>
-                  <button class="btn btn--ghost btn--sm">remove</button>
+                  <button
+                    v-if="avatarUrl"
+                    class="btn btn--ghost btn--sm"
+                    :disabled="isAccountLoading"
+                    @click="handleRemoveAvatar"
+                  >
+                    remove
+                  </button>
                 </div>
                 <span class="muted" style="font-size: 11px"
                   >JPG or PNG · up to 4MB · square works best</span
                 >
+                <span
+                  v-if="accountError && isAccountLoading === false"
+                  class="account-field-error"
+                >
+                  {{ accountError }}
+                </span>
               </div>
             </div>
             <div class="row">
@@ -116,15 +147,41 @@
             <div v-if="showPasswordFields" style="margin-top: 14px">
               <div class="row">
                 <InputText
+                  v-model="passwordNew"
                   label="New password"
                   type="password"
                   placeholder="••••••••"
                 />
                 <InputText
+                  v-model="passwordConfirm"
                   label="Confirm"
                   type="password"
                   placeholder="••••••••"
                 />
+              </div>
+              <div v-if="passwordError" class="account-field-error">
+                {{ passwordError }}
+              </div>
+              <div v-if="passwordSuccess" class="account-field-success">
+                Password updated.
+              </div>
+              <div
+                class="hstack gap-8"
+                style="justify-content: flex-end; margin-top: 12px"
+              >
+                <button
+                  class="btn btn--ghost btn--sm"
+                  @click="showPasswordFields = false"
+                >
+                  cancel
+                </button>
+                <button
+                  class="btn btn--primary btn--sm"
+                  :disabled="isAccountLoading"
+                  @click="submitPasswordChange"
+                >
+                  update password
+                </button>
               </div>
             </div>
           </section>
@@ -339,8 +396,9 @@
           </button>
           <button
             class="btn"
-            :disabled="deleteConfirm !== 'DELETE'"
+            :disabled="deleteConfirm !== 'DELETE' || isAccountLoading"
             style="background: var(--error); color: #fff"
+            @click="handleDeleteAccount"
           >
             delete forever
           </button>
@@ -353,6 +411,7 @@
 <script setup lang="ts">
 import type { Ref } from "vue";
 import { usePreferences } from "~/composables/usePreferences";
+import { useAccountActions } from "~/composables/useAccountActions";
 
 definePageMeta({ layout: "app", middleware: "auth" });
 useHead({ title: "Wanderist — Settings" });
@@ -417,6 +476,7 @@ function populateEmailFromClerk(): void {
     (address) => address.id === user.value!.primaryEmailAddressId,
   );
   profile.email = primaryEmail?.emailAddress ?? "";
+  avatarUrl.value = user.value.imageUrl ?? null;
 }
 
 watch(
@@ -463,6 +523,26 @@ const deleteModal = ref(false);
 const deleteConfirm = ref("");
 const activeSection = ref("profile");
 const sectionsRef = ref<HTMLElement | null>(null);
+
+// Password change state
+const passwordNew = ref("");
+const passwordConfirm = ref("");
+const passwordError = ref<string | null>(null);
+const passwordSuccess = ref(false);
+
+// Avatar state
+const avatarUrl = ref<string | null>(null);
+const avatarInputRef = ref<HTMLInputElement | null>(null);
+
+// Account actions composable
+const {
+  isLoading: isAccountLoading,
+  error: accountError,
+  changePassword,
+  uploadAvatar,
+  removeAvatar,
+  deleteAccount,
+} = useAccountActions();
 
 onUnmounted(() => {
   if (savedTimer.value !== null) {
@@ -514,6 +594,74 @@ async function saveChanges(): Promise<void> {
   }
 
   showToast(showSaved, savedTimer);
+}
+
+async function submitPasswordChange(): Promise<void> {
+  passwordError.value = null;
+  passwordSuccess.value = false;
+
+  if (!passwordNew.value) {
+    passwordError.value = "New password is required";
+    return;
+  }
+
+  if (passwordNew.value !== passwordConfirm.value) {
+    passwordError.value = "Passwords do not match";
+    return;
+  }
+
+  const succeeded = await changePassword(passwordNew.value);
+
+  if (!succeeded) {
+    passwordError.value = accountError.value ?? "Failed to update password";
+    return;
+  }
+
+  passwordNew.value = "";
+  passwordConfirm.value = "";
+  showPasswordFields.value = false;
+  passwordSuccess.value = true;
+}
+
+function triggerAvatarUpload(): void {
+  avatarInputRef.value?.click();
+}
+
+async function onAvatarFileSelected(event: Event): Promise<void> {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+
+  if (!file) {
+    return;
+  }
+
+  // Reset the input so the same file can be re-selected after removal.
+  input.value = "";
+
+  const imageUrl = await uploadAvatar(file);
+
+  if (imageUrl !== null) {
+    avatarUrl.value = imageUrl;
+  }
+}
+
+async function handleRemoveAvatar(): Promise<void> {
+  const succeeded = await removeAvatar();
+
+  if (succeeded) {
+    avatarUrl.value = null;
+  }
+}
+
+async function handleDeleteAccount(): Promise<void> {
+  const succeeded = await deleteAccount();
+
+  if (!succeeded) {
+    deleteModal.value = false;
+    return;
+  }
+
+  await navigateTo("/");
 }
 
 function scrollTo(id: string) {
@@ -624,6 +772,24 @@ if (import.meta.client) {
 }
 .avatar .topo {
   opacity: 0.5;
+}
+.avatar__img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 15px;
+}
+.account-field-error {
+  font-size: 12px;
+  color: var(--error-ink);
+  margin-top: 6px;
+}
+.account-field-success {
+  font-size: 12px;
+  color: var(--success-ink);
+  margin-top: 6px;
 }
 
 .switch {
