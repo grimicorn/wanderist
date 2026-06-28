@@ -210,6 +210,23 @@ describe("Settings page (/settings)", () => {
     });
   });
 
+  it("does not call savePreferences when loadError is set", async () => {
+    const { usePreferences } = await import("~/composables/usePreferences");
+    const savePreferencesMock = vi.fn().mockResolvedValue(true);
+    vi.mocked(usePreferences).mockReturnValueOnce(
+      makePreferencesMock({
+        savePreferences: savePreferencesMock,
+        loadError: "Failed to load preferences",
+      }),
+    );
+
+    const wrapper = mount(SettingsPage, globalConfig);
+    await wrapper.find(".btn--primary").trigger("click");
+    await wrapper.vm.$nextTick();
+
+    expect(savePreferencesMock).not.toHaveBeenCalled();
+  });
+
   it("shows error toast (not success toast) when save fails", async () => {
     const { usePreferences } = await import("~/composables/usePreferences");
     const savePreferencesMock = vi.fn().mockResolvedValue(false);

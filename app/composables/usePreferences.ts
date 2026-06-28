@@ -86,6 +86,16 @@ function extractErrorMessage(error: unknown): string {
     return UNEXPECTED_ERROR_MESSAGE;
   }
   const errorObj = error as Record<string, unknown>;
+
+  // ofetch wraps server errors: the Nitro statusMessage lands in error.data
+  const data = errorObj.data;
+  if (data && typeof data === "object") {
+    const dataObj = data as Record<string, unknown>;
+    if (typeof dataObj.statusMessage === "string") {
+      return dataObj.statusMessage;
+    }
+  }
+
   if (typeof errorObj.statusMessage === "string") {
     return errorObj.statusMessage;
   }

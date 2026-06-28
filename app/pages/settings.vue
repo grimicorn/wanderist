@@ -2,7 +2,11 @@
   <div>
     <AppTopbar title="Account" crumb="Settings">
       <button class="btn btn--ghost btn--sm">discard</button>
-      <button class="btn btn--primary btn--sm" @click="saveChanges">
+      <button
+        class="btn btn--primary btn--sm"
+        :disabled="!!loadError"
+        @click="saveChanges"
+      >
         <AppIcon name="check" :size="14" />
         save changes
       </button>
@@ -347,6 +351,7 @@
 </template>
 
 <script setup lang="ts">
+import type { Ref } from "vue";
 import { usePreferences } from "~/composables/usePreferences";
 
 definePageMeta({ layout: "app", middleware: "auth" });
@@ -452,12 +457,34 @@ const TOAST_DURATION_MS = 2200;
 const showPasswordFields = ref(false);
 const showSaved = ref(false);
 const showErrorBar = ref(false);
-let savedTimer: ReturnType<typeof setTimeout> | null = null;
-let errorTimer: ReturnType<typeof setTimeout> | null = null;
+const savedTimer = ref<ReturnType<typeof setTimeout> | null>(null);
+const errorTimer = ref<ReturnType<typeof setTimeout> | null>(null);
 const deleteModal = ref(false);
 const deleteConfirm = ref("");
 const activeSection = ref("profile");
 const sectionsRef = ref<HTMLElement | null>(null);
+
+onUnmounted(() => {
+  if (savedTimer.value !== null) {
+    clearTimeout(savedTimer.value);
+  }
+  if (errorTimer.value !== null) {
+    clearTimeout(errorTimer.value);
+  }
+});
+
+function showToast(
+  visible: Ref<boolean>,
+  timer: Ref<ReturnType<typeof setTimeout> | null>,
+): void {
+  if (timer.value !== null) {
+    clearTimeout(timer.value);
+  }
+  visible.value = true;
+  timer.value = setTimeout(() => {
+    visible.value = false;
+  }, TOAST_DURATION_MS);
+}
 
 function nullableString(value: string): string | null {
   const trimmed = value.trim();
@@ -465,6 +492,10 @@ function nullableString(value: string): string | null {
 }
 
 async function saveChanges(): Promise<void> {
+  if (loadError.value) {
+    return;
+  }
+
   const succeeded = await savePreferences({
     displayName: nullableString(profile.name),
     handle: nullableString(profile.handle),
@@ -478,23 +509,11 @@ async function saveChanges(): Promise<void> {
   });
 
   if (!succeeded) {
-    if (errorTimer !== null) {
-      clearTimeout(errorTimer);
-    }
-    showErrorBar.value = true;
-    errorTimer = setTimeout(() => {
-      showErrorBar.value = false;
-    }, TOAST_DURATION_MS);
+    showToast(showErrorBar, errorTimer);
     return;
   }
 
-  if (savedTimer !== null) {
-    clearTimeout(savedTimer);
-  }
-  showSaved.value = true;
-  savedTimer = setTimeout(() => {
-    showSaved.value = false;
-  }, TOAST_DURATION_MS);
+  showToast(showSaved, savedTimer);
 }
 
 function scrollTo(id: string) {
