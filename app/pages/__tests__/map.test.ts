@@ -4,9 +4,7 @@ import { createPinia, setActivePinia } from "pinia";
 import MapPage from "../map.vue";
 import { pageGlobalConfig as globalConfig } from "./test-utils";
 
-// useApiClient is a Nuxt auto-import used by usePlacesStore. The mock is
-// re-configured per test via mountWithPlaces so the onMounted fetch returns
-// the same data we pre-load into the store.
+// useApiClient is a Nuxt auto-import used by usePlacesStore.
 const mockApiFetch = vi.fn().mockResolvedValue([]);
 vi.stubGlobal("useApiClient", () => ({ apiFetch: mockApiFetch }));
 
@@ -14,6 +12,49 @@ vi.stubGlobal("useApiClient", () => ({ apiFetch: mockApiFetch }));
 // tests. Override it to the real pinia defineStore so the store actually works.
 const { defineStore } = await import("pinia");
 vi.stubGlobal("defineStore", defineStore);
+
+// useMapbox is stubbed so tests don't need a real Mapbox token or DOM canvas.
+// hasToken returns false so the fallback (DOM pins) path is active throughout.
+const mockSyncMarkers = vi.fn().mockResolvedValue(undefined);
+const mockInitMap = vi.fn().mockResolvedValue(null);
+const mockSetStyle = vi.fn();
+const mockZoomIn = vi.fn();
+const mockZoomOut = vi.fn();
+const mockSetMarkerActive = vi.fn();
+const mockStartDropPin = vi.fn();
+const mockCancelDropPin = vi.fn();
+const mockDestroyMap = vi.fn();
+
+vi.stubGlobal("useMapbox", () => ({
+  hasToken: () => false,
+  initMap: mockInitMap,
+  setStyle: mockSetStyle,
+  zoomIn: mockZoomIn,
+  zoomOut: mockZoomOut,
+  syncMarkers: mockSyncMarkers,
+  setMarkerActive: mockSetMarkerActive,
+  startDropPin: mockStartDropPin,
+  cancelDropPin: mockCancelDropPin,
+  destroyMap: mockDestroyMap,
+}));
+
+// useMapboxStyles is auto-imported; stub the composable wrapper and the named
+// export that map.vue imports directly.
+vi.stubGlobal("useMapboxStyles", () => ({
+  resolveMapboxStyleUrl: (key: string) => `mapbox://styles/mapbox/${key}-stub`,
+  resolveMapboxStyleLabel: (key: string) => `${key}-label`,
+}));
+vi.stubGlobal("resolveMapboxStyleLabel", (key: string) => {
+  const labels: Record<string, string> = {
+    outdoors: "outdoors-v12",
+    streets: "streets-v12",
+    satellite: "satellite-streets-v12",
+    light: "light-v11",
+    dark: "dark-v11",
+    custom: "wanderist-violet",
+  };
+  return labels[key] ?? key;
+});
 
 const SAMPLE_PLACES = [
   {
@@ -95,7 +136,7 @@ describe("Map page (/map)", () => {
     expect(wrapper.findAll(".place-item")).toHaveLength(SAMPLE_PLACES.length);
   });
 
-  it("renders only pins for places with lat/lng coordinates", async () => {
+  it("renders fallback DOM pins for places with lat/lng when mapbox token is absent", async () => {
     const wrapper = await mountWithPlaces();
     // Only Reykjavík and Tokyo have lat/lng; Lisbon does not.
     expect(wrapper.findAll(".pin-abs")).toHaveLength(2);
@@ -198,5 +239,41 @@ describe("Map page (/map)", () => {
     expect(wrapper.findAll(".place-item")).toHaveLength(0);
     expect(wrapper.findAll(".pin-abs")).toHaveLength(0);
     expect(wrapper.find(".legend").text()).toContain("0 pins");
+  });
+
+  it("does not show drop-pin mode banner initially", async () => {
+    const wrapper = await mountWithPlaces();
+    expect(wrapper.find(".drop-pin-banner").exists()).toBe(false);
+  });
+
+  it("does not show drop-pin form initially", async () => {
+    const wrapper = await mountWithPlaces();
+    expect(wrapper.find(".drop-pin-form").exists()).toBe(false);
+  });
+
+  it("does not call startDropPin when no map instance is active (no token)", async () => {
+    const wrapper = await mountWithPlaces();
+    const dropPinButton = wrapper.find(".btn.btn--primary.btn--sm");
+    await dropPinButton.trigger("click");
+    // hasToken() returns false so onDropPin returns early
+    expect(mockStartDropPin).not.toHaveBeenCalled();
+  });
+
+  it("shows places error alert when fetchPlaces fails", async () => {
+    mockApiFetch.mockRejectedValueOnce(new Error("Network error"));
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const errorWrapper = mount(MapPage, {
+      ...globalConfig,
+      global: {
+        ...globalConfig.global,
+        plugins: [pinia],
+      },
+    });
+    await flushPromises();
+    expect(errorWrapper.find(".places-error").exists()).toBe(true);
+    expect(errorWrapper.find(".places-error").text()).toContain(
+      "Network error",
+    );
   });
 });

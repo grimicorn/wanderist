@@ -20,9 +20,10 @@ export default defineNuxtConfig({
     public: {
       sentryDsn: "",
       siteOrigin: "",
+      mapboxToken: "",
     },
   },
-  css: ["~/assets/css/main.css"],
+  css: ["~/assets/css/main.css", "mapbox-gl/dist/mapbox-gl.css"],
   devtools: { enabled: true },
   nitro: {
     preset: "netlify",

@@ -43,24 +43,58 @@
             </div>
             <div class="avatar-row">
               <div class="avatar">
-                <div class="topo" />
+                <div v-if="!avatarUrl" class="topo" />
                 <AppIcon
+                  v-if="!avatarUrl"
                   name="user"
                   :size="30"
                   style="position: relative; z-index: 2"
                 />
+                <img
+                  v-else
+                  :src="avatarUrl"
+                  alt="Your avatar"
+                  class="avatar__img"
+                />
               </div>
               <div class="vstack gap-8">
                 <div class="hstack gap-8" style="flex-wrap: wrap">
-                  <button class="btn btn--outline btn--sm">
+                  <input
+                    ref="avatarInputRef"
+                    type="file"
+                    accept="image/jpeg,image/png"
+                    style="display: none"
+                    @change="onAvatarFileSelected"
+                  />
+                  <button
+                    class="btn btn--outline btn--sm"
+                    :disabled="isAccountLoading"
+                    @click="triggerAvatarUpload"
+                  >
                     <AppIcon name="camera" :size="14" />
                     upload photo
                   </button>
-                  <button class="btn btn--ghost btn--sm">remove</button>
+                  <button
+                    v-if="avatarUrl"
+                    class="btn btn--ghost btn--sm"
+                    :disabled="isAccountLoading"
+                    @click="handleRemoveAvatar"
+                  >
+                    remove
+                  </button>
                 </div>
                 <span class="muted" style="font-size: 11px"
                   >JPG or PNG · up to 4MB · square works best</span
                 >
+                <span v-if="avatarValidationError" class="account-field-error">
+                  {{ avatarValidationError }}
+                </span>
+                <span
+                  v-else-if="avatarError && !isAccountLoading"
+                  class="account-field-error"
+                >
+                  {{ avatarError }}
+                </span>
               </div>
             </div>
             <div class="row">
@@ -107,24 +141,56 @@
               </div>
               <button
                 class="btn btn--outline btn--sm"
-                @click="showPasswordFields = !showPasswordFields"
+                @click="togglePasswordFields"
               >
                 <AppIcon name="lock" :size="14" />
                 change password
               </button>
             </div>
+            <div v-if="passwordChangedSuccess" class="account-field-success">
+              Password updated.
+            </div>
             <div v-if="showPasswordFields" style="margin-top: 14px">
               <div class="row">
                 <InputText
+                  v-model="passwordNew"
                   label="New password"
                   type="password"
                   placeholder="••••••••"
                 />
                 <InputText
+                  v-model="passwordConfirm"
                   label="Confirm"
                   type="password"
                   placeholder="••••••••"
                 />
+              </div>
+              <div v-if="passwordMatchError" class="account-field-error">
+                {{ passwordMatchError }}
+              </div>
+              <div
+                v-if="passwordError && !isAccountLoading"
+                class="account-field-error"
+              >
+                {{ passwordError }}
+              </div>
+              <div
+                class="hstack gap-8"
+                style="justify-content: flex-end; margin-top: 12px"
+              >
+                <button
+                  class="btn btn--ghost btn--sm"
+                  @click="cancelPasswordChange"
+                >
+                  cancel
+                </button>
+                <button
+                  class="btn btn--primary btn--sm"
+                  :disabled="isAccountLoading"
+                  @click="submitPasswordChange"
+                >
+                  update password
+                </button>
               </div>
             </div>
           </section>
@@ -400,6 +466,12 @@
         </p>
         <InputText v-model="deleteConfirm" placeholder="DELETE" />
         <div
+          v-if="deleteError && !isAccountLoading"
+          class="account-field-error"
+        >
+          {{ deleteError }}
+        </div>
+        <div
           class="hstack gap-12"
           style="justify-content: flex-end; margin-top: 8px"
         >
@@ -408,8 +480,9 @@
           </button>
           <button
             class="btn"
-            :disabled="deleteConfirm !== 'DELETE'"
+            :disabled="deleteConfirm !== 'DELETE' || isAccountLoading"
             style="background: var(--error); color: #fff"
+            @click="handleDeleteAccount"
           >
             delete forever
           </button>
@@ -423,6 +496,7 @@
 import type { Ref } from "vue";
 import { usePreferences } from "~/composables/usePreferences";
 import { useConnections } from "~/composables/useConnections";
+import { useAccountActions } from "~/composables/useAccountActions";
 
 definePageMeta({ layout: "app", middleware: "auth" });
 useHead({ title: "Wanderist — Settings" });
@@ -500,6 +574,7 @@ function populateEmailFromClerk(): void {
     (address) => address.id === user.value!.primaryEmailAddressId,
   );
   profile.email = primaryEmail?.emailAddress ?? "";
+  avatarUrl.value = user.value.imageUrl ?? null;
 }
 
 watch(
@@ -573,6 +648,31 @@ const deleteConfirm = ref("");
 const activeSection = ref("profile");
 const sectionsRef = ref<HTMLElement | null>(null);
 
+// Password change state
+const passwordNew = ref("");
+const passwordConfirm = ref("");
+// Client-side validation error (e.g. passwords don't match); separate from the
+// server-side passwordError that comes from the composable.
+const passwordMatchError = ref<string | null>(null);
+const passwordChangedSuccess = ref(false);
+
+// Avatar state
+const avatarUrl = ref<string | null>(null);
+const avatarInputRef = ref<HTMLInputElement | null>(null);
+
+// Account actions composable — split error refs so each section only shows
+// its own error (no cross-contamination between password/avatar/delete).
+const {
+  isLoading: isAccountLoading,
+  passwordError,
+  avatarError,
+  deleteError,
+  changePassword,
+  uploadAvatar,
+  removeAvatar,
+  deleteAccount,
+} = useAccountActions();
+
 onUnmounted(() => {
   if (savedTimer.value !== null) {
     clearTimeout(savedTimer.value);
@@ -623,6 +723,108 @@ async function saveChanges(): Promise<void> {
   }
 
   showToast(showSaved, savedTimer);
+}
+
+function clearPasswordFields(): void {
+  passwordNew.value = "";
+  passwordConfirm.value = "";
+  passwordMatchError.value = null;
+  passwordChangedSuccess.value = false;
+}
+
+function togglePasswordFields(): void {
+  if (showPasswordFields.value) {
+    clearPasswordFields();
+  }
+  showPasswordFields.value = !showPasswordFields.value;
+}
+
+function cancelPasswordChange(): void {
+  clearPasswordFields();
+  showPasswordFields.value = false;
+}
+
+async function submitPasswordChange(): Promise<void> {
+  passwordMatchError.value = null;
+  passwordChangedSuccess.value = false;
+
+  if (!passwordNew.value) {
+    passwordMatchError.value = "New password is required";
+    return;
+  }
+
+  if (passwordNew.value !== passwordConfirm.value) {
+    passwordMatchError.value = "Passwords do not match";
+    return;
+  }
+
+  const succeeded = await changePassword(passwordNew.value);
+
+  if (!succeeded) {
+    return;
+  }
+
+  passwordNew.value = "";
+  passwordConfirm.value = "";
+  showPasswordFields.value = false;
+  passwordChangedSuccess.value = true;
+}
+
+function triggerAvatarUpload(): void {
+  avatarInputRef.value?.click();
+}
+
+// 4 MB — matches the "up to 4MB" copy and the server-side limit.
+const MAX_AVATAR_SIZE_BYTES = 4 * 1024 * 1024;
+
+// Local validation error shown before a network request is made.
+const avatarValidationError = ref<string | null>(null);
+
+async function onAvatarFileSelected(event: Event): Promise<void> {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+
+  if (!file) {
+    return;
+  }
+
+  // Reset the input so the same file can be re-selected after removal.
+  input.value = "";
+
+  avatarValidationError.value = null;
+
+  if (file.size > MAX_AVATAR_SIZE_BYTES) {
+    avatarValidationError.value = "File exceeds the 4 MB limit";
+    return;
+  }
+
+  const imageUrl = await uploadAvatar(file);
+
+  // uploadAvatar returns null on error (avatarError is set) or if the server
+  // returned no URL. A successful upload always yields a URL; null here means
+  // something went wrong even if the error ref wasn't set.
+  if (imageUrl !== null) {
+    avatarUrl.value = imageUrl;
+  }
+}
+
+async function handleRemoveAvatar(): Promise<void> {
+  const succeeded = await removeAvatar();
+
+  if (succeeded) {
+    avatarUrl.value = null;
+  }
+}
+
+async function handleDeleteAccount(): Promise<void> {
+  const succeeded = await deleteAccount();
+
+  if (!succeeded) {
+    // Keep the modal open so deleteError is visible to the user.
+    return;
+  }
+
+  await navigateTo("/");
 }
 
 function scrollTo(id: string) {
@@ -733,6 +935,24 @@ if (import.meta.client) {
 }
 .avatar .topo {
   opacity: 0.5;
+}
+.avatar__img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 15px;
+}
+.account-field-error {
+  font-size: 12px;
+  color: var(--error-ink);
+  margin-top: 6px;
+}
+.account-field-success {
+  font-size: 12px;
+  color: var(--success-ink);
+  margin-top: 6px;
 }
 
 .switch {

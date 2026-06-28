@@ -11,6 +11,22 @@ export default defineConfig({
     alias: {
       "~": resolve(root, "app"),
       "@": resolve(root, "app"),
+      // Nitro uses bracketed file and directory names ([id]) for dynamic route
+      // params. Vite's static import analysis treats [ ] as glob characters and
+      // fails to resolve those paths. Tests use these aliases instead so vite
+      // resolves the files correctly without glob expansion.
+      "@trips-id.get": resolve(root, "server/api/trips/[id].get"),
+      "@trips-id.patch": resolve(root, "server/api/trips/[id].patch"),
+      "@trips-id.delete": resolve(root, "server/api/trips/[id].delete"),
+      "@trips-id-stops-handler": resolve(root, "server/api/trips/[id]/stops"),
+      "@trips-id-stopid.patch": resolve(
+        root,
+        "server/api/trips/[id]/stops/[stopId].patch",
+      ),
+      "@trips-id-stopid.delete": resolve(
+        root,
+        "server/api/trips/[id]/stops/[stopId].delete",
+      ),
     },
   },
   test: {

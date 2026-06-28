@@ -53,6 +53,17 @@ Open Drizzle Studio (visual database browser):
 npm run db:studio
 ```
 
+## Map (Mapbox GL)
+
+The `/map` page uses [Mapbox GL JS](https://docs.mapbox.com/mapbox-gl-js/guides/) to render a real interactive map with place markers, zoom controls, a base-style switcher, and a drop-a-pin flow for creating new places.
+
+To enable the map, set a Mapbox public access token. Without it the page degrades gracefully to a CSS placeholder.
+
+1. Create a public token at [https://account.mapbox.com/access-tokens/](https://account.mapbox.com/access-tokens/).
+2. Set `NUXT_PUBLIC_MAPBOX_TOKEN=<your-token>` in your `.env`.
+
+Available base styles: Outdoors, Streets, Satellite, Light, Dark, and Wanderist violet (custom).
+
 ## Media storage
 
 File uploads (photos, cover images) are stored in [Netlify Blobs](https://docs.netlify.com/blobs/overview/) under the `media` store. Blobs are keyed as `<userId>/<mediaId>` and served back through the proxy route `GET /api/media/[id]`, which sets long-lived `Cache-Control` headers.

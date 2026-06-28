@@ -96,7 +96,7 @@
         v-for="trip in filteredTrips"
         :key="trip.id"
         class="tcard"
-        to="/trips/1"
+        :to="`/trips/${trip.id}`"
       >
         <div class="tcard__cover ph">
           <div class="topo" />
@@ -109,17 +109,12 @@
         </div>
         <div class="tcard__body">
           <div class="tcard__name">{{ trip.name }}</div>
-          <div class="tcard__dates">{{ trip.dates }}</div>
+          <div class="tcard__dates">{{ formatTripDates(trip) }}</div>
           <div class="tcard__foot">
-            <span class="m"
-              ><AppIcon name="pin" :size="13" /> {{ trip.stops }} stops</span
-            >
-            <span class="m"
-              ><AppIcon name="journal" :size="13" /> {{ trip.entries }}</span
-            >
-            <span v-if="trip.photos" class="m"
-              ><AppIcon name="image" :size="13" /> {{ trip.photos }}</span
-            >
+            <span v-if="trip.distanceKm != null" class="m">
+              <AppIcon name="pin" :size="13" />
+              {{ formatDistance(trip.distanceKm) }}
+            </span>
           </div>
         </div>
       </NuxtLink>
@@ -128,21 +123,13 @@
 </template>
 
 <script setup lang="ts">
+import { useTripsStore } from "~/stores/trips";
+import type { Trip } from "~/stores/trips";
+
 definePageMeta({ layout: "app", middleware: "auth" });
 useHead({ title: "Wanderist — Trips" });
 
 type TripStatus = "ongoing" | "upcoming" | "past";
-
-interface Trip {
-  id: string;
-  name: string;
-  dates: string;
-  stops: number;
-  entries: string;
-  photos?: string;
-  status: TripStatus;
-  year?: string;
-}
 
 const STATUS_CLASSES: Record<TripStatus, string> = {
   ongoing: "tag tag--ongoing",
@@ -153,78 +140,68 @@ const STATUS_CLASSES: Record<TripStatus, string> = {
 const tabs = ["All", "Ongoing", "Upcoming", "Past"] as const;
 const activeTab = ref<(typeof tabs)[number]>("All");
 
-const trips: Trip[] = [
-  {
-    id: "2",
-    name: "Portugal, coast to coast",
-    dates: "Jun 24 – Jul 3, 2026 · 9 days",
-    stops: 5,
-    entries: "0",
-    status: "upcoming",
-  },
-  {
-    id: "3",
-    name: "Norway in winter",
-    dates: "Feb 2027 · planning",
-    stops: 3,
-    entries: "draft",
-    status: "upcoming",
-  },
-  {
-    id: "4",
-    name: "Japan, north to south",
-    dates: "Oct 4 – Oct 22, 2025 · 18 days",
-    stops: 9,
-    entries: "9",
-    photos: "240",
-    status: "past",
-    year: "2025",
-  },
-  {
-    id: "5",
-    name: "Marrakech & the Atlas",
-    dates: "Mar 12 – Mar 19, 2025 · 7 days",
-    stops: 4,
-    entries: "2",
-    photos: "88",
-    status: "past",
-    year: "2025",
-  },
-  {
-    id: "6",
-    name: "Sydney & the east coast",
-    dates: "Nov 2 – Nov 16, 2024 · 14 days",
-    stops: 8,
-    entries: "4",
-    photos: "156",
-    status: "past",
-    year: "2024",
-  },
-  {
-    id: "7",
-    name: "A weekend in London",
-    dates: "Jun 7 – Jun 9, 2024 · 3 days",
-    stops: 2,
-    entries: "3",
-    photos: "31",
-    status: "past",
-    year: "2024",
-  },
-];
+const tripsStore = useTripsStore();
 
-const filteredTrips = computed(() => {
+onMounted(() => {
+  // listError is set in the store on failure; TODO surface it in the UI
+  // once an error/empty-state design is available (tracked in issue #17 or
+  // wherever the trips-page visual design lands).
+  tripsStore.fetchTrips().catch((error) => {
+    console.error("[trips] failed to load trips on mount", error);
+  });
+});
+
+const filteredTrips = computed<Trip[]>(() => {
   if (activeTab.value === "All") {
-    return trips;
+    return tripsStore.tripList;
   }
-  return trips.filter((trip) => trip.status === activeTab.value.toLowerCase());
+
+  const statusFilter = activeTab.value.toLowerCase() as TripStatus;
+  return tripsStore.tripList.filter((trip) => trip.status === statusFilter);
 });
 
 function tripStatusClass(status: TripStatus) {
   return STATUS_CLASSES[status];
 }
 
+const UTC_DATE_FORMAT = {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+  timeZone: "UTC",
+} as const;
+
 function tripStatusLabel(trip: Trip) {
-  return trip.year ?? trip.status;
+  if (!trip.startDate) {
+    return trip.status;
+  }
+
+  return new Date(trip.startDate).getUTCFullYear().toString();
+}
+
+function formatTripDates(trip: Trip): string {
+  if (!trip.startDate) {
+    return "dates TBD";
+  }
+
+  const start = new Date(trip.startDate);
+  const startStr = start.toLocaleDateString("en-US", UTC_DATE_FORMAT);
+
+  if (!trip.endDate) {
+    return startStr;
+  }
+
+  const end = new Date(trip.endDate);
+  const endStr = end.toLocaleDateString("en-US", UTC_DATE_FORMAT);
+
+  const diffMs = end.getTime() - start.getTime();
+  const days = Math.round(diffMs / (1000 * 60 * 60 * 24));
+
+  return `${startStr} – ${endStr} · ${days} days`;
+}
+
+function formatDistance(distanceKm: number): string {
+  return `${distanceKm.toFixed(0)} km`;
 }
 </script>
 

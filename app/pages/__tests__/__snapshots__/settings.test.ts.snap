@@ -21,7 +21,10 @@ exports[`Settings page (/settings) > renders without crashing and matches snapsh
               <div data-v-a376170b="" class="topo"></div><svg data-v-a376170b="" data-icon="" name="user" size="30" style="position: relative; z-index: 2;"></svg>
             </div>
             <div data-v-a376170b="" class="vstack gap-8">
-              <div data-v-a376170b="" class="hstack gap-8" style="flex-wrap: wrap;"><button data-v-a376170b="" class="btn btn--outline btn--sm"><svg data-v-a376170b="" data-icon="" name="camera" size="14"></svg> upload photo </button><button data-v-a376170b="" class="btn btn--ghost btn--sm">remove</button></div><span data-v-a376170b="" class="muted" style="font-size: 11px;">JPG or PNG · up to 4MB · square works best</span>
+              <div data-v-a376170b="" class="hstack gap-8" style="flex-wrap: wrap;"><input data-v-a376170b="" type="file" accept="image/jpeg,image/png" style="display: none;"><button data-v-a376170b="" class="btn btn--outline btn--sm"><svg data-v-a376170b="" data-icon="" name="camera" size="14"></svg> upload photo </button>
+                <!--v-if-->
+              </div><span data-v-a376170b="" class="muted" style="font-size: 11px;">JPG or PNG · up to 4MB · square works best</span>
+              <!--v-if-->
             </div>
           </div>
           <div data-v-a376170b="" class="row"><input data-v-a376170b=""><input data-v-a376170b=""></div><input data-v-a376170b=""><textarea data-v-a376170b=""></textarea>
@@ -37,6 +40,7 @@ exports[`Settings page (/settings) > renders without crashing and matches snapsh
               <p data-v-a376170b="">Last changed 3 months ago.</p>
             </div><button data-v-a376170b="" class="btn btn--outline btn--sm"><svg data-v-a376170b="" data-icon="" name="lock" size="14"></svg> change password </button>
           </div>
+          <!--v-if-->
           <!--v-if-->
         </section><!-- Connections -->
         <section data-v-a376170b="" id="connections" class="sect">
@@ -159,6 +163,7 @@ exports[`Settings page (/settings) > renders without crashing and matches snapsh
       <div data-v-a376170b="" class="label" style="color: var(--error-ink); margin-bottom: 10px;"> // confirm deletion </div>
       <h3 data-v-a376170b="" class="display">Delete your account?</h3>
       <p data-v-a376170b=""> This removes <b data-v-a376170b="">117 places</b>, <b data-v-a376170b="">9 trips</b> and all photos. Type <b data-v-a376170b="">DELETE</b> to confirm. </p><input data-v-a376170b="">
+      <!--v-if-->
       <div data-v-a376170b="" class="hstack gap-12" style="justify-content: flex-end; margin-top: 8px;"><button data-v-a376170b="" class="btn btn--ghost"> cancel </button><button data-v-a376170b="" class="btn" disabled="" style="background: var(--error); color: #fff;"> delete forever </button></div>
     </div>
   </div>
