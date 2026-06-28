@@ -40,6 +40,52 @@
             >{{ chip }}</span
           >
         </div>
+        <!-- Hero search results -->
+        <div
+          v-if="
+            heroSearch.trim() &&
+            (heroSearchResults.places.length ||
+              heroSearchResults.trips.length ||
+              heroSearchResults.entries.length ||
+              heroSearchResults.people.length)
+          "
+          class="xsearch-results"
+          aria-label="Search results"
+        >
+          <template
+            v-for="(group, groupKey) in heroSearchResultGroups"
+            :key="groupKey"
+          >
+            <div v-if="group.items.length" class="xsearch-group">
+              <div class="xsearch-group__label">{{ group.label }}</div>
+              <NuxtLink
+                v-for="item in group.items"
+                :key="item.id"
+                :to="item.href"
+                class="xsearch-item"
+              >
+                <AppIcon :name="item.icon" :size="14" />
+                <span class="xsearch-item__title">{{ item.title }}</span>
+                <span v-if="item.subtitle" class="xsearch-item__sub">{{
+                  item.subtitle
+                }}</span>
+              </NuxtLink>
+            </div>
+          </template>
+        </div>
+        <div
+          v-else-if="heroSearch.trim() && heroError"
+          class="xsearch-empty xsearch-empty--error"
+          role="alert"
+        >
+          {{ heroError }}
+        </div>
+        <div
+          v-else-if="heroSearch.trim() && !heroIsLoading"
+          class="xsearch-empty"
+        >
+          No results for &ldquo;{{ heroSearch }}&rdquo;.
+        </div>
       </div>
     </div>
 
@@ -213,7 +259,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from "vue";
+import { ref, onMounted, computed, watch } from "vue";
 
 const openNewEntry = inject<(() => void) | undefined>(
   "openNewEntry",
@@ -223,8 +269,26 @@ const openNewEntry = inject<(() => void) | undefined>(
 definePageMeta({ layout: "app", middleware: "auth" });
 useHead({ title: "Wanderist — Explore" });
 
-const heroSearch = ref("");
 const activeFilter = ref("All");
+
+const {
+  query: heroSearch,
+  results: heroSearchResults,
+  isLoading: heroIsLoading,
+  error: heroError,
+  search: heroDoSearch,
+} = useSearch();
+
+const heroSearchResultGroups = computed(() => ({
+  places: { label: "Places", items: heroSearchResults.value.places },
+  trips: { label: "Trips", items: heroSearchResults.value.trips },
+  entries: { label: "Journal", items: heroSearchResults.value.entries },
+  people: { label: "People", items: heroSearchResults.value.people },
+}));
+
+watch(heroSearch, (newQuery) => {
+  heroDoSearch(newQuery);
+});
 
 const searchChips = [
   "Cold-water swims",
@@ -717,5 +781,63 @@ section.xsec {
   .place-grid {
     grid-template-columns: 1fr;
   }
+}
+
+.xsearch-results {
+  margin-top: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.xsearch-group__label {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--faint);
+  padding: 9px 14px 4px;
+}
+
+.xsearch-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  text-decoration: none;
+  color: var(--ink);
+  transition: background 0.1s;
+}
+
+.xsearch-item:hover {
+  background: var(--accent-weak);
+}
+
+.xsearch-item :deep(.ico) {
+  width: 14px;
+  height: 14px;
+  color: var(--muted);
+  flex: none;
+}
+
+.xsearch-item__title {
+  font-size: 13px;
+  font-weight: 500;
+  flex: 1;
+}
+
+.xsearch-item__sub {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.xsearch-empty {
+  margin-top: 10px;
+  font-size: 12.5px;
+  color: var(--faint);
+}
+.xsearch-empty--error {
+  color: var(--error, #c0392b);
 }
 </style>

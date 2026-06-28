@@ -39,6 +39,13 @@ Object.assign(globalThis, {
   defineStore,
   // App composables — stubs for environments that don't import them explicitly
   useApiClient: vi.fn(() => ({ apiFetch: vi.fn().mockResolvedValue([]) })),
+  useSearch: vi.fn(() => ({
+    query: vue.ref(""),
+    results: vue.ref({ places: [], trips: [], entries: [], people: [] }),
+    isLoading: vue.ref(false),
+    error: vue.ref(null),
+    search: vi.fn().mockResolvedValue(undefined),
+  })),
   useEntryDraft: vi.fn(() => ({
     saveDraft: vi.fn(),
     loadDraft: vi.fn().mockReturnValue(null),
