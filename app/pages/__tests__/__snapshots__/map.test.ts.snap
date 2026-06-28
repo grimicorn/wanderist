@@ -2,12 +2,18 @@
 
 exports[`Map page (/map) > renders the map stage and matches snapshot 1`] = `
 "<div data-v-346616cd="" class="map-stage" data-mapstyle="outdoors">
-  <header data-v-346616cd="" class="topbar"><span data-v-346616cd="" class="tag tag--accent">3 places</span><button data-v-346616cd="" class="btn btn--primary btn--sm"><svg data-v-346616cd="" data-icon="" name="plus" size="14"></svg> drop a pin </button></header><!-- Map placeholder (Mapbox GL mounts here in production) -->
+  <header data-v-346616cd="" class="topbar"><span data-v-346616cd="" class="tag tag--accent">3 places</span><button data-v-346616cd="" class="btn btn--primary btn--sm"><svg data-v-346616cd="" data-icon="" name="plus" size="14"></svg> drop a pin </button></header><!-- Map panel: Mapbox GL mounts here when token is present -->
   <div data-v-346616cd="" class="map-panel">
     <div data-v-346616cd="" class="topo map-topo"></div><span data-v-346616cd="" class="map-mount">mapbox gl · #mapPanel</span><span data-v-346616cd="" class="map-attr">© Mapbox © OpenStreetMap</span>
   </div>
-  <!-- Pins — lat/lng-to-pixel mapping is handled by Mapbox (#15).
-         Until that lands, only places with coordinates render a pin. --><button data-v-346616cd="" class="pin-abs sm" aria-label="Reykjavík"><span data-v-346616cd="" class="pin-ring"></span><svg data-v-346616cd="" data-icon="" name="pin" size="18" class="pin"></svg></button><button data-v-346616cd="" class="pin-abs sm" aria-label="Tokyo"><span data-v-346616cd="" class="pin-ring"></span><svg data-v-346616cd="" data-icon="" name="pin" size="18" class="pin"></svg></button><!-- Load error state -->
+  <!-- Fallback pins rendered in DOM only when Mapbox is not active.
+         When Mapbox is active, markers are owned by the map. --><button data-v-346616cd="" class="pin-abs sm" aria-label="Reykjavík"><span data-v-346616cd="" class="pin-ring"></span><svg data-v-346616cd="" data-icon="" name="pin" size="18" class="pin"></svg></button><button data-v-346616cd="" class="pin-abs sm" aria-label="Tokyo"><span data-v-346616cd="" class="pin-ring"></span><svg data-v-346616cd="" data-icon="" name="pin" size="18" class="pin"></svg></button><!-- Places load error -->
+  <!--v-if-->
+  <!-- Map init error (bad token, WebGL unsupported, etc.) -->
+  <!--v-if-->
+  <!-- Drop-pin mode indicator -->
+  <!--v-if-->
+  <!-- Drop-pin create form -->
   <!--v-if-->
   <!-- Places panel -->
   <div data-v-346616cd="" class="places">
