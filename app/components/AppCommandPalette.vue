@@ -74,6 +74,8 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from "vue";
+import { useTripsStore } from "~/stores/trips";
+import type { Trip } from "~/stores/trips";
 
 interface SearchItem {
   title: string;
@@ -88,7 +90,7 @@ interface SearchGroup {
   items: SearchItem[];
 }
 
-const ALL_GROUPS: SearchGroup[] = [
+const STATIC_GROUPS: SearchGroup[] = [
   {
     key: "actions",
     label: "Quick actions",
@@ -163,30 +165,6 @@ const ALL_GROUPS: SearchGroup[] = [
     ],
   },
   {
-    key: "trips",
-    label: "Trips",
-    items: [
-      {
-        title: "Iceland, the ring road",
-        subtitle: "Ongoing · day 6 of 9",
-        icon: "route",
-        href: "/trips/1",
-      },
-      {
-        title: "Portugal 2026",
-        subtitle: "6 entries · Jun 2026",
-        icon: "route",
-        href: "/trips/2",
-      },
-      {
-        title: "Japan 2025",
-        subtitle: "9 entries · past",
-        icon: "route",
-        href: "/trips/3",
-      },
-    ],
-  },
-  {
     key: "entries",
     label: "Journal",
     items: [
@@ -231,6 +209,24 @@ const ALL_GROUPS: SearchGroup[] = [
   },
 ];
 
+const STATUS_SUBTITLE_MAP: Record<Trip["status"], string> = {
+  ongoing: "Ongoing",
+  upcoming: "Upcoming",
+  past: "Past",
+};
+
+function tripToSearchItem(trip: Trip): SearchItem {
+  const subtitle = STATUS_SUBTITLE_MAP[trip.status];
+  return {
+    title: trip.name,
+    subtitle,
+    icon: "route",
+    href: `/trips/${trip.id}`,
+  };
+}
+
+const tripsStore = useTripsStore();
+
 const props = defineProps<{ open: boolean }>();
 const emit = defineEmits<{ close: [] }>();
 
@@ -238,9 +234,31 @@ const query = ref("");
 const activeIndex = ref(0);
 const inputRef = ref<HTMLInputElement | null>(null);
 
+const allGroups = computed<SearchGroup[]>(() => {
+  const tripItems = tripsStore.tripList.map(tripToSearchItem);
+  const tripsGroup: SearchGroup = {
+    key: "trips",
+    label: "Trips",
+    items: tripItems,
+  };
+
+  // Insert trips group after the "places" anchor so they appear together.
+  // Fall back to appending if the anchor group is removed or renamed.
+  const placesIndex = STATIC_GROUPS.findIndex(
+    (group) => group.key === "places",
+  );
+  const insertAt = placesIndex >= 0 ? placesIndex + 1 : STATIC_GROUPS.length;
+
+  return [
+    ...STATIC_GROUPS.slice(0, insertAt),
+    tripsGroup,
+    ...STATIC_GROUPS.slice(insertAt),
+  ];
+});
+
 const visibleGroups = computed<SearchGroup[]>(() => {
   const q = query.value.trim().toLowerCase();
-  return ALL_GROUPS.flatMap((group) => {
+  return allGroups.value.flatMap((group) => {
     const filtered = q
       ? group.items.filter((item) =>
           `${item.title} ${item.subtitle ?? ""}`.toLowerCase().includes(q),

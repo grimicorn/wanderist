@@ -1,7 +1,27 @@
 <template>
-  <div class="content content--wide" style="padding-top: 0">
+  <div v-if="isLoading" class="content content--wide" style="padding-top: 0">
+    <div class="loading-state">Loading trip…</div>
+  </div>
+
+  <div
+    v-else-if="!tripDetail"
+    class="content content--wide"
+    style="padding-top: 0"
+  >
+    <div class="empty-state">Trip not found.</div>
+  </div>
+
+  <div v-else class="content content--wide" style="padding-top: 0">
     <!-- Hero -->
-    <div class="thero ph">
+    <div
+      class="thero ph"
+      :style="
+        pendingCoverUrl
+          ? `background-image: url('${encodeURI(pendingCoverUrl)}')`
+          : ''
+      "
+      :class="{ 'thero--has-cover': !!pendingCoverUrl }"
+    >
       <div class="topo" />
       <div class="thero__veil" />
       <div class="thero__acts">
@@ -12,10 +32,19 @@
             border-color: rgba(255, 255, 255, 0.4);
             color: #fff;
           "
+          :disabled="isUploadingCover"
+          @click="onEditCover"
         >
           <AppIcon name="image" :size="14" />
-          edit cover
+          {{ isUploadingCover ? "uploading…" : "edit cover" }}
         </button>
+        <input
+          ref="coverInputRef"
+          type="file"
+          accept="image/*"
+          style="display: none"
+          @change="onCoverFileSelected"
+        />
         <button
           class="btn btn--outline btn--sm"
           style="
@@ -23,23 +52,45 @@
             border-color: rgba(255, 255, 255, 0.4);
             color: #fff;
           "
+          @click="onShare"
         >
           <AppIcon name="globe" :size="14" />
-          share
+          {{
+            tripDetail.trip.visibility === "public" ? "public link" : "share"
+          }}
         </button>
       </div>
       <div class="thero__in">
-        <div class="label">// ongoing · day 6 of 9</div>
-        <h1>Iceland, the ring road</h1>
+        <div class="label">// {{ heroLabel }}</div>
+        <h1>{{ tripDetail.trip.name }}</h1>
         <div class="thero__meta">
-          <span
-            ><AppIcon name="calendar" :size="14" /> Jun 9 – Jun 17, 2026</span
-          >
-          <span><AppIcon name="pin" :size="14" /> 7 stops · 1,332 km loop</span>
-          <span><AppIcon name="journal" :size="14" /> 4 entries</span>
-          <span><AppIcon name="users" :size="14" /> with Maya</span>
+          <span v-if="tripDetail.trip.startDate">
+            <AppIcon name="calendar" :size="14" />
+            {{ formatHeroDates(tripDetail.trip) }}
+          </span>
+          <span>
+            <AppIcon name="pin" :size="14" />
+            {{ tripDetail.facts.stopCount }}
+            {{ tripDetail.facts.stopCount === 1 ? "stop" : "stops" }}
+            <template v-if="tripDetail.facts.distanceKm != null">
+              · {{ formatKm(tripDetail.facts.distanceKm) }}
+            </template>
+          </span>
+          <span>
+            <AppIcon name="image" :size="14" />
+            {{ tripDetail.facts.photoCount }}
+            {{ tripDetail.facts.photoCount === 1 ? "photo" : "photos" }}
+          </span>
         </div>
       </div>
+    </div>
+
+    <div v-if="uploadError" class="alert alert--error" style="margin: 12px 0">
+      {{ uploadError }}
+    </div>
+
+    <div v-if="shareError" class="alert alert--error" style="margin: 12px 0">
+      {{ shareError }}
     </div>
 
     <div class="tdcols">
@@ -52,207 +103,93 @@
               Route &amp; stops
             </h2>
           </div>
-          <button class="btn btn--ghost btn--sm">
+          <button
+            class="btn btn--ghost btn--sm"
+            :disabled="sortedStops.length < 2"
+            @click="onReorder"
+          >
             <AppIcon name="sliders" :size="14" />
             reorder
           </button>
         </div>
 
         <div class="iti">
-          <div class="stop is-done">
+          <div
+            v-for="stop in sortedStops"
+            :key="stop.id"
+            class="stop"
+            :class="stopStateClass(stop.status)"
+          >
             <div class="stop__node">
-              <div class="stop__pin"><AppIcon name="check" :size="18" /></div>
+              <div class="stop__pin">
+                <AppIcon
+                  v-if="stop.status === 'done'"
+                  name="check"
+                  :size="18"
+                />
+                <AppIcon
+                  v-else-if="stop.status === 'next'"
+                  name="pin"
+                  :size="18"
+                />
+                <span v-else>{{ stopDisplayNumber(stop) }}</span>
+              </div>
             </div>
             <div class="stop__card">
               <div class="stop__top">
                 <div>
-                  <div class="stop__name">Reykjavík</div>
+                  <div class="stop__name">{{ stop.name }}</div>
                   <div class="stop__sub">
-                    <AppIcon name="calendar" :size="12" /> Jun 9–11 · 2 nights
-                    <span class="tag tag--accent">base</span>
+                    <template v-if="stop.arriveDate">
+                      <AppIcon name="calendar" :size="12" />
+                      {{ formatStopDate(stop.arriveDate) }}
+                      <template v-if="stop.nights != null">
+                        · {{ stop.nights }}
+                        {{ stop.nights === 1 ? "night" : "nights" }}
+                      </template>
+                    </template>
+                    <span v-if="stop.status === 'next'" class="tag tag--accent"
+                      >next</span
+                    >
                   </div>
                 </div>
-                <span class="stop__grip"
-                  ><AppIcon name="grip" :size="16"
-                /></span>
+                <span class="stop__grip">
+                  <AppIcon name="grip" :size="16" />
+                </span>
               </div>
-              <p class="stop__note">
-                Landed, picked up the camper. Old harbour at 4am,
-                Hallgrímskirkja, then stocked up before heading east.
-              </p>
+              <p v-if="stop.note" class="stop__note">{{ stop.note }}</p>
               <div class="stop__foot">
-                <span class="m"
-                  ><AppIcon name="journal" :size="12" /> 2 entries</span
-                >
-                <span class="m"
-                  ><AppIcon name="image" :size="12" /> 28 photos</span
-                >
-                <span class="m"
-                  ><AppIcon name="plane" :size="12" /> arrival</span
-                >
-              </div>
-            </div>
-          </div>
-
-          <div class="stop is-done">
-            <div class="stop__node"><div class="stop__pin">2</div></div>
-            <div class="stop__card">
-              <div class="stop__top">
-                <div>
-                  <div class="stop__name">
-                    Þingvellir &amp; the Golden Circle
-                  </div>
-                  <div class="stop__sub">
-                    <AppIcon name="calendar" :size="12" /> Jun 11 · day trip
-                  </div>
-                </div>
-                <span class="stop__grip"
-                  ><AppIcon name="grip" :size="16"
-                /></span>
-              </div>
-              <p class="stop__note">
-                Continental rift, Geysir, Gullfoss. Rained sideways the whole
-                afternoon and it was still worth it.
-              </p>
-              <div class="stop__foot">
-                <span class="m"
-                  ><AppIcon name="journal" :size="12" /> 1 entry</span
-                >
-                <span class="m"
-                  ><AppIcon name="image" :size="12" /> 19 photos</span
-                >
-                <span class="m"
-                  ><AppIcon name="ruler" :size="12" /> 250 km</span
-                >
-              </div>
-            </div>
-          </div>
-
-          <div class="stop is-done">
-            <div class="stop__node"><div class="stop__pin">3</div></div>
-            <div class="stop__card">
-              <div class="stop__top">
-                <div>
-                  <div class="stop__name">Vík í Mýrdal</div>
-                  <div class="stop__sub">
-                    <AppIcon name="calendar" :size="12" /> Jun 12–13 · 1 night
-                  </div>
-                </div>
-                <span class="stop__grip"
-                  ><AppIcon name="grip" :size="16"
-                /></span>
-              </div>
-              <p class="stop__note">
-                Black sand at Reynisfjara, the church on the hill. Puffins
-                finally showed up near the cliffs.
-              </p>
-              <div class="stop__foot">
-                <span class="m"
-                  ><AppIcon name="journal" :size="12" /> 1 entry</span
-                >
-                <span class="m"
-                  ><AppIcon name="image" :size="12" /> 14 photos</span
-                >
-                <span class="m"
-                  ><AppIcon name="ruler" :size="12" /> 187 km</span
-                >
-              </div>
-            </div>
-          </div>
-
-          <div class="stop is-next">
-            <div class="stop__node">
-              <div class="stop__pin"><AppIcon name="pin" :size="18" /></div>
-            </div>
-            <div class="stop__card">
-              <div class="stop__top">
-                <div>
-                  <div class="stop__name">Jökulsárlón glacier lagoon</div>
-                  <div class="stop__sub">
-                    <span class="tag tag--accent">next · today</span> 1h 40m
-                    drive ahead
-                  </div>
-                </div>
-                <span class="stop__grip"
-                  ><AppIcon name="grip" :size="16"
-                /></span>
-              </div>
-              <p class="stop__note">
-                Icebergs calving into the lagoon, then Diamond Beach at golden
-                hour. Camp at Höfn after.
-              </p>
-              <div class="stop__foot">
-                <span class="m"
-                  ><AppIcon name="clock" :size="12" /> arrive ~2:30pm</span
-                >
-                <span class="m"
-                  ><AppIcon name="ruler" :size="12" /> 270 km</span
-                >
-                <span class="m"
-                  ><AppIcon name="bookmark" :size="12" /> 3 saved spots</span
-                >
-              </div>
-            </div>
-          </div>
-
-          <div class="stop">
-            <div class="stop__node"><div class="stop__pin">5</div></div>
-            <div class="stop__card">
-              <div class="stop__top">
-                <div>
-                  <div class="stop__name">Höfn &amp; the eastfjords</div>
-                  <div class="stop__sub">
-                    <AppIcon name="calendar" :size="12" /> Jun 14–15 · 1 night
-                  </div>
-                </div>
-                <span class="stop__grip"
-                  ><AppIcon name="grip" :size="16"
-                /></span>
-              </div>
-              <div class="stop__foot">
-                <span class="m"
-                  ><AppIcon name="ruler" :size="12" /> 180 km</span
-                >
-                <span class="m"
-                  ><AppIcon name="bookmark" :size="12" /> langoustine,
-                  harbour</span
-                >
-              </div>
-            </div>
-          </div>
-
-          <div class="stop">
-            <div class="stop__node"><div class="stop__pin">6</div></div>
-            <div class="stop__card">
-              <div class="stop__top">
-                <div>
-                  <div class="stop__name">Mývatn &amp; the north</div>
-                  <div class="stop__sub">
-                    <AppIcon name="calendar" :size="12" /> Jun 16 · geothermal
-                  </div>
-                </div>
-                <span class="stop__grip"
-                  ><AppIcon name="grip" :size="16"
-                /></span>
-              </div>
-              <div class="stop__foot">
-                <span class="m"
-                  ><AppIcon name="ruler" :size="12" /> 360 km</span
-                >
-                <span class="m"
-                  ><AppIcon name="bookmark" :size="12" /> nature baths</span
-                >
+                <span v-if="stop.distanceKm != null" class="m">
+                  <AppIcon name="ruler" :size="12" />
+                  {{ formatKm(stop.distanceKm) }}
+                </span>
               </div>
             </div>
           </div>
 
           <div class="stop__add">
             <div />
-            <button class="add-btn">
+            <button class="add-btn" :disabled="isAddingStop" @click="onAddStop">
               <AppIcon name="plus" :size="15" />
-              add a stop
+              {{ isAddingStop ? "adding…" : "add a stop" }}
             </button>
           </div>
+        </div>
+
+        <div
+          v-if="addStopError"
+          class="alert alert--error"
+          style="margin-top: 8px"
+        >
+          {{ addStopError }}
+        </div>
+
+        <div
+          v-if="reorderError"
+          class="alert alert--error"
+          style="margin-top: 8px"
+        >
+          {{ reorderError }}
         </div>
       </div>
 
@@ -261,18 +198,14 @@
         <div class="rail-card" style="padding: 0; overflow: hidden">
           <div class="mini-map">
             <div class="topo" />
-            <span class="pin-abs" style="left: 30%; top: 42%"
-              ><AppIcon name="pin" :size="18" class="pin"
-            /></span>
-            <span class="pin-abs" style="left: 48%; top: 58%"
-              ><AppIcon name="pin" :size="18" class="pin"
-            /></span>
-            <span class="pin-abs" style="left: 60%; top: 70%"
-              ><AppIcon name="pin" :size="18" class="pin"
-            /></span>
-            <span class="pin-abs" style="left: 74%; top: 54%"
-              ><AppIcon name="pin" :size="18" class="pin"
-            /></span>
+            <span
+              v-for="(stop, index) in mapPins"
+              :key="stop.id"
+              class="pin-abs"
+              :style="mapPinStyle(index, mapPins.length)"
+            >
+              <AppIcon name="pin" :size="18" class="pin" />
+            </span>
           </div>
           <div style="padding: 13px 16px">
             <NuxtLink class="btn btn--outline btn--sm btn--block" to="/map">
@@ -285,23 +218,39 @@
         <div class="rail-card">
           <h4 class="display">Trip facts</h4>
           <div class="fact">
-            <span class="k">Status</span
-            ><span class="v" style="color: var(--success-ink)">Ongoing</span>
+            <span class="k">Status</span>
+            <span class="v" :style="statusStyle">{{ statusLabel }}</span>
+          </div>
+          <div v-if="tripDetail.facts.distanceKm != null" class="fact">
+            <span class="k">Distance</span>
+            <span class="v">{{ formatKm(tripDetail.facts.distanceKm) }}</span>
+          </div>
+          <div
+            v-if="
+              tripDetail.facts.loggedDistanceKm != null &&
+              tripDetail.facts.distanceKm != null
+            "
+            class="fact"
+          >
+            <span class="k">Logged</span>
+            <span class="v">
+              {{ formatKm(tripDetail.facts.loggedDistanceKm) }} /
+              {{ formatKm(tripDetail.facts.distanceKm) }}
+            </span>
+          </div>
+          <div v-if="tripDetail.facts.nights != null" class="fact">
+            <span class="k">Nights</span>
+            <span class="v">{{ tripDetail.facts.nights }}</span>
           </div>
           <div class="fact">
-            <span class="k">Distance</span><span class="v">1,332 km</span>
+            <span class="k">Photos</span>
+            <span class="v">{{ tripDetail.facts.photoCount }}</span>
           </div>
           <div class="fact">
-            <span class="k">Logged</span><span class="v">892 / 1,332 km</span>
-          </div>
-          <div class="fact">
-            <span class="k">Nights</span><span class="v">8</span>
-          </div>
-          <div class="fact">
-            <span class="k">Photos</span><span class="v">61</span>
-          </div>
-          <div class="fact">
-            <span class="k">Visibility</span><span class="v">Private</span>
+            <span class="k">Visibility</span>
+            <span class="v">{{
+              tripDetail.trip.visibility === "public" ? "Public" : "Private"
+            }}</span>
           </div>
         </div>
 
@@ -323,23 +272,19 @@
                 background: none;
                 color: var(--accent-ink);
               "
+              @click="onInvite"
             >
               invite
             </button>
           </h4>
           <div class="companions">
             <div class="companion">
-              <span class="companion__av"
-                ><AppIcon name="user" :size="16"
-              /></span>
-              <div><b>Maya R.</b><br /><span>@mayarambles · editor</span></div>
-            </div>
-            <div class="companion">
               <span
                 class="companion__av"
                 style="background: var(--bg-tint); color: var(--muted)"
-                ><AppIcon name="plus" :size="16"
-              /></span>
+              >
+                <AppIcon name="plus" :size="16" />
+              </span>
               <div>
                 <b>Invite someone</b><br /><span>add a co-traveller</span>
               </div>
@@ -352,11 +297,296 @@
 </template>
 
 <script setup lang="ts">
+import { useTripsStore } from "~/stores/trips";
+import type { Trip, TripStop } from "~/stores/trips";
+import { useMediaUpload } from "~/composables/useMediaUpload";
+
 definePageMeta({ layout: "app", middleware: "auth" });
-useHead({ title: "Wanderist — Iceland, the ring road" });
+
+const route = useRoute();
+const tripId = computed(() => String(route.params.id));
+
+const tripsStore = useTripsStore();
+const {
+  upload,
+  isUploading: isUploadingCover,
+  error: mediaError,
+} = useMediaUpload();
+
+const isAddingStop = ref(false);
+const addStopError = ref<string | null>(null);
+const reorderError = ref<string | null>(null);
+const uploadError = ref<string | null>(null);
+const shareError = ref<string | null>(null);
+const coverInputRef = ref<HTMLInputElement | null>(null);
+
+const isLoading = computed(() => tripsStore.isLoadingDetail);
+const tripDetail = computed(() => tripsStore.currentTripDetail);
+
+useAsyncData(
+  () => `trip-detail-${tripId.value}`,
+  () => tripsStore.fetchTripById(tripId.value),
+  { watch: [tripId] },
+);
+
+useHead(
+  computed(() => ({
+    title: tripDetail.value
+      ? `Wanderist — ${tripDetail.value.trip.name}`
+      : "Wanderist — Trip",
+  })),
+);
+
+const sortedStops = computed<TripStop[]>(() => {
+  if (!tripDetail.value) {
+    return [];
+  }
+  return [...tripDetail.value.stops].sort(
+    (stopA, stopB) => stopA.sortOrder - stopB.sortOrder,
+  );
+});
+
+// Cap at 6 stops to fit the mini-map without overlapping pins
+const mapPins = computed<TripStop[]>(() => sortedStops.value.slice(0, 6));
+
+// pendingCoverUrl holds the optimistically cached URL after a successful cover
+// upload so the hero displays immediately without a round-trip to re-fetch the trip.
+// Set only after both the upload AND the patchTrip calls succeed so the visible
+// state never diverges from the persisted state.
+const pendingCoverUrl = ref<string | null>(null);
+
+const STATUS_STYLE_MAP: Record<Trip["status"], string> = {
+  ongoing: "color: var(--success-ink)",
+  upcoming: "color: var(--info-ink)",
+  past: "",
+};
+
+const STATUS_LABEL_MAP: Record<Trip["status"], string> = {
+  ongoing: "Ongoing",
+  upcoming: "Upcoming",
+  past: "Past",
+};
+
+const statusStyle = computed<string>(() => {
+  const status = tripDetail.value?.trip.status ?? "past";
+  return STATUS_STYLE_MAP[status];
+});
+
+const statusLabel = computed<string>(() => {
+  const status = tripDetail.value?.trip.status ?? "past";
+  return STATUS_LABEL_MAP[status];
+});
+
+const heroLabel = computed<string>(() => {
+  const status = tripDetail.value?.trip.status;
+  if (status === "ongoing") {
+    return "ongoing trip";
+  }
+  if (status === "upcoming") {
+    return "upcoming trip";
+  }
+  return "past trip";
+});
+
+const STOP_STATE_CLASSES: Record<TripStop["status"], string> = {
+  done: "is-done",
+  next: "is-next",
+  planned: "",
+};
+
+function stopStateClass(status: TripStop["status"]): string {
+  return STOP_STATE_CLASSES[status];
+}
+
+function stopDisplayNumber(stop: TripStop): number {
+  const index = sortedStops.value.findIndex(
+    (candidateStop) => candidateStop.id === stop.id,
+  );
+  return index + 1;
+}
+
+const UTC_DATE_FORMAT = {
+  month: "short",
+  day: "numeric",
+  timeZone: "UTC",
+} as const;
+
+function formatHeroDates(
+  trip: NonNullable<typeof tripDetail.value>["trip"],
+): string {
+  if (!trip.startDate) {
+    return "";
+  }
+
+  const start = new Date(trip.startDate);
+  const startStr = start.toLocaleDateString("en-US", UTC_DATE_FORMAT);
+
+  if (!trip.endDate) {
+    return startStr;
+  }
+
+  const end = new Date(trip.endDate);
+  const endStr = end.toLocaleDateString("en-US", UTC_DATE_FORMAT);
+
+  return `${startStr} – ${endStr}`;
+}
+
+function formatStopDate(dateString: string): string {
+  return new Date(dateString).toLocaleDateString("en-US", UTC_DATE_FORMAT);
+}
+
+function formatKm(km: number): string {
+  return `${km.toLocaleString(undefined, { maximumFractionDigits: 0 })} km`;
+}
+
+function mapPinStyle(index: number, total: number): string {
+  if (total === 0) {
+    return "";
+  }
+  // Spread pins across the mini-map in a simple arc pattern
+  const leftPercent = 20 + (60 / Math.max(total - 1, 1)) * index;
+  const topPercent = 30 + Math.sin((index / total) * Math.PI) * 40;
+  return `left: ${leftPercent.toFixed(0)}%; top: ${topPercent.toFixed(0)}%`;
+}
+
+async function onAddStop(): Promise<void> {
+  if (!tripId.value) {
+    return;
+  }
+
+  isAddingStop.value = true;
+  addStopError.value = null;
+
+  try {
+    await tripsStore.createStop(tripId.value, {
+      name: "New stop",
+      status: "planned",
+    });
+  } catch (error) {
+    addStopError.value =
+      error instanceof Error ? error.message : "Failed to add stop";
+  } finally {
+    isAddingStop.value = false;
+  }
+}
+
+async function onReorder(): Promise<void> {
+  if (!tripId.value || sortedStops.value.length < 2) {
+    return;
+  }
+
+  reorderError.value = null;
+
+  try {
+    // Reorder is a drag operation in the full UI; for now the button persists
+    // the current visual order to the server (no-op if already ordered,
+    // but wires the endpoint so drag-and-drop can call reorderStops directly).
+    const stopIds = sortedStops.value.map((stop) => stop.id);
+    await tripsStore.reorderStops(tripId.value, stopIds);
+  } catch (error) {
+    reorderError.value =
+      error instanceof Error ? error.message : "Failed to reorder stops";
+  }
+}
+
+function onEditCover(): void {
+  coverInputRef.value?.click();
+}
+
+async function onCoverFileSelected(event: Event): Promise<void> {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+
+  if (!file) {
+    return;
+  }
+
+  uploadError.value = null;
+
+  try {
+    const result = await upload(file);
+    try {
+      await tripsStore.patchTrip(tripId.value, { coverImageId: result.id });
+    } catch (patchError) {
+      // The file uploaded but the trip could not be updated; the media is now
+      // orphaned server-side. Surface the specific error so the user knows
+      // the cover change did not persist (note: media cleanup is not implemented).
+      uploadError.value =
+        patchError instanceof Error
+          ? patchError.message
+          : "Cover uploaded but could not be saved to the trip";
+      return;
+    }
+    // Set after both steps succeed so the displayed cover matches persisted state
+    pendingCoverUrl.value = result.url;
+  } catch {
+    uploadError.value = mediaError.value ?? "Could not upload cover";
+  } finally {
+    // Reset input so selecting the same file fires change again
+    input.value = "";
+  }
+}
+
+async function copyPublicLink(tripIdToShare: string): Promise<void> {
+  const publicUrl = `${window.location.origin}/trips/${tripIdToShare}`;
+  try {
+    await navigator.clipboard.writeText(publicUrl);
+  } catch {
+    shareError.value = `Could not copy. Share this link manually: ${publicUrl}`;
+  }
+}
+
+async function onShare(): Promise<void> {
+  if (!tripDetail.value) {
+    return;
+  }
+
+  const trip = tripDetail.value.trip;
+  shareError.value = null;
+
+  if (trip.visibility === "public") {
+    await copyPublicLink(trip.id);
+    return;
+  }
+
+  // Making a trip public is irreversible from this UI — confirm before proceeding.
+  // The button label changes to "public link" once public, so a second click copies.
+  const confirmed = window.confirm(
+    "Make this trip public? Anyone with the link will be able to view it.",
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    await tripsStore.patchTrip(tripId.value, { visibility: "public" });
+  } catch (error) {
+    shareError.value =
+      error instanceof Error ? error.message : "Failed to update visibility";
+    return;
+  }
+
+  await copyPublicLink(trip.id);
+}
+
+function onInvite(): void {
+  // Companion invite requires a collaborator/follow-system endpoint that is
+  // not yet exposed via the current API surface. This is a no-op placeholder;
+  // the follow system (useFollows) handles user follows but not trip-level
+  // collaborator invitations. Tracked for a future API endpoint addition.
+}
 </script>
 
 <style scoped>
+.loading-state,
+.empty-state {
+  padding: 60px 0;
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+}
+
 .thero {
   position: relative;
   height: 280px;
@@ -366,9 +596,14 @@ useHead({ title: "Wanderist — Iceland, the ring road" });
   margin: 22px 0 24px;
   display: flex;
   align-items: flex-end;
+  background-size: cover;
+  background-position: center;
 }
 .thero .topo {
   opacity: 0.5;
+}
+.thero--has-cover .topo {
+  display: none;
 }
 .thero__veil {
   position: absolute;
@@ -555,9 +790,13 @@ useHead({ title: "Wanderist — Iceland, the ring road" });
   gap: 8px;
   justify-content: center;
 }
-.stop__add .add-btn:hover {
+.stop__add .add-btn:hover:not(:disabled) {
   border-color: var(--accent);
   color: var(--accent-ink);
+}
+.stop__add .add-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .trail {
@@ -647,6 +886,14 @@ useHead({ title: "Wanderist — Iceland, the ring road" });
 .companion span {
   font-size: 11px;
   color: var(--muted);
+}
+
+.alert--error {
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  background: var(--error-weak, #fee2e2);
+  color: var(--error-ink, #b91c1c);
+  font-size: 12.5px;
 }
 
 @media (max-width: 920px) {

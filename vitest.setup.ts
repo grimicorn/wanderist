@@ -20,6 +20,12 @@ Object.assign(globalThis, {
   useNuxtApp: vi.fn(() => ({})),
   useRuntimeConfig: vi.fn(() => ({ public: { mapboxToken: "" } })),
   useScrollReveal: vi.fn(),
+  useAsyncData: vi.fn(() => ({
+    data: vue.ref(null),
+    pending: vue.ref(false),
+    error: vue.ref(null),
+    refresh: vi.fn(),
+  })),
   // Clerk composables
   useClerkAuth: vi.fn(() => ({
     isSignedIn: vue.ref(false),
@@ -33,6 +39,13 @@ Object.assign(globalThis, {
   defineStore,
   // App composables — stubs for environments that don't import them explicitly
   useApiClient: vi.fn(() => ({ apiFetch: vi.fn().mockResolvedValue([]) })),
+  useMediaUpload: vi.fn(() => ({
+    upload: vi
+      .fn()
+      .mockResolvedValue({ id: "media-1", url: "/test-image.jpg" }),
+    isUploading: vue.ref(false),
+    error: vue.ref(null),
+  })),
   useAccountActions: vi.fn(() => ({
     isLoading: vue.readonly(vue.ref(false)),
     passwordError: vue.readonly(vue.ref(null)),
