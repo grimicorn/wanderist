@@ -68,6 +68,10 @@ describe("formatCompact", () => {
     it("returns '999.9k' for 999900 (just under 1M boundary)", () => {
       expect(formatCompact(999_900)).toBe("999.9k");
     });
+
+    it("rolls over to '1M' when k-rounding reaches 1000k (e.g. 999999)", () => {
+      expect(formatCompact(999_999)).toBe("1M");
+    });
   });
 
   describe("1 000 000 and above — compact M notation", () => {

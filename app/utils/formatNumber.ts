@@ -18,20 +18,20 @@ export function formatCompact(value: number): string {
   }
 
   if (roundedInt >= 1_000_000) {
-    const millions = value / 1_000_000;
-    const roundedMillions = Math.round(millions * 10) / 10;
-    const formatted =
-      roundedMillions % 1 === 0
-        ? String(Math.round(roundedMillions))
-        : roundedMillions.toFixed(1);
-    return `${formatted}M`;
+    return withSuffix(value, 1_000_000, "M");
   }
 
-  const thousands = value / 1_000;
-  const roundedThousands = Math.round(thousands * 10) / 10;
+  const roundedThousands = Math.round((value / 1_000) * 10) / 10;
+  // Guard rollover: values near 999 999 can round up to 1000k, so promote to M.
+  if (roundedThousands >= 1_000) {
+    return withSuffix(value, 1_000_000, "M");
+  }
+  return withSuffix(value, 1_000, "k");
+}
+
+function withSuffix(value: number, divisor: number, suffix: string): string {
+  const scaled = Math.round((value / divisor) * 10) / 10;
   const formatted =
-    roundedThousands % 1 === 0
-      ? String(Math.round(roundedThousands))
-      : roundedThousands.toFixed(1);
-  return `${formatted}k`;
+    scaled % 1 === 0 ? String(Math.round(scaled)) : scaled.toFixed(1);
+  return `${formatted}${suffix}`;
 }
