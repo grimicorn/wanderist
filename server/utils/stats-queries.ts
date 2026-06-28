@@ -5,7 +5,17 @@
  * be called from any server context and tested in isolation without mocking
  * module-level singletons.
  */
-import { count, countDistinct, sum, eq, gte, and, sql } from "drizzle-orm";
+import {
+  count,
+  countDistinct,
+  sum,
+  eq,
+  gte,
+  and,
+  ne,
+  lte,
+  sql,
+} from "drizzle-orm";
 import type { getDb } from "../db/index";
 import {
   places,
@@ -26,6 +36,11 @@ const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
 // Conversion factor: kilometres to miles.
 const KM_TO_MI = 0.621371;
+
+/** Extracts the first integer count from a single-row aggregate result. */
+function firstCount(rows: { value: number | null }[]): number {
+  return rows[0]?.value ?? 0;
+}
 
 export interface UserStats {
   placesCount: number;
@@ -68,23 +83,23 @@ export async function countPlaces(
     .from(places)
     .where(eq(places.userId, userId));
 
-  return rows[0]?.value ?? 0;
+  return firstCount(rows);
 }
 
 /**
- * Returns the number of distinct non-null countries across the user's places.
+ * Returns the number of distinct non-null, non-empty countries across the user's places.
  */
 export async function countDistinctCountries(
   database: Database,
   userId: string,
 ): Promise<number> {
-  // countDistinct already excludes NULLs in SQL; no extra null predicate needed.
+  // countDistinct excludes NULLs; the ne() predicate also excludes empty strings.
   const rows = await database
     .select({ value: countDistinct(places.country) })
     .from(places)
-    .where(eq(places.userId, userId));
+    .where(and(eq(places.userId, userId), ne(places.country, "")));
 
-  return rows[0]?.value ?? 0;
+  return firstCount(rows);
 }
 
 /**
@@ -111,8 +126,8 @@ export async function sumTripStopDistanceKm(
 }
 
 /**
- * Converts kilometres to miles, rounded to a consistent precision so callers
- * can format the result without further conversion.
+ * Converts kilometres to miles. Returns a full-precision float; callers are
+ * expected to format the result (e.g. via formatCompact) before display.
  */
 export function kmToMi(km: number): number {
   return km * KM_TO_MI;
@@ -136,20 +151,25 @@ export async function computeDayStreak(
   now: Date = new Date(),
 ): Promise<number> {
   // Pull distinct UTC dates on which the user has entries, most recent first.
+  // `occurredAt` is `timestamp` without time zone, so values are stored as UTC
+  // wall-clock. Format directly (no AT TIME ZONE cast) so the bucketed date
+  // matches the JS UTC anchors (toUtcDateString) regardless of the DB session tz.
+  // Exclude future-dated entries (user-supplied occurredAt can be ahead of now)
+  // so a future entry doesn't become the most-recent date and collapse the streak.
   const rows = await database
     .select({
-      entryDate: sql<string>`TO_CHAR(${entries.occurredAt} AT TIME ZONE 'UTC', 'YYYY-MM-DD')`,
+      entryDate: sql<string>`TO_CHAR(${entries.occurredAt}, 'YYYY-MM-DD')`,
     })
     .from(entries)
     .where(
-      and(eq(entries.userId, userId), sql`${entries.occurredAt} IS NOT NULL`),
+      and(
+        eq(entries.userId, userId),
+        sql`${entries.occurredAt} IS NOT NULL`,
+        lte(entries.occurredAt, now),
+      ),
     )
-    .groupBy(
-      sql`TO_CHAR(${entries.occurredAt} AT TIME ZONE 'UTC', 'YYYY-MM-DD')`,
-    )
-    .orderBy(
-      sql`TO_CHAR(${entries.occurredAt} AT TIME ZONE 'UTC', 'YYYY-MM-DD') DESC`,
-    );
+    .groupBy(sql`TO_CHAR(${entries.occurredAt}, 'YYYY-MM-DD')`)
+    .orderBy(sql`TO_CHAR(${entries.occurredAt}, 'YYYY-MM-DD') DESC`);
 
   if (rows.length === 0) {
     return 0;
@@ -197,7 +217,7 @@ export async function countPlacesThisWeek(
     .from(places)
     .where(and(eq(places.userId, userId), gte(places.createdAt, weekAgo)));
 
-  return rows[0]?.value ?? 0;
+  return firstCount(rows);
 }
 
 /**

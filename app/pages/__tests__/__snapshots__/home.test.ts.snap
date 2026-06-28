@@ -16,7 +16,9 @@ exports[`Home / Dashboard page (/home) > renders without crashing and matches sn
       <p data-v-10844834="" class="alert__msg">Import them straight into your Portugal trip.</p>
     </div>
     <div data-v-10844834="" class="hstack gap-8" style="margin-left: auto;"><a data-v-10844834="" class="btn btn--ghost btn--sm">manage</a><button data-v-10844834="" class="btn btn--primary btn--sm">import all</button></div>
-  </div><!-- Stats -->
+  </div><!-- Stats load error -->
+  <!--v-if-->
+  <!-- Stats -->
   <div data-v-10844834="" class="stats">
     <div data-v-10844834="" class="stat">
       <div data-v-10844834="" class="stat__ico"><svg data-v-10844834="" data-icon="" name="pin" size="16"></svg></div>

@@ -14,6 +14,16 @@
       </button>
     </div>
 
+    <!-- Stats load error -->
+    <div
+      v-if="statsError"
+      class="alert alert--error"
+      role="alert"
+      style="margin-bottom: 14px"
+    >
+      {{ statsError }}
+    </div>
+
     <!-- Featured active trip -->
     <div v-if="ongoingTrip" class="feature">
       <NuxtLink class="feature__cover ph" :to="`/trips/${ongoingTrip.id}`">
@@ -114,7 +124,12 @@ const tabs = ["All", "Ongoing", "Upcoming", "Past"] as const;
 const activeTab = ref<(typeof tabs)[number]>("All");
 
 const tripsStore = useTripsStore();
-const { stats, displayDistance, fetchStats } = useStats();
+const {
+  stats,
+  displayDistance,
+  loadError: statsError,
+  fetchStats,
+} = useStats();
 
 const distanceUnitShort = computed(() =>
   stats.value.distanceUnit === "km" ? "km" : "miles",

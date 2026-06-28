@@ -44,6 +44,16 @@
       </div>
     </div>
 
+    <!-- Stats load error -->
+    <div
+      v-if="statsError"
+      class="alert alert--error"
+      role="alert"
+      style="margin-bottom: 14px"
+    >
+      {{ statsError }}
+    </div>
+
     <!-- Stats -->
     <div class="stats">
       <div v-for="stat in stats" :key="stat.label" class="stat">
@@ -64,7 +74,9 @@
             >Your world</span
           >
           <span class="grow" />
-          <span class="tag">{{ rawStats.placesCount }} pins</span>
+          <span class="tag"
+            >{{ formatCompact(rawStats.placesCount) }} pins</span
+          >
           <NuxtLink class="btn btn--ghost btn--sm" to="/map">
             expand
             <AppIcon name="arrow-right" :size="14" />
@@ -198,6 +210,7 @@ const {
   displayDistance,
   displayDistanceDelta,
   displayDistanceLabel,
+  loadError: statsError,
   fetchStats,
 } = useStats();
 

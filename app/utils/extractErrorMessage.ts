@@ -21,9 +21,11 @@ export function extractErrorMessage(error: unknown): string {
     return nestedStatusMessage;
   }
 
+  // Use || (truthiness) rather than ?? so that an empty-string field falls
+  // through to the next candidate, matching readNestedStatusMessage's behaviour.
   return (
-    readStringField(errorObj, "statusMessage") ??
-    readStringField(errorObj, "message") ??
+    readStringField(errorObj, "statusMessage") ||
+    readStringField(errorObj, "message") ||
     UNEXPECTED_ERROR_MESSAGE
   );
 }

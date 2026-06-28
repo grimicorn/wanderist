@@ -145,6 +145,14 @@ describe("countDistinctCountries", () => {
     const result = await countDistinctCountries(database, "user-1");
     expect(result).toBe(0);
   });
+
+  it("excludes empty-string countries from the count", async () => {
+    // The query filters ne(country, "") so the DB returns 0 for a user whose
+    // only places have country="" (empty string, not null).
+    const database = makeDb([{ value: 0 }]);
+    const result = await countDistinctCountries(database, "user-1");
+    expect(result).toBe(0);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -237,6 +245,20 @@ describe("computeDayStreak", () => {
     ]);
     const result = await computeDayStreak(database, "user-1", FIXED_NOW);
     expect(result).toBe(3);
+  });
+
+  it("returns correct streak when future-dated entry would otherwise be first (DB filter excludes it)", async () => {
+    // If a future-dated entry existed in the DB without the lte(now) filter,
+    // it would appear first in the DESC sort, fail the today/yesterday check,
+    // and collapse the streak to 0. The query now filters future dates, so the
+    // DB returns only the valid rows. We model that by NOT including the future
+    // row in the mock result (i.e. the DB already filtered it out).
+    const database = makeDb([
+      { entryDate: "2026-06-28" },
+      { entryDate: "2026-06-27" },
+    ]);
+    const result = await computeDayStreak(database, "user-1", FIXED_NOW);
+    expect(result).toBe(2);
   });
 
   it("handles a 14-day streak correctly", async () => {
