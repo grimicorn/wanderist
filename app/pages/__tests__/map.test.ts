@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
+import { ref } from "vue";
 import { createPinia, setActivePinia } from "pinia";
 import MapPage from "../map.vue";
 import { pageGlobalConfig as globalConfig } from "./test-utils";
@@ -7,6 +8,23 @@ import { pageGlobalConfig as globalConfig } from "./test-utils";
 // useApiClient is a Nuxt auto-import used by usePlacesStore.
 const mockApiFetch = vi.fn().mockResolvedValue([]);
 vi.stubGlobal("useApiClient", () => ({ apiFetch: mockApiFetch }));
+
+// useSearch stub — tracks the query and lets individual tests drive results.
+const searchQueryRef = ref("");
+const searchResultsRef = ref({
+  places: [],
+  trips: [],
+  entries: [],
+  people: [],
+});
+const mockDoSearch = vi.fn();
+vi.stubGlobal("useSearch", () => ({
+  query: searchQueryRef,
+  results: searchResultsRef,
+  isLoading: ref(false),
+  error: ref(null),
+  search: mockDoSearch,
+}));
 
 // defineStore is stubbed as vi.fn() in vitest.setup.ts for snapshot/component
 // tests. Override it to the real pinia defineStore so the store actually works.
@@ -122,6 +140,8 @@ describe("Map page (/map)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockApiFetch.mockResolvedValue([]);
+    searchQueryRef.value = "";
+    searchResultsRef.value = { places: [], trips: [], entries: [], people: [] };
     setActivePinia(createPinia());
   });
 
@@ -219,10 +239,32 @@ describe("Map page (/map)", () => {
     expect(wrapper.find(".legend").text()).toContain("2 pins");
   });
 
-  it("filters place list when search is typed", async () => {
+  it("filters place list when search is typed (via useSearch results)", async () => {
     const wrapper = await mountWithPlaces();
+
+    // Simulate useSearch returning only Tokyo when queried
+    mockDoSearch.mockImplementation(() => {
+      searchResultsRef.value = {
+        places: [
+          {
+            id: "p-2",
+            title: "Tokyo",
+            subtitle: undefined,
+            icon: "pin",
+            href: "/map",
+          },
+        ],
+        trips: [],
+        entries: [],
+        people: [],
+      };
+    });
+
     const input = wrapper.find(".places__search input");
     await input.setValue("tokyo");
+    await flushPromises();
+    await wrapper.vm.$nextTick();
+
     expect(wrapper.findAll(".place-item")).toHaveLength(1);
     expect(wrapper.find(".place-item__name").text()).toBe("Tokyo");
   });

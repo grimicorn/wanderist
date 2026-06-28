@@ -1,9 +1,25 @@
-import { describe, it, expect } from "vitest";
-import { mount } from "@vue/test-utils";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { mount, flushPromises } from "@vue/test-utils";
+import { ref } from "vue";
 import AppCommandPalette from "../AppCommandPalette.vue";
 
 const iconStub = { template: "<svg data-icon />" };
 const linkStub = { template: "<a><slot /></a>", props: ["to"] };
+
+// Reactive search state shared across tests
+const mockQuery = ref("");
+const mockResults = ref({ places: [], trips: [], entries: [], people: [] });
+const mockIsLoading = ref(false);
+const mockError = ref<string | null>(null);
+const mockSearch = vi.fn();
+
+vi.stubGlobal("useSearch", () => ({
+  query: mockQuery,
+  results: mockResults,
+  isLoading: mockIsLoading,
+  error: mockError,
+  search: mockSearch,
+}));
 
 const globalConfig = {
   global: {
@@ -15,6 +31,14 @@ const globalConfig = {
 };
 
 describe("AppCommandPalette", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    mockQuery.value = "";
+    mockResults.value = { places: [], trips: [], entries: [], people: [] };
+    mockIsLoading.value = false;
+    mockError.value = null;
+  });
+
   it("renders nothing when closed", () => {
     const wrapper = mount(AppCommandPalette, {
       props: { open: false },
@@ -49,34 +73,83 @@ describe("AppCommandPalette", () => {
     expect(wrapper.findAll(".cmdk__item")).toHaveLength(5);
   });
 
-  it("filters results when query is typed", async () => {
+  it("shows API search results when query is typed", async () => {
     const wrapper = mount(AppCommandPalette, {
       props: { open: true },
       ...globalConfig,
     });
+
+    // Simulate a search returning place results
+    mockSearch.mockImplementation(() => {
+      mockResults.value = {
+        places: [
+          {
+            id: "p-1",
+            title: "Reykjavík",
+            subtitle: "Iceland",
+            icon: "pin",
+            href: "/map",
+          },
+        ],
+        trips: [],
+        entries: [],
+        people: [],
+      };
+    });
+
     await wrapper.find(".cmdk__input").setValue("reyk");
-    expect(wrapper.findAll(".cmdk__item").length).toBeGreaterThan(0);
-    expect(wrapper.html()).toContain("Reykjavík");
+    // Trigger the watch manually (watch fires synchronously in happy-dom)
+    await wrapper.vm.$nextTick();
+
+    expect(mockSearch).toHaveBeenCalledWith("reyk");
+    expect(wrapper.findAll(".cmdk__item")).toHaveLength(1);
+    expect(wrapper.find(".cmdk__t").text()).toContain("Reykjavík");
   });
 
-  it("shows empty state when query has no matches", async () => {
+  it("shows results from multiple groups when API returns results in several categories", async () => {
     const wrapper = mount(AppCommandPalette, {
       props: { open: true },
       ...globalConfig,
     });
-    await wrapper.find(".cmdk__input").setValue("zzznomatch");
+
+    // Simulate a search populating both places and trips
+    mockSearch.mockImplementation(() => {
+      mockResults.value = {
+        places: [{ id: "p-1", title: "Reykjavík", icon: "pin", href: "/map" }],
+        trips: [
+          {
+            id: "t-1",
+            title: "Iceland trip",
+            icon: "route",
+            href: "/trips/t-1",
+          },
+        ],
+        entries: [],
+        people: [],
+      };
+    });
+
+    await wrapper.find(".cmdk__input").setValue("ice");
+    await flushPromises();
+    await wrapper.vm.$nextTick();
+
+    const labels = wrapper.findAll(".cmdk__glabel").map((el) => el.text());
+    expect(labels).toContain("Places");
+    expect(labels).toContain("Trips");
+  });
+
+  it("shows empty state when query is set but API returns no results", async () => {
+    const wrapper = mount(AppCommandPalette, {
+      props: { open: true },
+      ...globalConfig,
+    });
+
+    // mockSearch is vi.fn() (no-op after resetAllMocks), so mockResults stays empty.
+    mockQuery.value = "zzznomatch";
+    await wrapper.vm.$nextTick();
+
     expect(wrapper.find(".cmdk__empty").exists()).toBe(true);
     expect(wrapper.find(".cmdk__empty").text()).toContain("zzznomatch");
-  });
-
-  it("shows results from multiple groups when query matches across categories", async () => {
-    const wrapper = mount(AppCommandPalette, {
-      props: { open: true },
-      ...globalConfig,
-    });
-    await wrapper.find(".cmdk__input").setValue("re");
-    const labels = wrapper.findAll(".cmdk__glabel").map((el) => el.text());
-    expect(labels.length).toBeGreaterThan(1);
   });
 
   it("emits close when scrim is clicked", async () => {
@@ -114,5 +187,15 @@ describe("AppCommandPalette", () => {
     });
     expect(wrapper.find(".cmdk__foot").exists()).toBe(true);
     expect(wrapper.find(".cmdk__brand").text()).toBe("wanderist");
+  });
+
+  it("calls search when input value changes", async () => {
+    const wrapper = mount(AppCommandPalette, {
+      props: { open: true },
+      ...globalConfig,
+    });
+
+    await wrapper.find(".cmdk__input").setValue("tokyo");
+    expect(mockSearch).toHaveBeenCalledWith("tokyo");
   });
 });

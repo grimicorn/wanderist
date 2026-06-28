@@ -31,7 +31,7 @@
             <div class="cmdk__glabel">{{ group.label }}</div>
             <NuxtLink
               v-for="(item, index) in group.items"
-              :key="item.title"
+              :key="item.id"
               :to="item.href"
               class="cmdk__item"
               :class="{
@@ -74,13 +74,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from "vue";
-
-interface SearchItem {
-  title: string;
-  subtitle?: string;
-  icon: string;
-  href: string;
-}
+import type { SearchItem } from "~/composables/useSearch";
 
 interface SearchGroup {
   key: string;
@@ -88,171 +82,71 @@ interface SearchGroup {
   items: SearchItem[];
 }
 
-const ALL_GROUPS: SearchGroup[] = [
-  {
-    key: "actions",
-    label: "Quick actions",
-    items: [
-      {
-        title: "New entry",
-        subtitle: "Write a journal entry",
-        icon: "plus",
-        href: "/journal/new",
-      },
-      {
-        title: "Drop a pin",
-        subtitle: "Add a place to your map",
-        icon: "pin",
-        href: "/map",
-      },
-      {
-        title: "New trip",
-        subtitle: "Start planning a route",
-        icon: "route",
-        href: "/trips",
-      },
-      {
-        title: "Open map",
-        subtitle: "See your world",
-        icon: "map",
-        href: "/map",
-      },
-      {
-        title: "Settings",
-        subtitle: "Account & preferences",
-        icon: "settings",
-        href: "/settings",
-      },
-    ],
-  },
-  {
-    key: "places",
-    label: "Places",
-    items: [
-      {
-        title: "Reykjavík",
-        subtitle: "Iceland · 4 entries",
-        icon: "pin",
-        href: "/map",
-      },
-      {
-        title: "Lisbon",
-        subtitle: "Portugal · 12 photos",
-        icon: "pin",
-        href: "/map",
-      },
-      {
-        title: "London",
-        subtitle: "United Kingdom",
-        icon: "pin",
-        href: "/map",
-      },
-      { title: "Tokyo", subtitle: "Japan · 2025", icon: "pin", href: "/map" },
-      {
-        title: "Marrakech",
-        subtitle: "Morocco · 2025",
-        icon: "pin",
-        href: "/map",
-      },
-      {
-        title: "Sydney",
-        subtitle: "Australia · 2024",
-        icon: "pin",
-        href: "/map",
-      },
-    ],
-  },
-  {
-    key: "trips",
-    label: "Trips",
-    items: [
-      {
-        title: "Iceland, the ring road",
-        subtitle: "Ongoing · day 6 of 9",
-        icon: "route",
-        href: "/trips/1",
-      },
-      {
-        title: "Portugal 2026",
-        subtitle: "6 entries · Jun 2026",
-        icon: "route",
-        href: "/trips/2",
-      },
-      {
-        title: "Japan 2025",
-        subtitle: "9 entries · past",
-        icon: "route",
-        href: "/trips/3",
-      },
-    ],
-  },
-  {
-    key: "entries",
-    label: "Journal",
-    items: [
-      {
-        title: "Harbor at 4am",
-        subtitle: "Reykjavík · Jun 12",
-        icon: "journal",
-        href: "/journal",
-      },
-      {
-        title: "Tram 28, again",
-        subtitle: "Lisbon · Jun 8",
-        icon: "journal",
-        href: "/journal",
-      },
-      {
-        title: "Glacier lagoon morning",
-        subtitle: "Jökulsárlón · Jun 11",
-        icon: "journal",
-        href: "/journal",
-      },
-    ],
-  },
-  {
-    key: "people",
-    label: "People",
-    items: [
-      {
-        title: "@elsa_far",
-        subtitle: "Reykjavík · follows you",
-        icon: "user",
-        href: "/explore",
-      },
-      {
-        title: "@marco.travels",
-        subtitle: "Lisbon · 2.1k places",
-        icon: "user",
-        href: "/explore",
-      },
-      { title: "@yuki", subtitle: "Tokyo", icon: "user", href: "/explore" },
-    ],
-  },
-];
+const QUICK_ACTIONS: SearchGroup = {
+  key: "actions",
+  label: "Quick actions",
+  items: [
+    {
+      id: "action-new-entry",
+      title: "New entry",
+      subtitle: "Write a journal entry",
+      icon: "plus",
+      href: "/journal/new",
+    },
+    {
+      id: "action-drop-pin",
+      title: "Drop a pin",
+      subtitle: "Add a place to your map",
+      icon: "pin",
+      href: "/map",
+    },
+    {
+      id: "action-new-trip",
+      title: "New trip",
+      subtitle: "Start planning a route",
+      icon: "route",
+      href: "/trips",
+    },
+    {
+      id: "action-open-map",
+      title: "Open map",
+      subtitle: "See your world",
+      icon: "map",
+      href: "/map",
+    },
+    {
+      id: "action-settings",
+      title: "Settings",
+      subtitle: "Account & preferences",
+      icon: "settings",
+      href: "/settings",
+    },
+  ],
+};
 
 const props = defineProps<{ open: boolean }>();
 const emit = defineEmits<{ close: [] }>();
 
-const query = ref("");
 const activeIndex = ref(0);
 const inputRef = ref<HTMLInputElement | null>(null);
 
+const { query, results, search } = useSearch();
+
 const visibleGroups = computed<SearchGroup[]>(() => {
-  const q = query.value.trim().toLowerCase();
-  return ALL_GROUPS.flatMap((group) => {
-    const filtered = q
-      ? group.items.filter((item) =>
-          `${item.title} ${item.subtitle ?? ""}`.toLowerCase().includes(q),
-        )
-      : group.key === "actions"
-        ? group.items
-        : [];
-    if (!filtered.length) {
-      return [];
-    }
-    return [{ ...group, items: filtered }];
-  });
+  const trimmed = query.value.trim();
+
+  if (!trimmed) {
+    return [QUICK_ACTIONS];
+  }
+
+  const dynamicGroups: SearchGroup[] = [
+    { key: "places", label: "Places", items: results.value.places },
+    { key: "trips", label: "Trips", items: results.value.trips },
+    { key: "entries", label: "Journal", items: results.value.entries },
+    { key: "people", label: "People", items: results.value.people },
+  ];
+
+  return dynamicGroups.filter((group) => group.items.length > 0);
 });
 
 const flatItems = computed(() => visibleGroups.value.flatMap((g) => g.items));
@@ -305,7 +199,8 @@ watch(
   },
 );
 
-watch(query, () => {
+watch(query, (newQuery) => {
   activeIndex.value = 0;
+  search(newQuery);
 });
 </script>

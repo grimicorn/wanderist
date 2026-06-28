@@ -84,6 +84,7 @@ const projectGlobals = {
   useClerkAuth: "readonly",
   useApiClient: "readonly",
   useFollows: "readonly",
+  useSearch: "readonly",
   useMapbox: "readonly",
   useMapboxStyles: "readonly",
   resolveMapboxStyleLabel: "readonly",
