@@ -20,6 +20,12 @@ Object.assign(globalThis, {
   useNuxtApp: vi.fn(() => ({})),
   useRuntimeConfig: vi.fn(() => ({ public: { mapboxToken: "" } })),
   useScrollReveal: vi.fn(),
+  useAsyncData: vi.fn(() => ({
+    data: vue.ref(null),
+    pending: vue.ref(false),
+    error: vue.ref(null),
+    refresh: vi.fn(),
+  })),
   // Clerk composables
   useClerkAuth: vi.fn(() => ({
     isSignedIn: vue.ref(false),
@@ -47,6 +53,13 @@ Object.assign(globalThis, {
     disconnectInstagram: vi.fn().mockResolvedValue(true),
     disconnectGoogle: vi.fn().mockResolvedValue(true),
     importInstagramPhotos: vi.fn().mockResolvedValue(true),
+  })),
+  useMediaUpload: vi.fn(() => ({
+    upload: vi
+      .fn()
+      .mockResolvedValue({ id: "media-1", url: "/test-image.jpg" }),
+    isUploading: vue.ref(false),
+    error: vue.ref(null),
   })),
   useAccountActions: vi.fn(() => ({
     isLoading: vue.readonly(vue.ref(false)),

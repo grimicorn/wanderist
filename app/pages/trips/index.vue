@@ -13,55 +13,24 @@
     </div>
 
     <!-- Featured active trip -->
-    <div class="feature">
-      <NuxtLink class="feature__cover ph" to="/trips/1">
+    <div v-if="ongoingTrip" class="feature">
+      <NuxtLink class="feature__cover ph" :to="`/trips/${ongoingTrip.id}`">
         <div class="topo" />
         <span class="feature__badge tag tag--ongoing">● ongoing</span>
       </NuxtLink>
       <div class="feature__body">
-        <div class="label">// active trip · day 6 of 9</div>
-        <h2 style="margin-top: 8px">Iceland, the ring road</h2>
-        <div class="feature__route">
-          <span class="stop"><span class="dot" />Reykjavík</span>
-          <AppIcon name="arrow-right" :size="13" class="arr" />
-          <span class="stop"><span class="dot" />Vík</span>
-          <AppIcon name="arrow-right" :size="13" class="arr" />
-          <span class="stop"><span class="dot" />Jökulsárlón</span>
-          <AppIcon name="arrow-right" :size="13" class="arr" />
-          <span class="stop" style="color: var(--muted)">+4 stops</span>
-        </div>
-        <div class="feature__prog">
-          <div class="progress">
-            <span style="width: 64%" />
-          </div>
-          <div
-            class="hstack"
-            style="
-              justify-content: space-between;
-              font-size: 11px;
-              color: var(--muted);
-              margin-top: 6px;
-            "
-          >
-            <span>64% logged · 4 of 7 stops</span>
-            <span>3 days left</span>
-          </div>
-        </div>
+        <div class="label">// active trip</div>
+        <h2 style="margin-top: 8px">{{ ongoingTrip.name }}</h2>
         <div class="feature__stats">
-          <div>
-            <div class="n">4</div>
-            <div class="l">entries</div>
-          </div>
-          <div>
-            <div class="n">61</div>
-            <div class="l">photos</div>
-          </div>
-          <div>
-            <div class="n">892</div>
-            <div class="l">miles</div>
+          <div v-if="ongoingTrip.distanceKm != null">
+            <div class="n">{{ formatDistance(ongoingTrip.distanceKm) }}</div>
+            <div class="l">distance</div>
           </div>
           <div style="margin-left: auto; align-self: center">
-            <NuxtLink class="btn btn--primary btn--sm" to="/trips/1">
+            <NuxtLink
+              class="btn btn--primary btn--sm"
+              :to="`/trips/${ongoingTrip.id}`"
+            >
               open trip
               <AppIcon name="arrow-right" :size="14" />
             </NuxtLink>
@@ -150,6 +119,10 @@ onMounted(() => {
     console.error("[trips] failed to load trips on mount", error);
   });
 });
+
+const ongoingTrip = computed<Trip | null>(
+  () => tripsStore.tripList.find((trip) => trip.status === "ongoing") ?? null,
+);
 
 const filteredTrips = computed<Trip[]>(() => {
   if (activeTab.value === "All") {
