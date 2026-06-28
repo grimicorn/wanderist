@@ -1,4 +1,4 @@
-import { eq, and, desc, inArray, sql } from "drizzle-orm";
+import { eq, and, asc, desc, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { requireUser } from "../../utils/auth";
 import { getDb } from "../../db/index";
@@ -46,9 +46,7 @@ function groupByEntryId<T extends { entryId: string }>(
   const groups: Record<string, T[]> = {};
   for (const row of rows) {
     const key = row.entryId;
-    if (!groups[key]) {
-      groups[key] = [];
-    }
+    groups[key] ??= [];
     groups[key].push(row);
   }
   return groups;
@@ -64,7 +62,8 @@ async function fetchEntryPhotos(
   return database
     .select()
     .from(entryPhotos)
-    .where(inArray(entryPhotos.entryId, entryIds));
+    .where(inArray(entryPhotos.entryId, entryIds))
+    .orderBy(asc(entryPhotos.sortOrder));
 }
 
 async function fetchEntryTags(

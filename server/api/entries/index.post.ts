@@ -11,8 +11,10 @@ import {
   loadEntryRelations,
 } from "../../utils/entry-helpers";
 
+type DbClient = ReturnType<typeof getDb>;
+
 async function insertEntryPhotos(
-  database: ReturnType<typeof getDb>,
+  database: DbClient,
   entryId: string,
   mediaIds: string[],
 ): Promise<void> {
@@ -29,7 +31,7 @@ async function insertEntryPhotos(
 }
 
 async function insertEntryTags(
-  database: ReturnType<typeof getDb>,
+  database: DbClient,
   entryId: string,
   tagIds: string[],
 ): Promise<void> {
@@ -47,6 +49,12 @@ export default defineEventHandler(async (event) => {
 
   requireString(body?.title, "title");
   const title = (body.title as string).trim();
+  if (title === "") {
+    throw createError({
+      statusCode: 400,
+      statusMessage: "title must not be empty",
+    });
+  }
 
   const bodyText = optionalString(body?.body, "body");
   const tripId = optionalString(body?.tripId, "tripId");
@@ -62,8 +70,10 @@ export default defineEventHandler(async (event) => {
 
   const entryId = generateId();
 
-  return database.transaction(async (tx) => {
-    const inserted = await tx
+  return database.transaction(async (transaction) => {
+    const db = transaction as unknown as DbClient;
+
+    const inserted = await db
       .insert(entries)
       .values({
         id: entryId,
@@ -78,28 +88,11 @@ export default defineEventHandler(async (event) => {
       })
       .returning();
 
-    const tagIds = await upsertTags(
-      tx as unknown as ReturnType<typeof getDb>,
-      tagNames,
-    );
+    const tagIds = await upsertTags(db, tagNames);
+    await insertEntryPhotos(db, entryId, photoMediaIds);
+    await insertEntryTags(db, entryId, tagIds);
 
-    await Promise.all([
-      insertEntryPhotos(
-        tx as unknown as ReturnType<typeof getDb>,
-        entryId,
-        photoMediaIds,
-      ),
-      insertEntryTags(
-        tx as unknown as ReturnType<typeof getDb>,
-        entryId,
-        tagIds,
-      ),
-    ]);
-
-    const relations = await loadEntryRelations(
-      tx as unknown as ReturnType<typeof getDb>,
-      entryId,
-    );
+    const relations = await loadEntryRelations(db, entryId);
 
     return { ...inserted[0], ...relations };
   });

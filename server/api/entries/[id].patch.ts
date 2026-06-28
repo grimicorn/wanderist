@@ -149,8 +149,8 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  return database.transaction(async (tx) => {
-    const txClient = tx as unknown as DbClient;
+  return database.transaction(async (transaction) => {
+    const txClient = transaction as unknown as DbClient;
 
     let updated: typeof entries.$inferSelect | null = null;
 
@@ -163,14 +163,12 @@ export default defineEventHandler(async (event) => {
       updated = rows[0];
     }
 
-    await Promise.all([
-      tagNames !== undefined
-        ? replaceEntryTags(txClient, id, tagNames)
-        : Promise.resolve(),
-      photoMediaIds !== undefined
-        ? replaceEntryPhotos(txClient, id, photoMediaIds)
-        : Promise.resolve(),
-    ]);
+    if (tagNames !== undefined) {
+      await replaceEntryTags(txClient, id, tagNames);
+    }
+    if (photoMediaIds !== undefined) {
+      await replaceEntryPhotos(txClient, id, photoMediaIds);
+    }
 
     if (!updated) {
       const rows = await txClient

@@ -17,6 +17,7 @@ vi.mock("drizzle-orm", async (importOriginal) => {
   const original = await importOriginal<typeof import("drizzle-orm")>();
   return {
     ...original,
+    asc: vi.fn(original.asc),
     eq: vi.fn(original.eq),
     and: vi.fn(original.and),
     desc: vi.fn(original.desc),
@@ -40,7 +41,10 @@ function makeDbForListing(rows: Record<string, unknown>[]) {
   const whereMock = vi.fn().mockReturnValue({ orderBy: orderByMock });
   const fromMock = vi.fn().mockReturnValue({ where: whereMock });
 
-  const photosWhereMock = vi.fn().mockResolvedValue([]);
+  const photosOrderByMock = vi.fn().mockResolvedValue([]);
+  const photosWhereMock = vi
+    .fn()
+    .mockReturnValue({ orderBy: photosOrderByMock });
   const photosFromMock = vi.fn().mockReturnValue({ where: photosWhereMock });
 
   const tagsWhereMock = vi.fn().mockResolvedValue([]);

@@ -120,6 +120,7 @@ export const useEntriesStore = defineStore("entries", () => {
   }
 
   async function fetchEntry(id: string): Promise<Entry> {
+    error.value = null;
     try {
       return await apiFetch<Entry>(`/api/entries/${id}`);
     } catch (caught) {
@@ -129,6 +130,7 @@ export const useEntriesStore = defineStore("entries", () => {
   }
 
   async function createEntry(input: CreateEntryInput): Promise<Entry> {
+    error.value = null;
     try {
       const created = await apiFetch<Entry>("/api/entries", {
         method: "POST",
@@ -136,7 +138,8 @@ export const useEntriesStore = defineStore("entries", () => {
       });
 
       // Prepend so the newest entry appears first, matching server sort order
-      // (occurredAt desc nulls last, createdAt desc).
+      // (occurredAt desc nulls last, createdAt desc). Note: a backdated
+      // occurredAt may place the entry out of order until the next refetch.
       entries.value = [created, ...entries.value];
 
       return created;
@@ -150,6 +153,7 @@ export const useEntriesStore = defineStore("entries", () => {
     id: string,
     input: UpdateEntryInput,
   ): Promise<Entry> {
+    error.value = null;
     try {
       const updated = await apiFetch<Entry>(`/api/entries/${id}`, {
         method: "PATCH",
@@ -168,6 +172,7 @@ export const useEntriesStore = defineStore("entries", () => {
   }
 
   async function deleteEntry(id: string): Promise<void> {
+    error.value = null;
     try {
       await apiFetch(`/api/entries/${id}`, { method: "DELETE" });
       entries.value = entries.value.filter((entry) => entry.id !== id);
@@ -178,6 +183,7 @@ export const useEntriesStore = defineStore("entries", () => {
   }
 
   async function likeEntry(id: string): Promise<Entry> {
+    error.value = null;
     try {
       const updated = await apiFetch<Entry>(`/api/entries/${id}/like`, {
         method: "POST",
@@ -193,6 +199,7 @@ export const useEntriesStore = defineStore("entries", () => {
   }
 
   async function unlikeEntry(id: string): Promise<Entry> {
+    error.value = null;
     try {
       const updated = await apiFetch<Entry>(`/api/entries/${id}/like`, {
         method: "DELETE",

@@ -1,4 +1,4 @@
-import { eq, inArray } from "drizzle-orm";
+import { asc, eq, inArray } from "drizzle-orm";
 import { getDb } from "../db/index";
 import {
   entries,
@@ -80,16 +80,15 @@ export async function upsertTags(
   database: ReturnType<typeof getDb>,
   tagNames: string[],
 ): Promise<string[]> {
+  const uniqueNames = [
+    ...new Set(tagNames.map((name) => name.trim()).filter(Boolean)),
+  ];
   const tagIds: string[] = [];
-  for (const name of tagNames) {
-    const trimmedName = name.trim();
-    if (trimmedName === "") {
-      continue;
-    }
+  for (const name of uniqueNames) {
     const existing = await database
       .insert(tags)
-      .values({ id: generateId(), name: trimmedName })
-      .onConflictDoUpdate({ target: tags.name, set: { name: trimmedName } })
+      .values({ id: generateId(), name })
+      .onConflictDoUpdate({ target: tags.name, set: { name } })
       .returning({ id: tags.id });
     tagIds.push(existing[0].id);
   }
@@ -111,7 +110,8 @@ async function fetchPhotosForEntries(
   return database
     .select()
     .from(entryPhotos)
-    .where(inArray(entryPhotos.entryId, entryIds));
+    .where(inArray(entryPhotos.entryId, entryIds))
+    .orderBy(asc(entryPhotos.sortOrder));
 }
 
 async function fetchTagsForEntries(
