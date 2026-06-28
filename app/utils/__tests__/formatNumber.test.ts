@@ -53,7 +53,7 @@ describe("formatCompact", () => {
       expect(formatCompact(100_000)).toBe("100k");
     });
 
-    it("returns '1k' for 1050 (rounds to 1.1, then stays as 1.1k)", () => {
+    it("returns '1.1k' for 1050", () => {
       expect(formatCompact(1_050)).toBe("1.1k");
     });
 

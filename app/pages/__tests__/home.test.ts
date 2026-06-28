@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { ref } from "vue";
+import { ref, computed } from "vue";
 import { mount } from "@vue/test-utils";
 import HomePage from "../home.vue";
 import { pageGlobalConfig as globalConfig } from "./test-utils";
@@ -20,6 +20,9 @@ const mockStatsRef = ref({
 vi.mock("~/composables/useStats", () => ({
   useStats: vi.fn(() => ({
     stats: mockStatsRef,
+    displayDistance: computed(() => mockStatsRef.value.totalDistanceMi),
+    displayDistanceDelta: computed(() => mockStatsRef.value.distanceMiThisWeek),
+    displayDistanceLabel: computed(() => "Miles logged"),
     isLoading: ref(false),
     loadError: ref(null),
     fetchStats: mockFetchStats,

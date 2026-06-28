@@ -28,6 +28,32 @@ export function useStats() {
   const isLoading = ref(false);
   const loadError = ref<string | null>(null);
 
+  /**
+   * Returns the total distance in the user's preferred unit
+   * (miles or km based on their distanceUnit preference).
+   */
+  const displayDistance = computed(() =>
+    stats.value.distanceUnit === "km"
+      ? stats.value.totalDistanceKm
+      : stats.value.totalDistanceMi,
+  );
+
+  /**
+   * Returns the week-over-week distance delta in the user's preferred unit.
+   */
+  const displayDistanceDelta = computed(() =>
+    stats.value.distanceUnit === "km"
+      ? stats.value.distanceKmThisWeek
+      : stats.value.distanceMiThisWeek,
+  );
+
+  /**
+   * Returns the label for the distance unit ("Km logged" or "Miles logged").
+   */
+  const displayDistanceLabel = computed(() =>
+    stats.value.distanceUnit === "km" ? "Km logged" : "Miles logged",
+  );
+
   async function fetchStats(): Promise<void> {
     isLoading.value = true;
     loadError.value = null;
@@ -44,6 +70,9 @@ export function useStats() {
 
   return {
     stats,
+    displayDistance,
+    displayDistanceDelta,
+    displayDistanceLabel,
     isLoading: readonly(isLoading),
     loadError: readonly(loadError),
     fetchStats,

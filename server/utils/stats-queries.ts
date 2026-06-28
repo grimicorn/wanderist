@@ -88,8 +88,9 @@ export async function countDistinctCountries(
 
 /**
  * Returns the sum of `distance_km` across all trip stops belonging to the
- * user's trips. Null distances on individual stops are treated as zero via SQL
- * COALESCE inside the SUM aggregate.
+ * user's trips. Stops with a null `distance_km` are excluded from the SQL
+ * SUM aggregate (standard SQL behaviour). A null aggregate result — meaning
+ * no stops have a non-null distance — is treated as zero by the caller.
  */
 export async function sumTripStopDistanceKm(
   database: Database,

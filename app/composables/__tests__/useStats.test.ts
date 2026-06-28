@@ -102,13 +102,56 @@ describe("useStats", () => {
 
     it("exposes isLoading as readonly", () => {
       const { isLoading } = useStats();
-      // readonly refs are still readable
       expect(typeof isLoading.value).toBe("boolean");
     });
 
     it("exposes loadError as readonly", () => {
       const { loadError } = useStats();
       expect(loadError.value).toBeNull();
+    });
+  });
+
+  describe("derived distance helpers", () => {
+    it("displayDistance returns totalDistanceMi when unit is mi", async () => {
+      mockApiFetch.mockResolvedValue({ ...SAMPLE_STATS, distanceUnit: "mi" });
+      const { fetchStats, displayDistance } = useStats();
+      await fetchStats();
+      expect(displayDistance.value).toBe(SAMPLE_STATS.totalDistanceMi);
+    });
+
+    it("displayDistance returns totalDistanceKm when unit is km", async () => {
+      mockApiFetch.mockResolvedValue({ ...SAMPLE_STATS, distanceUnit: "km" });
+      const { fetchStats, displayDistance } = useStats();
+      await fetchStats();
+      expect(displayDistance.value).toBe(SAMPLE_STATS.totalDistanceKm);
+    });
+
+    it("displayDistanceDelta returns distanceMiThisWeek when unit is mi", async () => {
+      mockApiFetch.mockResolvedValue({ ...SAMPLE_STATS, distanceUnit: "mi" });
+      const { fetchStats, displayDistanceDelta } = useStats();
+      await fetchStats();
+      expect(displayDistanceDelta.value).toBe(SAMPLE_STATS.distanceMiThisWeek);
+    });
+
+    it("displayDistanceDelta returns distanceKmThisWeek when unit is km", async () => {
+      mockApiFetch.mockResolvedValue({ ...SAMPLE_STATS, distanceUnit: "km" });
+      const { fetchStats, displayDistanceDelta } = useStats();
+      await fetchStats();
+      expect(displayDistanceDelta.value).toBe(SAMPLE_STATS.distanceKmThisWeek);
+    });
+
+    it("displayDistanceLabel returns 'Miles logged' when unit is mi", async () => {
+      mockApiFetch.mockResolvedValue({ ...SAMPLE_STATS, distanceUnit: "mi" });
+      const { fetchStats, displayDistanceLabel } = useStats();
+      await fetchStats();
+      expect(displayDistanceLabel.value).toBe("Miles logged");
+    });
+
+    it("displayDistanceLabel returns 'Km logged' when unit is km", async () => {
+      mockApiFetch.mockResolvedValue({ ...SAMPLE_STATS, distanceUnit: "km" });
+      const { fetchStats, displayDistanceLabel } = useStats();
+      await fetchStats();
+      expect(displayDistanceLabel.value).toBe("Km logged");
     });
   });
 });

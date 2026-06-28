@@ -188,7 +188,13 @@ import { useStats } from "~/composables/useStats";
 definePageMeta({ layout: "app", middleware: "auth" });
 useHead({ title: "Wanderist — Home" });
 
-const { stats: rawStats, fetchStats } = useStats();
+const {
+  stats: rawStats,
+  displayDistance,
+  displayDistanceDelta,
+  displayDistanceLabel,
+  fetchStats,
+} = useStats();
 
 onMounted(() => {
   fetchStats().catch((error) => {
@@ -196,48 +202,38 @@ onMounted(() => {
   });
 });
 
-const stats = computed(() => {
-  const distanceValue =
-    rawStats.value.distanceUnit === "km"
-      ? rawStats.value.totalDistanceKm
-      : rawStats.value.totalDistanceMi;
-  const distanceDelta =
-    rawStats.value.distanceUnit === "km"
-      ? rawStats.value.distanceKmThisWeek
-      : rawStats.value.distanceMiThisWeek;
-  const distanceLabel =
-    rawStats.value.distanceUnit === "km" ? "Km logged" : "Miles logged";
-
-  return [
-    {
-      icon: "pin",
-      value: formatCompact(rawStats.value.placesCount),
-      label: "Places pinned",
-      delta:
-        rawStats.value.placesThisWeek > 0
-          ? `+${rawStats.value.placesThisWeek} wk`
-          : null,
-    },
-    {
-      icon: "globe",
-      value: formatCompact(rawStats.value.countriesCount),
-      label: "Countries",
-      delta: null,
-    },
-    {
-      icon: "plane",
-      value: formatCompact(distanceValue),
-      label: distanceLabel,
-      delta: distanceDelta > 0 ? `+${formatCompact(distanceDelta)} wk` : null,
-    },
-    {
-      icon: "flag",
-      value: formatCompact(rawStats.value.currentStreak),
-      label: "Day streak",
-      delta: null,
-    },
-  ];
-});
+const stats = computed(() => [
+  {
+    icon: "pin",
+    value: formatCompact(rawStats.value.placesCount),
+    label: "Places pinned",
+    delta:
+      rawStats.value.placesThisWeek > 0
+        ? `+${rawStats.value.placesThisWeek} wk`
+        : null,
+  },
+  {
+    icon: "globe",
+    value: formatCompact(rawStats.value.countriesCount),
+    label: "Countries",
+    delta: null,
+  },
+  {
+    icon: "plane",
+    value: formatCompact(displayDistance.value),
+    label: displayDistanceLabel.value,
+    delta:
+      displayDistanceDelta.value > 0
+        ? `+${formatCompact(displayDistanceDelta.value)} wk`
+        : null,
+  },
+  {
+    icon: "flag",
+    value: formatCompact(rawStats.value.currentStreak),
+    label: "Day streak",
+    delta: null,
+  },
+]);
 
 const mapPins = [
   { tip: "Reykjavík · 4 entries", left: "24%", top: "40%", sm: false },

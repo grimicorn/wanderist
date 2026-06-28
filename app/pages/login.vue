@@ -35,7 +35,7 @@
             <div class="v">{{ loginStreakLabel }}</div>
           </div>
           <div>
-            <div class="k">{{ loginDistanceLabel }}</div>
+            <div class="k">{{ displayDistanceLabel }}</div>
             <div class="v">{{ loginDistanceValue }}</div>
           </div>
         </div>
@@ -73,29 +73,17 @@ import { useStats } from "~/composables/useStats";
 useHead({ title: "Wanderist — Sign in" });
 definePageMeta({ layout: false });
 
-const { stats, fetchStats } = useStats();
-
-onMounted(() => {
-  fetchStats().catch(() => {
-    // Login page is pre-auth; stats will remain at defaults if not signed in.
-  });
-});
+// Read from the shared useState cache only — do not make an auth-gated API
+// call from this page. If the user has already authenticated, the stats
+// will be in the shared state from the dashboard; otherwise defaults show.
+const { stats, displayDistance, displayDistanceLabel } = useStats();
 
 const loginPlacesLabel = computed(() => formatCompact(stats.value.placesCount));
 const loginCountriesLabel = computed(() =>
   formatCompact(stats.value.countriesCount),
 );
 const loginStreakLabel = computed(() => `${stats.value.currentStreak} days`);
-const loginDistanceLabel = computed(() =>
-  stats.value.distanceUnit === "km" ? "Km logged" : "Miles logged",
-);
-const loginDistanceValue = computed(() => {
-  const distance =
-    stats.value.distanceUnit === "km"
-      ? stats.value.totalDistanceKm
-      : stats.value.totalDistanceMi;
-  return formatCompact(distance);
-});
+const loginDistanceValue = computed(() => formatCompact(displayDistance.value));
 </script>
 
 <style scoped>

@@ -3,7 +3,7 @@
     <div class="trips-head">
       <div>
         <div class="label">
-          // {{ filteredTrips.length }} trips · {{ tripsHeaderStats }}
+          // {{ tripsStore.tripList.length }} trips · {{ tripsHeaderStats }}
         </div>
         <h1>Your trips</h1>
         <p>One ongoing, two on the calendar, six in the books.</p>
@@ -114,16 +114,16 @@ const tabs = ["All", "Ongoing", "Upcoming", "Past"] as const;
 const activeTab = ref<(typeof tabs)[number]>("All");
 
 const tripsStore = useTripsStore();
-const { stats, fetchStats } = useStats();
+const { stats, displayDistance, fetchStats } = useStats();
 
-const tripsHeaderStats = computed(() => {
-  const distanceValue =
-    stats.value.distanceUnit === "km"
-      ? stats.value.totalDistanceKm
-      : stats.value.totalDistanceMi;
-  const distanceLabel = stats.value.distanceUnit === "km" ? "km" : "miles";
-  return `${formatCompact(stats.value.placesCount)} places · ${formatCompact(distanceValue)} ${distanceLabel}`;
-});
+const distanceUnitShort = computed(() =>
+  stats.value.distanceUnit === "km" ? "km" : "miles",
+);
+
+const tripsHeaderStats = computed(
+  () =>
+    `${formatCompact(stats.value.placesCount)} places · ${formatCompact(displayDistance.value)} ${distanceUnitShort.value}`,
+);
 
 onMounted(() => {
   fetchStats().catch((error) => {

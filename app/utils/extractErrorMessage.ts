@@ -15,22 +15,32 @@ export function extractErrorMessage(error: unknown): string {
   }
 
   const errorObj = error as Record<string, unknown>;
-  const data = errorObj.data;
 
-  if (data && typeof data === "object") {
-    const dataObj = data as Record<string, unknown>;
-    if (typeof dataObj.statusMessage === "string") {
-      return dataObj.statusMessage;
-    }
+  const nestedStatusMessage = readNestedStatusMessage(errorObj.data);
+  if (nestedStatusMessage) {
+    return nestedStatusMessage;
   }
 
-  if (typeof errorObj.statusMessage === "string") {
-    return errorObj.statusMessage;
+  return (
+    readStringField(errorObj, "statusMessage") ??
+    readStringField(errorObj, "message") ??
+    UNEXPECTED_ERROR_MESSAGE
+  );
+}
+
+function readNestedStatusMessage(data: unknown): string | null {
+  if (!data || typeof data !== "object") {
+    return null;
   }
 
-  if (typeof errorObj.message === "string") {
-    return errorObj.message;
-  }
+  const dataObj = data as Record<string, unknown>;
+  return readStringField(dataObj, "statusMessage");
+}
 
-  return UNEXPECTED_ERROR_MESSAGE;
+function readStringField(
+  record: Record<string, unknown>,
+  field: string,
+): string | null {
+  const value = record[field];
+  return typeof value === "string" ? value : null;
 }
