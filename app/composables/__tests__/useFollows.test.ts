@@ -33,6 +33,19 @@ describe("useFollows", () => {
     expect(followingIds.value).toEqual(new Set(["user-2", "user-3"]));
   });
 
+  it("fetchFollowing resets error at the start of a successful fetch", async () => {
+    // First call fails
+    mockApiFetch.mockRejectedValueOnce(new Error("Network error"));
+    const { fetchFollowing, error } = useFollows();
+    await fetchFollowing();
+    expect(error.value).toBeTruthy();
+
+    // Second call succeeds — error should be cleared
+    mockApiFetch.mockResolvedValue({ followingIds: [] });
+    await fetchFollowing();
+    expect(error.value).toBeNull();
+  });
+
   it("fetchFollowing does not throw on API error (logs it instead)", async () => {
     mockApiFetch.mockRejectedValue(new Error("Network error"));
     const { fetchFollowing, error } = useFollows();
@@ -52,6 +65,11 @@ describe("useFollows", () => {
   it("isFollowing returns false for an ID not in followingIds", () => {
     const { isFollowing } = useFollows();
     expect(isFollowing("user-nobody")).toBe(false);
+  });
+
+  it("isPending returns false before a toggle is started", () => {
+    const { isPending } = useFollows();
+    expect(isPending("user-2")).toBe(false);
   });
 
   it("toggleFollow calls POST /api/follows and adds the userId to followingIds", async () => {
@@ -91,7 +109,7 @@ describe("useFollows", () => {
     expect(error.value).toBeTruthy();
   });
 
-  it("toggleFollow is a no-op when a toggle is already in progress (isLoading guard)", async () => {
+  it("toggleFollow is a no-op for the same userId when already in progress (per-user guard)", async () => {
     let resolveFirst!: () => void;
     const firstCallPromise = new Promise<void>((resolve) => {
       resolveFirst = resolve;
@@ -105,7 +123,7 @@ describe("useFollows", () => {
     // Start the first toggle without awaiting
     const firstToggle = toggleFollow("user-2");
 
-    // Attempt a second toggle while the first is in flight
+    // Attempt a second toggle for the *same* userId while the first is in flight
     const secondToggle = toggleFollow("user-2");
 
     resolveFirst();
@@ -114,5 +132,30 @@ describe("useFollows", () => {
 
     // Only the first call should have reached the API
     expect(mockApiFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("toggleFollow allows concurrent toggles for different user IDs", async () => {
+    let resolveElsa!: () => void;
+    const elsaPromise = new Promise<void>((resolve) => {
+      resolveElsa = resolve;
+    });
+    mockApiFetch
+      .mockReturnValueOnce(elsaPromise.then(() => ({ ok: true })))
+      .mockResolvedValue({ ok: true });
+
+    const { toggleFollow } = useFollows();
+
+    // Start toggle for elsa without awaiting
+    const elsaToggle = toggleFollow("user-elsa");
+
+    // Immediately toggle a *different* user — should not be blocked
+    const marcoToggle = toggleFollow("user-marco");
+
+    resolveElsa();
+    await elsaToggle;
+    await marcoToggle;
+
+    // Both users should have had their toggle request reach the API
+    expect(mockApiFetch).toHaveBeenCalledTimes(2);
   });
 });

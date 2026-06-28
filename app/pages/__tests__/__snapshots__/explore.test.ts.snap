@@ -136,6 +136,7 @@ exports[`Explore page (/explore) > renders without crashing and matches snapshot
             <h2 data-v-fccf1d79="">Travelers to follow</h2>
           </div>
         </div>
+        <!--v-if-->
         <div data-v-fccf1d79="" class="card card--pad" style="padding: 16px 18px;">
           <div data-v-fccf1d79="" class="person"><span data-v-fccf1d79="" class="person__av"><svg data-v-fccf1d79="" data-icon="" name="user" size="19"></svg></span>
             <div data-v-fccf1d79="" class="person__name"><b data-v-fccf1d79="">Elsa Farþegi</b><span data-v-fccf1d79="">@elsa_far · Reykjavík · 84 places</span></div><button data-v-fccf1d79="" class="btn btn--sm btn--outline">follow</button>

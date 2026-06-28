@@ -174,6 +174,12 @@
               <h2>Travelers to follow</h2>
             </div>
           </div>
+          <AppAlert
+            v-if="followError"
+            intent="error"
+            :message="followError"
+            :dismissible="true"
+          />
           <div class="card card--pad" style="padding: 16px 18px">
             <div v-for="person in people" :key="person.handle" class="person">
               <span class="person__av">
@@ -189,6 +195,7 @@
               <button
                 class="btn btn--sm"
                 :class="person.following ? 'btn--primary' : 'btn--outline'"
+                :disabled="person.pending"
                 @click="toggleFollow(person.userId)"
               >
                 <template v-if="person.following">
@@ -335,8 +342,10 @@ const PEOPLE = [
 
 const {
   fetchFollowing,
-  toggleFollow: toggleFollowById,
+  toggleFollow,
   isFollowing,
+  isPending,
+  error: followError,
 } = useFollows();
 
 // Derive follow state from the composable so it stays in sync with persisted state.
@@ -344,12 +353,9 @@ const people = computed(() =>
   PEOPLE.map((person) => ({
     ...person,
     following: isFollowing(person.userId),
+    pending: isPending(person.userId),
   })),
 );
-
-async function toggleFollow(userId: string): Promise<void> {
-  await toggleFollowById(userId);
-}
 
 onMounted(async () => {
   await fetchFollowing();

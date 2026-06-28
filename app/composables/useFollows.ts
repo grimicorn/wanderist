@@ -6,6 +6,7 @@
  * - toggleFollow: follow or unfollow a user by their Clerk user ID, keeping
  *   local state in sync with the persisted result
  * - isFollowing: returns true if the current user follows the given user ID
+ * - pendingUserIds: set of user IDs currently being toggled (per-user guard)
  */
 export function useFollows() {
   const { apiFetch } = useApiClient();
@@ -14,10 +15,11 @@ export function useFollows() {
     "follows:followingIds",
     () => new Set(),
   );
-  const isLoading = ref(false);
+  const pendingUserIds = ref<Set<string>>(new Set());
   const error = ref<string | null>(null);
 
   async function fetchFollowing(): Promise<void> {
+    error.value = null;
     try {
       const response = await apiFetch<{ followingIds: string[] }>(
         "/api/follows",
@@ -47,11 +49,11 @@ export function useFollows() {
   }
 
   async function toggleFollow(userId: string): Promise<void> {
-    if (isLoading.value) {
+    if (pendingUserIds.value.has(userId)) {
       return;
     }
 
-    isLoading.value = true;
+    pendingUserIds.value = new Set([...pendingUserIds.value, userId]);
     error.value = null;
 
     try {
@@ -64,7 +66,9 @@ export function useFollows() {
       console.error("useFollows: toggleFollow failed", toggleError);
       error.value = "Could not update follow state";
     } finally {
-      isLoading.value = false;
+      const next = new Set(pendingUserIds.value);
+      next.delete(userId);
+      pendingUserIds.value = next;
     }
   }
 
@@ -72,12 +76,17 @@ export function useFollows() {
     return followingIds.value.has(userId);
   }
 
+  function isPending(userId: string): boolean {
+    return pendingUserIds.value.has(userId);
+  }
+
   return {
     followingIds,
-    isLoading,
+    pendingUserIds,
     error,
     fetchFollowing,
     toggleFollow,
     isFollowing,
+    isPending,
   };
 }
