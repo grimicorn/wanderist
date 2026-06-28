@@ -5,6 +5,7 @@
  * vite's static import analysis rejecting bracketed path segments.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { makeOwnershipError, callHandler } from "./_helpers";
 
 // ---------------------------------------------------------------------------
 // Hoisted mocks
@@ -139,9 +140,7 @@ describe("PATCH /api/trips/[id]/stops/[stopId]", () => {
   });
 
   it("updates the stop and returns the updated record", async () => {
-    const result = await (handler as (event: object) => Promise<unknown>)(
-      buildEvent(),
-    );
+    const result = await callHandler(handler, buildEvent());
 
     expect(mockUpdate).toHaveBeenCalledTimes(1);
     expect(result).toMatchObject({ id: "stop-1", name: "New Name" });
@@ -152,9 +151,9 @@ describe("PATCH /api/trips/[id]/stops/[stopId]", () => {
       key === "id" ? undefined : "stop-1",
     );
 
-    await expect(
-      (handler as (event: object) => Promise<unknown>)(buildEvent()),
-    ).rejects.toMatchObject({ statusCode: 400 });
+    await expect(callHandler(handler, buildEvent())).rejects.toMatchObject({
+      statusCode: 400,
+    });
   });
 
   it("throws 400 when stop id is missing", async () => {
@@ -162,35 +161,33 @@ describe("PATCH /api/trips/[id]/stops/[stopId]", () => {
       key === "id" ? "trip-1" : undefined,
     );
 
-    await expect(
-      (handler as (event: object) => Promise<unknown>)(buildEvent()),
-    ).rejects.toMatchObject({ statusCode: 400 });
+    await expect(callHandler(handler, buildEvent())).rejects.toMatchObject({
+      statusCode: 400,
+    });
   });
 
   it("throws 404 when the trip is not owned by the user", async () => {
-    mockLoadOwnedOrThrow.mockRejectedValue(
-      Object.assign(new Error("Not found"), { statusCode: 404 }),
-    );
+    mockLoadOwnedOrThrow.mockRejectedValue(makeOwnershipError());
 
-    await expect(
-      (handler as (event: object) => Promise<unknown>)(buildEvent()),
-    ).rejects.toMatchObject({ statusCode: 404 });
+    await expect(callHandler(handler, buildEvent())).rejects.toMatchObject({
+      statusCode: 404,
+    });
   });
 
   it("throws 404 when the stop does not belong to the trip", async () => {
     mockSelectLimit.mockResolvedValue([]);
 
-    await expect(
-      (handler as (event: object) => Promise<unknown>)(buildEvent()),
-    ).rejects.toMatchObject({ statusCode: 404 });
+    await expect(callHandler(handler, buildEvent())).rejects.toMatchObject({
+      statusCode: 404,
+    });
   });
 
   it("throws 400 when no valid patch fields are provided", async () => {
     mockReadBody.mockResolvedValue({});
     mockOptionalString.mockReturnValue(undefined);
 
-    await expect(
-      (handler as (event: object) => Promise<unknown>)(buildEvent()),
-    ).rejects.toMatchObject({ statusCode: 400 });
+    await expect(callHandler(handler, buildEvent())).rejects.toMatchObject({
+      statusCode: 400,
+    });
   });
 });

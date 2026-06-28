@@ -5,6 +5,7 @@
  * vite's static import analysis rejecting bracketed path segments.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { makeOwnershipError, callHandler } from "./_helpers";
 
 // ---------------------------------------------------------------------------
 // Hoisted mocks
@@ -99,9 +100,7 @@ describe("DELETE /api/trips/[id]/stops/[stopId]", () => {
   });
 
   it("deletes the stop and returns ok", async () => {
-    const result = await (handler as (event: object) => Promise<unknown>)(
-      buildEvent(),
-    );
+    const result = await callHandler(handler, buildEvent());
 
     expect(mockDelete).toHaveBeenCalledTimes(1);
     expect(result).toEqual({ ok: true });
@@ -112,9 +111,9 @@ describe("DELETE /api/trips/[id]/stops/[stopId]", () => {
       key === "id" ? undefined : "stop-1",
     );
 
-    await expect(
-      (handler as (event: object) => Promise<unknown>)(buildEvent()),
-    ).rejects.toMatchObject({ statusCode: 400 });
+    await expect(callHandler(handler, buildEvent())).rejects.toMatchObject({
+      statusCode: 400,
+    });
   });
 
   it("throws 400 when stop id is missing", async () => {
@@ -122,26 +121,24 @@ describe("DELETE /api/trips/[id]/stops/[stopId]", () => {
       key === "id" ? "trip-1" : undefined,
     );
 
-    await expect(
-      (handler as (event: object) => Promise<unknown>)(buildEvent()),
-    ).rejects.toMatchObject({ statusCode: 400 });
+    await expect(callHandler(handler, buildEvent())).rejects.toMatchObject({
+      statusCode: 400,
+    });
   });
 
   it("throws 404 when the trip is not owned by the user", async () => {
-    mockLoadOwnedOrThrow.mockRejectedValue(
-      Object.assign(new Error("Not found"), { statusCode: 404 }),
-    );
+    mockLoadOwnedOrThrow.mockRejectedValue(makeOwnershipError());
 
-    await expect(
-      (handler as (event: object) => Promise<unknown>)(buildEvent()),
-    ).rejects.toMatchObject({ statusCode: 404 });
+    await expect(callHandler(handler, buildEvent())).rejects.toMatchObject({
+      statusCode: 404,
+    });
   });
 
   it("throws 404 when the stop does not belong to the trip", async () => {
     mockSelectLimit.mockResolvedValue([]);
 
-    await expect(
-      (handler as (event: object) => Promise<unknown>)(buildEvent()),
-    ).rejects.toMatchObject({ statusCode: 404 });
+    await expect(callHandler(handler, buildEvent())).rejects.toMatchObject({
+      statusCode: 404,
+    });
   });
 });

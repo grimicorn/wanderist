@@ -1,11 +1,11 @@
 import { eq, inArray } from "drizzle-orm";
 import { getDb } from "../../../../db/index";
-import { trips, tripStops } from "../../../../db/schema";
-import { loadOwnedOrThrow } from "../../../../utils/db-helpers";
+import { tripStops } from "../../../../db/schema";
+import { requireTripId, loadOwnedTrip } from "../../../../utils/trip-helpers";
 
-type Trip = typeof trips.$inferSelect;
+type Database = ReturnType<typeof getDb>;
 
-function parseStopIds(value: unknown): string[] {
+function requireArray(value: unknown): unknown[] {
   if (!Array.isArray(value)) {
     throw createError({
       statusCode: 400,
@@ -20,25 +20,38 @@ function parseStopIds(value: unknown): string[] {
     });
   }
 
-  if (value.some((item) => typeof item !== "string" || item.trim() === "")) {
+  return value;
+}
+
+function requireStringItems(items: unknown[]): string[] {
+  if (items.some((item) => typeof item !== "string" || item.trim() === "")) {
     throw createError({
       statusCode: 400,
       statusMessage: "Each stopId must be a non-empty string",
     });
   }
 
-  if (new Set(value).size !== value.length) {
+  return items as string[];
+}
+
+function requireUniqueItems(items: string[]): void {
+  if (new Set(items).size !== items.length) {
     throw createError({
       statusCode: 400,
       statusMessage: "stopIds must not contain duplicates",
     });
   }
+}
 
-  return value as string[];
+function parseStopIds(value: unknown): string[] {
+  const items = requireArray(value);
+  const stringItems = requireStringItems(items);
+  requireUniqueItems(stringItems);
+  return stringItems;
 }
 
 async function fetchTripStopIds(
-  database: ReturnType<typeof import("../../../../db/index").getDb>,
+  database: Database,
   tripId: string,
 ): Promise<string[]> {
   const rows = await database
@@ -72,16 +85,9 @@ function validateAllStopsPresent(
 }
 
 export default defineEventHandler(async (event) => {
-  const tripId = getRouterParam(event, "id");
+  const tripId = requireTripId(event);
 
-  if (!tripId) {
-    throw createError({
-      statusCode: 400,
-      statusMessage: "Trip id is required",
-    });
-  }
-
-  await loadOwnedOrThrow<Trip>(event, trips, trips.id, trips.userId, tripId);
+  await loadOwnedTrip(event, tripId);
 
   const body = await readBody(event);
   const stopIds = parseStopIds(body?.stopIds);

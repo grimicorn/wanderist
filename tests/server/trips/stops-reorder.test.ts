@@ -7,6 +7,7 @@
  * let vite resolve the path without treating [ ] as glob characters.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { makeOwnershipError, callHandler } from "./_helpers";
 
 // ---------------------------------------------------------------------------
 // Hoisted mocks
@@ -129,9 +130,10 @@ describe("PUT /api/trips/[id]/stops/reorder", () => {
   });
 
   it("updates sort order for each stop and returns reordered list", async () => {
-    const result = (await (handler as (event: object) => Promise<unknown>)(
-      buildEvent(),
-    )) as { id: string; sortOrder: number }[];
+    const result = (await callHandler(handler, buildEvent())) as {
+      id: string;
+      sortOrder: number;
+    }[];
 
     expect(mockUpdate).toHaveBeenCalledTimes(3);
     // Each stop should be updated with its new sortOrder
@@ -149,25 +151,25 @@ describe("PUT /api/trips/[id]/stops/reorder", () => {
   it("throws 400 when stopIds is not an array", async () => {
     mockReadBody.mockResolvedValue({ stopIds: "not-an-array" });
 
-    await expect(
-      (handler as (event: object) => Promise<unknown>)(buildEvent()),
-    ).rejects.toMatchObject({ statusCode: 400 });
+    await expect(callHandler(handler, buildEvent())).rejects.toMatchObject({
+      statusCode: 400,
+    });
   });
 
   it("throws 400 when stopIds is empty", async () => {
     mockReadBody.mockResolvedValue({ stopIds: [] });
 
-    await expect(
-      (handler as (event: object) => Promise<unknown>)(buildEvent()),
-    ).rejects.toMatchObject({ statusCode: 400 });
+    await expect(callHandler(handler, buildEvent())).rejects.toMatchObject({
+      statusCode: 400,
+    });
   });
 
   it("throws 400 when stopIds contains duplicates", async () => {
     mockReadBody.mockResolvedValue({ stopIds: ["stop-a", "stop-a", "stop-b"] });
 
-    await expect(
-      (handler as (event: object) => Promise<unknown>)(buildEvent()),
-    ).rejects.toMatchObject({ statusCode: 400 });
+    await expect(callHandler(handler, buildEvent())).rejects.toMatchObject({
+      statusCode: 400,
+    });
   });
 
   it("throws 400 when a stopId does not belong to the trip", async () => {
@@ -175,43 +177,41 @@ describe("PUT /api/trips/[id]/stops/reorder", () => {
       stopIds: ["stop-a", "stop-b", "stop-UNKNOWN"],
     });
 
-    await expect(
-      (handler as (event: object) => Promise<unknown>)(buildEvent()),
-    ).rejects.toMatchObject({ statusCode: 400 });
+    await expect(callHandler(handler, buildEvent())).rejects.toMatchObject({
+      statusCode: 400,
+    });
   });
 
   it("throws 400 when the reorder list is missing stops", async () => {
     // Only provide 2 of 3 existing stops
     mockReadBody.mockResolvedValue({ stopIds: ["stop-a", "stop-b"] });
 
-    await expect(
-      (handler as (event: object) => Promise<unknown>)(buildEvent()),
-    ).rejects.toMatchObject({ statusCode: 400 });
+    await expect(callHandler(handler, buildEvent())).rejects.toMatchObject({
+      statusCode: 400,
+    });
   });
 
   it("throws 400 when trip id is missing", async () => {
     mockGetRouterParam.mockReturnValue(undefined);
 
-    await expect(
-      (handler as (event: object) => Promise<unknown>)(buildEvent()),
-    ).rejects.toMatchObject({ statusCode: 400 });
+    await expect(callHandler(handler, buildEvent())).rejects.toMatchObject({
+      statusCode: 400,
+    });
   });
 
   it("throws 404 when the trip is not owned by the user", async () => {
-    mockLoadOwnedOrThrow.mockRejectedValue(
-      Object.assign(new Error("Not found"), { statusCode: 404 }),
-    );
+    mockLoadOwnedOrThrow.mockRejectedValue(makeOwnershipError());
 
-    await expect(
-      (handler as (event: object) => Promise<unknown>)(buildEvent()),
-    ).rejects.toMatchObject({ statusCode: 404 });
+    await expect(callHandler(handler, buildEvent())).rejects.toMatchObject({
+      statusCode: 404,
+    });
   });
 
   it("rejects when one of the updates fails", async () => {
     mockUpdateWhere.mockRejectedValueOnce(new Error("DB error"));
 
-    await expect(
-      (handler as (event: object) => Promise<unknown>)(buildEvent()),
-    ).rejects.toThrow("DB error");
+    await expect(callHandler(handler, buildEvent())).rejects.toThrow(
+      "DB error",
+    );
   });
 });

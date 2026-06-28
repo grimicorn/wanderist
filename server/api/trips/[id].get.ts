@@ -1,7 +1,7 @@
 import { eq, asc, count } from "drizzle-orm";
 import { getDb } from "../../db/index";
 import { trips, tripStops, entries, entryPhotos } from "../../db/schema";
-import { loadOwnedOrThrow } from "../../utils/db-helpers";
+import { requireTripId, loadOwnedTrip } from "../../utils/trip-helpers";
 
 type Trip = typeof trips.$inferSelect;
 type TripStop = typeof tripStops.$inferSelect;
@@ -76,22 +76,9 @@ function computeFacts(
 
 export default defineEventHandler(
   async (event): Promise<TripDetailResponse> => {
-    const tripId = getRouterParam(event, "id");
+    const tripId = requireTripId(event);
 
-    if (!tripId) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: "Trip id is required",
-      });
-    }
-
-    const trip = await loadOwnedOrThrow<Trip>(
-      event,
-      trips,
-      trips.id,
-      trips.userId,
-      tripId,
-    );
+    const trip = await loadOwnedTrip(event, tripId);
 
     const database = getDb();
 

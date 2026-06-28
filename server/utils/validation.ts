@@ -7,6 +7,29 @@
  */
 
 /**
+ * Assigns `value` to `target[key]` only when `value` is not `undefined`.
+ * Use this in PATCH field builders to avoid repeating
+ * `if (x !== undefined) { fields.x = x; }` for every optional field.
+ */
+export function setIfDefined<
+  TTarget extends Record<string, unknown>,
+  TKey extends keyof TTarget,
+>(target: TTarget, key: TKey, value: TTarget[TKey] | undefined): void {
+  if (value !== undefined) {
+    target[key] = value;
+  }
+}
+
+/**
+ * Converts `undefined` to `null` and passes any other value through unchanged.
+ * Use this to convert optional parsed values into nullable DB column values
+ * without branching (`?? null`) on every field.
+ */
+export function toNullable<T>(value: T | undefined): T | null {
+  return value !== undefined ? value : null;
+}
+
+/**
  * Validates that `value` is a member of the given `allowed` enum array.
  * Returns the typed enum value or throws 400. Pass `defaultValue` for fields
  * that should have a default when `value` is absent.

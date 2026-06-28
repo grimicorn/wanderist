@@ -2,6 +2,7 @@
  * Tests for GET /api/trips/[id] — single trip with stops and facts
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { makeOwnershipError, callHandler } from "./_helpers";
 
 // ---------------------------------------------------------------------------
 // Hoisted mocks
@@ -213,18 +214,16 @@ describe("GET /api/trips/[id]", () => {
   it("throws 400 when no trip id is provided", async () => {
     mockGetRouterParam.mockReturnValue(undefined);
 
-    await expect(
-      (handler as (event: object) => unknown)(buildEvent()),
-    ).rejects.toMatchObject({ statusCode: 400 });
+    await expect(callHandler(handler, buildEvent())).rejects.toMatchObject({
+      statusCode: 400,
+    });
   });
 
   it("throws 404 when the trip does not belong to the user", async () => {
-    mockLoadOwnedOrThrow.mockRejectedValue(
-      Object.assign(new Error("Not found"), { statusCode: 404 }),
-    );
+    mockLoadOwnedOrThrow.mockRejectedValue(makeOwnershipError());
 
-    await expect(
-      (handler as (event: object) => unknown)(buildEvent()),
-    ).rejects.toMatchObject({ statusCode: 404 });
+    await expect(callHandler(handler, buildEvent())).rejects.toMatchObject({
+      statusCode: 404,
+    });
   });
 });

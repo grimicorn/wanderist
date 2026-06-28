@@ -1,42 +1,22 @@
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { getDb } from "../../../../db/index";
-import { trips, tripStops } from "../../../../db/schema";
-import { loadOwnedOrThrow } from "../../../../utils/db-helpers";
-
-type Trip = typeof trips.$inferSelect;
+import { tripStops } from "../../../../db/schema";
+import {
+  requireTripId,
+  requireStopId,
+  loadOwnedTrip,
+  loadTripStop,
+} from "../../../../utils/trip-helpers";
 
 export default defineEventHandler(async (event) => {
-  const tripId = getRouterParam(event, "id");
-  const stopId = getRouterParam(event, "stopId");
+  const tripId = requireTripId(event);
+  const stopId = requireStopId(event);
 
-  if (!tripId) {
-    throw createError({
-      statusCode: 400,
-      statusMessage: "Trip id is required",
-    });
-  }
+  await loadOwnedTrip(event, tripId);
 
-  if (!stopId) {
-    throw createError({
-      statusCode: 400,
-      statusMessage: "Stop id is required",
-    });
-  }
-
-  // Verify trip ownership first
-  await loadOwnedOrThrow<Trip>(event, trips, trips.id, trips.userId, tripId);
-
-  // Verify the stop belongs to this trip before deleting
   const database = getDb();
-  const existingStop = await database
-    .select({ id: tripStops.id })
-    .from(tripStops)
-    .where(and(eq(tripStops.id, stopId), eq(tripStops.tripId, tripId)))
-    .limit(1);
 
-  if (!existingStop[0]) {
-    throw createError({ statusCode: 404, statusMessage: "Stop not found" });
-  }
+  await loadTripStop(database, tripId, stopId);
 
   await database.delete(tripStops).where(eq(tripStops.id, stopId));
 

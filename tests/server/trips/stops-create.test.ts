@@ -7,6 +7,7 @@
  * let vite resolve the path without treating [ ] as glob characters.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { makeOwnershipError, callHandler } from "./_helpers";
 
 // ---------------------------------------------------------------------------
 // Hoisted mocks
@@ -131,9 +132,7 @@ describe("POST /api/trips/[id]/stops", () => {
   });
 
   it("creates a stop and returns it", async () => {
-    const result = await (handler as (event: object) => Promise<unknown>)(
-      buildEvent(),
-    );
+    const result = await callHandler(handler, buildEvent());
 
     expect(mockInsert).toHaveBeenCalledTimes(1);
     expect(mockValues).toHaveBeenCalledWith(
@@ -150,7 +149,7 @@ describe("POST /api/trips/[id]/stops", () => {
   it("assigns sortOrder as one higher than existing max", async () => {
     mockWhere.mockResolvedValue([{ maxOrder: 4 }]);
 
-    await (handler as (event: object) => Promise<unknown>)(buildEvent());
+    await callHandler(handler, buildEvent());
 
     expect(mockValues).toHaveBeenCalledWith(
       expect.objectContaining({ sortOrder: 5 }),
@@ -160,7 +159,7 @@ describe("POST /api/trips/[id]/stops", () => {
   it("assigns sortOrder 0 when there are no existing stops", async () => {
     mockWhere.mockResolvedValue([{ maxOrder: null }]);
 
-    await (handler as (event: object) => Promise<unknown>)(buildEvent());
+    await callHandler(handler, buildEvent());
 
     expect(mockValues).toHaveBeenCalledWith(
       expect.objectContaining({ sortOrder: 0 }),
@@ -170,34 +169,32 @@ describe("POST /api/trips/[id]/stops", () => {
   it("throws 400 when name is missing", async () => {
     mockReadBody.mockResolvedValue({});
 
-    await expect(
-      (handler as (event: object) => Promise<unknown>)(buildEvent()),
-    ).rejects.toMatchObject({ statusCode: 400 });
+    await expect(callHandler(handler, buildEvent())).rejects.toMatchObject({
+      statusCode: 400,
+    });
   });
 
   it("throws 400 for an invalid stop status", async () => {
     mockReadBody.mockResolvedValue({ name: "Stop", status: "invalid" });
 
-    await expect(
-      (handler as (event: object) => Promise<unknown>)(buildEvent()),
-    ).rejects.toMatchObject({ statusCode: 400 });
+    await expect(callHandler(handler, buildEvent())).rejects.toMatchObject({
+      statusCode: 400,
+    });
   });
 
   it("throws 400 when trip id is missing", async () => {
     mockGetRouterParam.mockReturnValue(undefined);
 
-    await expect(
-      (handler as (event: object) => Promise<unknown>)(buildEvent()),
-    ).rejects.toMatchObject({ statusCode: 400 });
+    await expect(callHandler(handler, buildEvent())).rejects.toMatchObject({
+      statusCode: 400,
+    });
   });
 
   it("throws 404 when the trip does not belong to the user", async () => {
-    mockLoadOwnedOrThrow.mockRejectedValue(
-      Object.assign(new Error("Not found"), { statusCode: 404 }),
-    );
+    mockLoadOwnedOrThrow.mockRejectedValue(makeOwnershipError());
 
-    await expect(
-      (handler as (event: object) => Promise<unknown>)(buildEvent()),
-    ).rejects.toMatchObject({ statusCode: 404 });
+    await expect(callHandler(handler, buildEvent())).rejects.toMatchObject({
+      statusCode: 404,
+    });
   });
 });

@@ -2,6 +2,7 @@
  * Tests for PATCH /api/trips/[id]
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { makeOwnershipError, callHandler } from "./_helpers";
 
 // ---------------------------------------------------------------------------
 // Hoisted mocks
@@ -116,7 +117,7 @@ describe("PATCH /api/trips/[id]", () => {
   });
 
   it("updates and returns the trip", async () => {
-    const result = await (handler as (event: object) => unknown)(buildEvent());
+    const result = await callHandler(handler, buildEvent());
 
     expect(mockUpdate).toHaveBeenCalledTimes(1);
     expect(mockSet).toHaveBeenCalledWith(
@@ -126,80 +127,106 @@ describe("PATCH /api/trips/[id]", () => {
   });
 
   it("verifies ownership before updating", async () => {
-    await (handler as (event: object) => unknown)(buildEvent());
+    await callHandler(handler, buildEvent());
 
-    expect(mockLoadOwnedOrThrow).toHaveBeenCalledTimes(1);
+    const ownershipOrder = mockLoadOwnedOrThrow.mock.invocationCallOrder[0];
+    const updateOrder = mockUpdate.mock.invocationCallOrder[0];
+    expect(ownershipOrder).toBeLessThan(updateOrder);
   });
 
   it("throws 400 when no valid fields are provided", async () => {
     mockReadBody.mockResolvedValue({});
 
-    await expect(
-      (handler as (event: object) => unknown)(buildEvent()),
-    ).rejects.toMatchObject({ statusCode: 400 });
+    await expect(callHandler(handler, buildEvent())).rejects.toMatchObject({
+      statusCode: 400,
+    });
   });
 
   it("throws 400 for an invalid status value", async () => {
     mockReadBody.mockResolvedValue({ status: "bad-status" });
 
-    await expect(
-      (handler as (event: object) => unknown)(buildEvent()),
-    ).rejects.toMatchObject({ statusCode: 400 });
+    await expect(callHandler(handler, buildEvent())).rejects.toMatchObject({
+      statusCode: 400,
+    });
   });
 
   it("throws 400 for an invalid visibility value", async () => {
     mockReadBody.mockResolvedValue({ visibility: "secret" });
 
-    await expect(
-      (handler as (event: object) => unknown)(buildEvent()),
-    ).rejects.toMatchObject({ statusCode: 400 });
+    await expect(callHandler(handler, buildEvent())).rejects.toMatchObject({
+      statusCode: 400,
+    });
   });
 
   it("throws 400 for an invalid date string", async () => {
     mockReadBody.mockResolvedValue({ startDate: "not-a-date" });
 
-    await expect(
-      (handler as (event: object) => unknown)(buildEvent()),
-    ).rejects.toMatchObject({ statusCode: 400 });
+    await expect(callHandler(handler, buildEvent())).rejects.toMatchObject({
+      statusCode: 400,
+    });
   });
 
   it("throws 400 when trip id is missing", async () => {
     mockGetRouterParam.mockReturnValue(undefined);
 
-    await expect(
-      (handler as (event: object) => unknown)(buildEvent()),
-    ).rejects.toMatchObject({ statusCode: 400 });
+    await expect(callHandler(handler, buildEvent())).rejects.toMatchObject({
+      statusCode: 400,
+    });
   });
 
   it("throws 404 when the trip does not belong to the user", async () => {
-    mockLoadOwnedOrThrow.mockRejectedValue(
-      Object.assign(new Error("Not found"), { statusCode: 404 }),
-    );
+    mockLoadOwnedOrThrow.mockRejectedValue(makeOwnershipError());
 
-    await expect(
-      (handler as (event: object) => unknown)(buildEvent()),
-    ).rejects.toMatchObject({ statusCode: 404 });
+    await expect(callHandler(handler, buildEvent())).rejects.toMatchObject({
+      statusCode: 404,
+    });
   });
 
   it("accepts null dates to clear start/end date", async () => {
     mockReadBody.mockResolvedValue({ startDate: null });
     mockReturning.mockResolvedValue([{ ...UPDATED_TRIP, startDate: null }]);
 
-    await (handler as (event: object) => unknown)(buildEvent());
+    await callHandler(handler, buildEvent());
 
     expect(mockSet).toHaveBeenCalledWith(
       expect.objectContaining({ startDate: null }),
     );
   });
 
-  it("throws 400 when endDate is before startDate", async () => {
+  it("throws 400 when endDate is before startDate (both in patch)", async () => {
     mockReadBody.mockResolvedValue({
       startDate: "2026-07-10T00:00:00.000Z",
       endDate: "2026-07-01T00:00:00.000Z",
     });
 
-    await expect(
-      (handler as (event: object) => unknown)(buildEvent()),
-    ).rejects.toMatchObject({ statusCode: 400 });
+    await expect(callHandler(handler, buildEvent())).rejects.toMatchObject({
+      statusCode: 400,
+    });
+  });
+
+  it("throws 400 when patching only endDate earlier than existing startDate", async () => {
+    mockLoadOwnedOrThrow.mockResolvedValue({
+      id: "trip-1",
+      userId: "user-1",
+      startDate: new Date("2026-07-10T00:00:00.000Z"),
+    });
+    mockReadBody.mockResolvedValue({ endDate: "2026-07-01T00:00:00.000Z" });
+
+    await expect(callHandler(handler, buildEvent())).rejects.toMatchObject({
+      statusCode: 400,
+    });
+  });
+
+  it("throws 400 when patching only startDate later than existing endDate", async () => {
+    mockLoadOwnedOrThrow.mockResolvedValue({
+      id: "trip-1",
+      userId: "user-1",
+      endDate: new Date("2026-07-01T00:00:00.000Z"),
+    });
+    mockReadBody.mockResolvedValue({ startDate: "2026-07-10T00:00:00.000Z" });
+
+    await expect(callHandler(handler, buildEvent())).rejects.toMatchObject({
+      statusCode: 400,
+    });
   });
 });

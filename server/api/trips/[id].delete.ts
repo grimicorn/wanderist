@@ -1,19 +1,12 @@
 import { eq } from "drizzle-orm";
 import { getDb } from "../../db/index";
 import { trips } from "../../db/schema";
-import { assertOwnership } from "../../utils/db-helpers";
+import { requireTripId, loadOwnedTrip } from "../../utils/trip-helpers";
 
 export default defineEventHandler(async (event) => {
-  const tripId = getRouterParam(event, "id");
+  const tripId = requireTripId(event);
 
-  if (!tripId) {
-    throw createError({
-      statusCode: 400,
-      statusMessage: "Trip id is required",
-    });
-  }
-
-  await assertOwnership(event, trips, trips.id, trips.userId, tripId);
+  await loadOwnedTrip(event, tripId);
 
   const database = getDb();
 

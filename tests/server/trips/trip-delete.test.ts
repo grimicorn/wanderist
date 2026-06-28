@@ -2,13 +2,14 @@
  * Tests for DELETE /api/trips/[id]
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { makeOwnershipError, callHandler } from "./_helpers";
 
 // ---------------------------------------------------------------------------
 // Hoisted mocks
 // ---------------------------------------------------------------------------
 
 const {
-  mockAssertOwnership,
+  mockLoadOwnedTrip,
   mockGetRouterParam,
   mockCreateError,
   mockDelete,
@@ -18,7 +19,7 @@ const {
   const mockDelete = vi.fn(() => ({ where: mockWhere }));
 
   return {
-    mockAssertOwnership: vi.fn().mockResolvedValue(undefined),
+    mockLoadOwnedTrip: vi.fn().mockResolvedValue({ id: "trip-1" }),
     mockGetRouterParam: vi.fn().mockReturnValue("trip-1"),
     mockCreateError: vi.fn(
       (options: { statusCode: number; statusMessage: string }) =>
@@ -29,8 +30,18 @@ const {
   };
 });
 
-vi.mock("../../../server/utils/db-helpers", () => ({
-  assertOwnership: mockAssertOwnership,
+vi.mock("../../../server/utils/trip-helpers", () => ({
+  requireTripId: (event: object) => {
+    const id = mockGetRouterParam(event, "id");
+    if (!id) {
+      throw mockCreateError({
+        statusCode: 400,
+        statusMessage: "Trip id is required",
+      });
+    }
+    return id;
+  },
+  loadOwnedTrip: mockLoadOwnedTrip,
 }));
 
 vi.mock("../../../server/db/index", () => ({
@@ -57,42 +68,40 @@ describe("DELETE /api/trips/[id]", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetRouterParam.mockReturnValue("trip-1");
-    mockAssertOwnership.mockResolvedValue(undefined);
+    mockLoadOwnedTrip.mockResolvedValue({ id: "trip-1" });
     mockWhere.mockResolvedValue(undefined);
     mockDelete.mockReturnValue({ where: mockWhere });
   });
 
   it("deletes the trip and returns ok", async () => {
-    const result = await (handler as (event: object) => unknown)(buildEvent());
+    const result = await callHandler(handler, buildEvent());
 
-    expect(mockAssertOwnership).toHaveBeenCalledTimes(1);
+    expect(mockLoadOwnedTrip).toHaveBeenCalledTimes(1);
     expect(mockDelete).toHaveBeenCalledTimes(1);
     expect(result).toEqual({ ok: true });
   });
 
   it("verifies ownership before deleting", async () => {
-    await (handler as (event: object) => unknown)(buildEvent());
+    await callHandler(handler, buildEvent());
 
-    expect(mockAssertOwnership).toHaveBeenCalledBefore
-      ? expect(mockAssertOwnership).toHaveBeenCalledBefore(mockDelete)
-      : expect(mockAssertOwnership).toHaveBeenCalledTimes(1);
+    const ownershipOrder = mockLoadOwnedTrip.mock.invocationCallOrder[0];
+    const deleteOrder = mockDelete.mock.invocationCallOrder[0];
+    expect(ownershipOrder).toBeLessThan(deleteOrder);
   });
 
   it("throws 400 when trip id is missing", async () => {
     mockGetRouterParam.mockReturnValue(undefined);
 
-    await expect(
-      (handler as (event: object) => unknown)(buildEvent()),
-    ).rejects.toMatchObject({ statusCode: 400 });
+    await expect(callHandler(handler, buildEvent())).rejects.toMatchObject({
+      statusCode: 400,
+    });
   });
 
   it("throws 404 when the trip does not belong to the user", async () => {
-    mockAssertOwnership.mockRejectedValue(
-      Object.assign(new Error("Not found"), { statusCode: 404 }),
-    );
+    mockLoadOwnedTrip.mockRejectedValue(makeOwnershipError());
 
-    await expect(
-      (handler as (event: object) => unknown)(buildEvent()),
-    ).rejects.toMatchObject({ statusCode: 404 });
+    await expect(callHandler(handler, buildEvent())).rejects.toMatchObject({
+      statusCode: 404,
+    });
   });
 });
