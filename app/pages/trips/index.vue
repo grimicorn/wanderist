@@ -96,7 +96,7 @@
         v-for="trip in filteredTrips"
         :key="trip.id"
         class="tcard"
-        to="/trips/1"
+        :to="`/trips/${trip.id}`"
       >
         <div class="tcard__cover ph">
           <div class="topo" />

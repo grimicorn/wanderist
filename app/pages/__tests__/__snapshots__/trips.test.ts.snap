@@ -9,7 +9,7 @@ exports[`Trips page (/trips) > renders without crashing and matches snapshot 1`]
       <p data-v-f103826c="">One ongoing, two on the calendar, six in the books.</p>
     </div><button data-v-f103826c="" class="btn btn--outline"><svg data-v-f103826c="" data-icon="" name="route" size="15"></svg> plan a new route </button>
   </div><!-- Featured active trip -->
-  <div data-v-f103826c="" class="feature"><a data-v-f103826c="" class="feature__cover ph">
+  <div data-v-f103826c="" class="feature"><a data-v-f103826c="" href="/trips/1" class="feature__cover ph">
       <div data-v-f103826c="" class="topo"></div><span data-v-f103826c="" class="feature__badge tag tag--ongoing">● ongoing</span>
     </a>
     <div data-v-f103826c="" class="feature__body">
@@ -33,14 +33,14 @@ exports[`Trips page (/trips) > renders without crashing and matches snapshot 1`]
           <div class="n" data-v-f103826c="">892</div>
           <div class="l" data-v-f103826c="">miles</div>
         </div>
-        <div data-v-f103826c="" style="margin-left: auto; align-self: center;"><a data-v-f103826c="" class="btn btn--primary btn--sm"> open trip <svg data-v-f103826c="" data-icon="" name="arrow-right" size="14"></svg></a></div>
+        <div data-v-f103826c="" style="margin-left: auto; align-self: center;"><a data-v-f103826c="" href="/trips/1" class="btn btn--primary btn--sm"> open trip <svg data-v-f103826c="" data-icon="" name="arrow-right" size="14"></svg></a></div>
       </div>
     </div>
   </div><!-- Toolbar -->
   <div data-v-f103826c="" class="trip-toolbar">
     <div data-v-f103826c="" class="seg-tabs"><button data-v-f103826c="" class="is-active">All</button><button data-v-f103826c="" class="">Ongoing</button><button data-v-f103826c="" class="">Upcoming</button><button data-v-f103826c="" class="">Past</button></div><span data-v-f103826c="" class="spacer"></span><span data-v-f103826c="" class="label label--plain" style="font-size: 10px;">sort</span><button data-v-f103826c="" class="btn btn--outline btn--sm"><svg data-v-f103826c="" data-icon="" name="sliders" size="14"></svg> recent first </button>
   </div><!-- Grid -->
-  <div data-v-f103826c="" class="trip-grid"><a data-v-f103826c="" class="tcard">
+  <div data-v-f103826c="" class="trip-grid"><a data-v-f103826c="" href="/trips/1" class="tcard">
       <div data-v-f103826c="" class="tcard__cover ph">
         <div data-v-f103826c="" class="topo"></div><span data-v-f103826c="" class="tcard__status tag tag--ongoing">2026</span><button data-v-f103826c="" class="tcard__save" aria-label="Save"><svg data-v-f103826c="" data-icon="" name="bookmark" size="15"></svg></button>
       </div>
@@ -49,7 +49,7 @@ exports[`Trips page (/trips) > renders without crashing and matches snapshot 1`]
         <div data-v-f103826c="" class="tcard__dates">Jun 20, 2026 – Jun 29, 2026 · 9 days</div>
         <div data-v-f103826c="" class="tcard__foot"><span data-v-f103826c="" class="m"><svg data-v-f103826c="" data-icon="" name="pin" size="13"></svg> 892 km</span></div>
       </div>
-    </a><a data-v-f103826c="" class="tcard">
+    </a><a data-v-f103826c="" href="/trips/2" class="tcard">
       <div data-v-f103826c="" class="tcard__cover ph">
         <div data-v-f103826c="" class="topo"></div><span data-v-f103826c="" class="tcard__status tag tag--upcoming">2026</span><button data-v-f103826c="" class="tcard__save" aria-label="Save"><svg data-v-f103826c="" data-icon="" name="bookmark" size="15"></svg></button>
       </div>
@@ -60,7 +60,7 @@ exports[`Trips page (/trips) > renders without crashing and matches snapshot 1`]
           <!--v-if-->
         </div>
       </div>
-    </a><a data-v-f103826c="" class="tcard">
+    </a><a data-v-f103826c="" href="/trips/3" class="tcard">
       <div data-v-f103826c="" class="tcard__cover ph">
         <div data-v-f103826c="" class="topo"></div><span data-v-f103826c="" class="tcard__status tag tag--upcoming">upcoming</span><button data-v-f103826c="" class="tcard__save" aria-label="Save"><svg data-v-f103826c="" data-icon="" name="bookmark" size="15"></svg></button>
       </div>
@@ -71,7 +71,7 @@ exports[`Trips page (/trips) > renders without crashing and matches snapshot 1`]
           <!--v-if-->
         </div>
       </div>
-    </a><a data-v-f103826c="" class="tcard">
+    </a><a data-v-f103826c="" href="/trips/4" class="tcard">
       <div data-v-f103826c="" class="tcard__cover ph">
         <div data-v-f103826c="" class="topo"></div><span data-v-f103826c="" class="tcard__status tag tag--past">2025</span><button data-v-f103826c="" class="tcard__save" aria-label="Save"><svg data-v-f103826c="" data-icon="" name="bookmark" size="15"></svg></button>
       </div>
@@ -82,7 +82,7 @@ exports[`Trips page (/trips) > renders without crashing and matches snapshot 1`]
           <!--v-if-->
         </div>
       </div>
-    </a><a data-v-f103826c="" class="tcard">
+    </a><a data-v-f103826c="" href="/trips/5" class="tcard">
       <div data-v-f103826c="" class="tcard__cover ph">
         <div data-v-f103826c="" class="topo"></div><span data-v-f103826c="" class="tcard__status tag tag--past">2025</span><button data-v-f103826c="" class="tcard__save" aria-label="Save"><svg data-v-f103826c="" data-icon="" name="bookmark" size="15"></svg></button>
       </div>
@@ -93,7 +93,7 @@ exports[`Trips page (/trips) > renders without crashing and matches snapshot 1`]
           <!--v-if-->
         </div>
       </div>
-    </a><a data-v-f103826c="" class="tcard">
+    </a><a data-v-f103826c="" href="/trips/6" class="tcard">
       <div data-v-f103826c="" class="tcard__cover ph">
         <div data-v-f103826c="" class="topo"></div><span data-v-f103826c="" class="tcard__status tag tag--past">2024</span><button data-v-f103826c="" class="tcard__save" aria-label="Save"><svg data-v-f103826c="" data-icon="" name="bookmark" size="15"></svg></button>
       </div>

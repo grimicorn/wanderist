@@ -92,7 +92,10 @@ function buildGlobalConfig(pinia: ReturnType<typeof createPinia>) {
       plugins: [pinia],
       stubs: {
         AppIcon: { template: "<svg data-icon />" },
-        NuxtLink: { template: "<a><slot /></a>", props: ["to"] },
+        NuxtLink: {
+          template: '<a :href="to"><slot /></a>',
+          props: ["to"],
+        },
       },
     },
   };
@@ -188,5 +191,14 @@ describe("Trips page (/trips)", () => {
     const tripsStore = useTripsStore();
     await wrapper.vm.$nextTick();
     expect(tripsStore.fetchTrips).toHaveBeenCalledTimes(1);
+  });
+
+  it("each trip card links to the correct trip detail route", () => {
+    const wrapper = mount(TripsPage, buildGlobalConfig(pinia));
+    const cards = wrapper.findAll(".tcard");
+    cards.forEach((card, index) => {
+      const expectedId = SAMPLE_TRIPS[index].id;
+      expect(card.attributes("href")).toBe(`/trips/${expectedId}`);
+    });
   });
 });
