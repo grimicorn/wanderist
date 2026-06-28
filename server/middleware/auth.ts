@@ -12,8 +12,17 @@ function getClerkClient() {
   return cachedClerkClient;
 }
 
+const WEBHOOK_PATH_PREFIX = "/api/webhooks/";
+
 export default defineEventHandler(async (event) => {
-  if (!event.path.startsWith("/api/")) return;
+  if (!event.path.startsWith("/api/")) {
+    return;
+  }
+
+  // Webhook routes authenticate via Svix signature, not a bearer token.
+  if (event.path.startsWith(WEBHOOK_PATH_PREFIX)) {
+    return;
+  }
 
   const clerkClient = getClerkClient();
 
