@@ -27,14 +27,16 @@ function parseName(body: Record<string, unknown>): string | undefined {
     return undefined;
   }
 
-  if (name.trim() === "") {
+  const trimmed = name.trim();
+
+  if (trimmed === "") {
     throw createError({
       statusCode: 400,
       statusMessage: "name must be a non-empty string when provided",
     });
   }
 
-  return name;
+  return trimmed;
 }
 
 function buildPatchFields(body: Record<string, unknown>): TripPatchFields {

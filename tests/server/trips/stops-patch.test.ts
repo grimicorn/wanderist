@@ -190,4 +190,15 @@ describe("PATCH /api/trips/[id]/stops/[stopId]", () => {
       statusCode: 400,
     });
   });
+
+  it("trims whitespace from name before storing", async () => {
+    mockOptionalString.mockReturnValue("  Reykjavík  ");
+    mockReadBody.mockResolvedValue({ name: "  Reykjavík  " });
+
+    await callHandler(handler, buildEvent());
+
+    expect(mockSet).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "Reykjavík" }),
+    );
+  });
 });

@@ -229,4 +229,14 @@ describe("PATCH /api/trips/[id]", () => {
       statusCode: 400,
     });
   });
+
+  it("trims whitespace from name before storing", async () => {
+    mockReadBody.mockResolvedValue({ name: "  Iceland  " });
+
+    await callHandler(handler, buildEvent());
+
+    expect(mockSet).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "Iceland" }),
+    );
+  });
 });

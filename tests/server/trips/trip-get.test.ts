@@ -13,61 +13,13 @@ const {
   mockGetRouterParam,
   mockCreateError,
   mockSelect,
-  mockFrom,
-  mockWhere,
-  mockOrderBy,
-  mockLimit,
-  mockInnerJoin,
 } = vi.hoisted(() => {
-  const SAMPLE_TRIP = {
-    id: "trip-1",
-    userId: "user-1",
-    name: "Iceland",
-    status: "ongoing",
-    startDate: null,
-    endDate: null,
-    distanceKm: 892,
-    coverImageId: null,
-    visibility: "private",
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
-
-  const SAMPLE_STOPS = [
-    {
-      id: "stop-1",
-      tripId: "trip-1",
-      name: "Reykjavík",
-      sortOrder: 0,
-      nights: 2,
-      distanceKm: 100,
-      status: "done",
-      arriveDate: null,
-      note: null,
-      placeId: null,
-    },
-  ];
-
-  const mockLoadOwnedOrThrow = vi.fn().mockResolvedValue(SAMPLE_TRIP);
+  const mockLoadOwnedOrThrow = vi.fn();
   const mockGetRouterParam = vi.fn().mockReturnValue("trip-1");
   const mockCreateError = vi.fn(
     (options: { statusCode: number; statusMessage: string }) =>
       Object.assign(new Error(options.statusMessage), options),
   );
-
-  const mockOrderBy = vi.fn().mockResolvedValue(SAMPLE_STOPS);
-  const mockLimit = vi.fn().mockResolvedValue([{ total: 5 }]);
-  const mockInnerJoin = vi.fn(() => ({ where: mockWhere2 }));
-
-  // Chain for tripStops: select().from().where().orderBy()
-  const mockWhere = vi.fn(() => ({ orderBy: mockOrderBy }));
-  const mockFrom = vi.fn(() => ({ where: mockWhere }));
-
-  // Chain for entryPhotos: select().from().innerJoin().where()
-  const mockWhere2 = vi.fn().mockResolvedValue([{ total: 5 }]);
-
-  // We need both chains to work from the same select mock
-  // The test will configure per-call behavior
   const mockSelect = vi.fn();
 
   return {
@@ -75,11 +27,6 @@ const {
     mockGetRouterParam,
     mockCreateError,
     mockSelect,
-    mockFrom,
-    mockWhere,
-    mockOrderBy,
-    mockLimit,
-    mockInnerJoin,
   };
 });
 
