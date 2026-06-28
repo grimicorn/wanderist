@@ -8,13 +8,20 @@
  * Trailing ".0" is stripped so "1.0k" becomes "1k".
  */
 export function formatCompact(value: number): string {
-  if (value < 1_000) {
-    return String(Math.round(value));
+  if (!Number.isFinite(value)) {
+    return "0";
+  }
+
+  const roundedInt = Math.round(value);
+  if (roundedInt < 1_000) {
+    return String(roundedInt);
   }
 
   const thousands = value / 1_000;
-  const rounded = Math.round(thousands * 10) / 10;
+  const roundedThousands = Math.round(thousands * 10) / 10;
   const formatted =
-    rounded % 1 === 0 ? String(Math.round(rounded)) : rounded.toFixed(1);
+    roundedThousands % 1 === 0
+      ? String(Math.round(roundedThousands))
+      : roundedThousands.toFixed(1);
   return `${formatted}k`;
 }

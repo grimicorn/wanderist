@@ -447,9 +447,7 @@ watch(
 onMounted(async () => {
   await placesStore.fetchPlaces().catch(() => undefined);
   await initializeMap();
-  fetchMapStats().catch((error) => {
-    console.error("[map] failed to load stats on mount", error);
-  });
+  fetchMapStats();
 });
 
 onBeforeUnmount(() => {

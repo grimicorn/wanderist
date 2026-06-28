@@ -78,10 +78,11 @@ export async function countDistinctCountries(
   database: Database,
   userId: string,
 ): Promise<number> {
+  // countDistinct already excludes NULLs in SQL; no extra null predicate needed.
   const rows = await database
     .select({ value: countDistinct(places.country) })
     .from(places)
-    .where(and(eq(places.userId, userId), sql`${places.country} IS NOT NULL`));
+    .where(eq(places.userId, userId));
 
   return rows[0]?.value ?? 0;
 }
@@ -200,15 +201,12 @@ export async function countPlacesThisWeek(
 }
 
 /**
- * Returns the sum of trip-stop distances (in km) added in the last 7 days
- * (based on the stop's parent trip belonging to the user and the stop being
- * created within the window). Uses trip stops' creation timestamp as a proxy
- * for "when was this distance logged."
+ * Returns the sum of trip-stop distances (in km) for trips that were created
+ * in the last 7 days. Uses the parent trip's `createdAt` as a proxy for when
+ * the distance was first logged.
  *
- * Note: `trip_stops` does not have a `createdAt` column, so we fall back to
- * the parent trip's `updatedAt` as a reasonable approximation.
- * This is a best-effort delta — exact precision would require a dedicated
- * audit table.
+ * This is a best-effort delta — exact per-stop precision would require a
+ * dedicated `createdAt` column on `trip_stops`.
  */
 export async function sumTripStopDistanceKmThisWeek(
   database: Database,
@@ -221,7 +219,7 @@ export async function sumTripStopDistanceKmThisWeek(
     .select({ totalKm: sum(tripStops.distanceKm) })
     .from(tripStops)
     .innerJoin(trips, eq(tripStops.tripId, trips.id))
-    .where(and(eq(trips.userId, userId), gte(trips.updatedAt, weekAgo)));
+    .where(and(eq(trips.userId, userId), gte(trips.createdAt, weekAgo)));
 
   const raw = rows[0]?.totalKm;
   const parsed = parseFloat(String(raw ?? "0"));

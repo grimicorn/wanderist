@@ -73,17 +73,42 @@ import { useStats } from "~/composables/useStats";
 useHead({ title: "Wanderist — Sign in" });
 definePageMeta({ layout: false });
 
+// Representative placeholder values for the marketing panel when no real user
+// stats are in the shared cache (i.e. the visitor is not yet authenticated).
+const PLACEHOLDER_PLACES = 117;
+const PLACEHOLDER_COUNTRIES = 9;
+const PLACEHOLDER_STREAK = 14;
+const PLACEHOLDER_DISTANCE = 48218;
+
 // Read from the shared useState cache only — do not make an auth-gated API
-// call from this page. If the user has already authenticated, the stats
-// will be in the shared state from the dashboard; otherwise defaults show.
+// call from this page. If the user has already authenticated during this
+// session, the cache holds their real stats; otherwise fall back to
+// representative placeholder copy so the panel never shows zeros.
 const { stats, displayDistance, displayDistanceLabel } = useStats();
 
-const loginPlacesLabel = computed(() => formatCompact(stats.value.placesCount));
-const loginCountriesLabel = computed(() =>
-  formatCompact(stats.value.countriesCount),
+const hasRealStats = computed(() => stats.value.placesCount > 0);
+
+const loginPlacesLabel = computed(() =>
+  formatCompact(
+    hasRealStats.value ? stats.value.placesCount : PLACEHOLDER_PLACES,
+  ),
 );
-const loginStreakLabel = computed(() => `${stats.value.currentStreak} days`);
-const loginDistanceValue = computed(() => formatCompact(displayDistance.value));
+const loginCountriesLabel = computed(() =>
+  formatCompact(
+    hasRealStats.value ? stats.value.countriesCount : PLACEHOLDER_COUNTRIES,
+  ),
+);
+const loginStreakLabel = computed(() => {
+  const streak = hasRealStats.value
+    ? stats.value.currentStreak
+    : PLACEHOLDER_STREAK;
+  return `${streak} days`;
+});
+const loginDistanceValue = computed(() =>
+  formatCompact(
+    hasRealStats.value ? displayDistance.value : PLACEHOLDER_DISTANCE,
+  ),
+);
 </script>
 
 <style scoped>

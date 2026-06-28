@@ -64,7 +64,7 @@
             >Your world</span
           >
           <span class="grow" />
-          <span class="tag">{{ stats.placesCount }} pins</span>
+          <span class="tag">{{ rawStats.placesCount }} pins</span>
           <NuxtLink class="btn btn--ghost btn--sm" to="/map">
             expand
             <AppIcon name="arrow-right" :size="14" />
@@ -197,9 +197,7 @@ const {
 } = useStats();
 
 onMounted(() => {
-  fetchStats().catch((error) => {
-    console.error("[home] failed to load stats on mount", error);
-  });
+  fetchStats();
 });
 
 const stats = computed(() => [

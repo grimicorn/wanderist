@@ -296,7 +296,7 @@ describe("sumTripStopDistanceKmThisWeek", () => {
     expect(result).toBeCloseTo(2254.5, 1);
   });
 
-  it("returns 0 when no trips were updated this week", async () => {
+  it("returns 0 when no trips were created this week", async () => {
     const database = makeDb([{ totalKm: null }]);
     const result = await sumTripStopDistanceKmThisWeek(
       database,

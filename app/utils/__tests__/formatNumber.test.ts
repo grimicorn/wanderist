@@ -19,6 +19,10 @@ describe("formatCompact", () => {
       expect(formatCompact(9.7)).toBe("10");
     });
 
+    it("returns '1000' boundary — 999.6 rounds to 1000 → '1k'", () => {
+      expect(formatCompact(999.6)).toBe("1k");
+    });
+
     it("returns '14' for 14 (streak-style value)", () => {
       expect(formatCompact(14)).toBe("14");
     });

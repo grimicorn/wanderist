@@ -45,7 +45,7 @@ exports[`Home / Dashboard page (/home) > renders without crashing and matches sn
   </div><!-- Map + current trip -->
   <div data-v-10844834="" class="cols">
     <div data-v-10844834="" class="map-card">
-      <div data-v-10844834="" class="map-card__bar"><span data-v-10844834="" class="label label--plain" style="color: var(--ink);">Your world</span><span data-v-10844834="" class="grow"></span><span data-v-10844834="" class="tag"> pins</span><a data-v-10844834="" class="btn btn--ghost btn--sm"> expand <svg data-v-10844834="" data-icon="" name="arrow-right" size="14"></svg></a></div>
+      <div data-v-10844834="" class="map-card__bar"><span data-v-10844834="" class="label label--plain" style="color: var(--ink);">Your world</span><span data-v-10844834="" class="grow"></span><span data-v-10844834="" class="tag">117 pins</span><a data-v-10844834="" class="btn btn--ghost btn--sm"> expand <svg data-v-10844834="" data-icon="" name="arrow-right" size="14"></svg></a></div>
       <div data-v-10844834="" class="map-body">
         <div data-v-10844834="" class="map-panel">
           <div data-v-10844834="" class="topo" style="opacity: 0.4;"></div>
