@@ -6,46 +6,7 @@
  * automatically.
  */
 import { useApiClient } from "~/composables/useApiClient";
-
-const UNEXPECTED_ERROR_MESSAGE = "An unexpected error occurred";
-
-function readStringField(
-  record: Record<string, unknown>,
-  field: string,
-): string | null {
-  const value = record[field];
-  return typeof value === "string" ? value : null;
-}
-
-function extractErrorMessage(error: unknown): string {
-  if (!error || typeof error !== "object") {
-    return UNEXPECTED_ERROR_MESSAGE;
-  }
-  const errorObj = error as Record<string, unknown>;
-
-  const data = errorObj.data;
-  if (data && typeof data === "object") {
-    const fromData = readStringField(
-      data as Record<string, unknown>,
-      "statusMessage",
-    );
-    if (fromData) {
-      return fromData;
-    }
-  }
-
-  const fromStatus = readStringField(errorObj, "statusMessage");
-  if (fromStatus) {
-    return fromStatus;
-  }
-
-  const fromMessage = readStringField(errorObj, "message");
-  if (fromMessage) {
-    return fromMessage;
-  }
-
-  return UNEXPECTED_ERROR_MESSAGE;
-}
+import { extractErrorMessage } from "~/utils/extractErrorMessage";
 
 export function useAccountActions() {
   const { apiFetch } = useApiClient();

@@ -142,4 +142,26 @@ Object.assign(globalThis, {
     fetchPreferences: vi.fn().mockResolvedValue(undefined),
     savePreferences: vi.fn().mockResolvedValue(true),
   })),
+  useStats: vi.fn(() => {
+    const stats = vue.ref({
+      placesCount: 117,
+      countriesCount: 9,
+      totalDistanceMi: 48218,
+      totalDistanceKm: 77600,
+      currentStreak: 14,
+      placesThisWeek: 6,
+      distanceMiThisWeek: 1400,
+      distanceKmThisWeek: 2254,
+      distanceUnit: "mi",
+    });
+    return {
+      stats,
+      displayDistance: vue.computed(() => stats.value.totalDistanceMi),
+      displayDistanceDelta: vue.computed(() => stats.value.distanceMiThisWeek),
+      displayDistanceLabel: vue.computed(() => "Miles logged"),
+      isLoading: vue.ref(false),
+      loadError: vue.ref(null),
+      fetchStats: vi.fn().mockResolvedValue(undefined),
+    };
+  }),
 });

@@ -66,6 +66,16 @@
       </div>
     </div>
 
+    <!-- Stats load error -->
+    <div
+      v-if="statsError"
+      class="alert alert--error"
+      role="alert"
+      style="margin-bottom: 14px"
+    >
+      {{ statsError }}
+    </div>
+
     <!-- Stats -->
     <div class="stats">
       <div v-for="stat in stats" :key="stat.label" class="stat">
@@ -86,7 +96,9 @@
             >Your world</span
           >
           <span class="grow" />
-          <span class="tag">117 pins</span>
+          <span class="tag"
+            >{{ formatCompact(rawStats.placesCount) }} pins</span
+          >
           <NuxtLink class="btn btn--ghost btn--sm" to="/map">
             expand
             <AppIcon name="arrow-right" :size="14" />
@@ -204,6 +216,8 @@
 </template>
 
 <script setup lang="ts">
+import { formatCompact } from "~/utils/formatNumber";
+import { useStats } from "~/composables/useStats";
 import { useConnections } from "~/composables/useConnections";
 
 definePageMeta({ layout: "app", middleware: "auth" });
@@ -228,12 +242,51 @@ const openNewEntry = inject<(() => void) | undefined>(
   undefined,
 );
 
-const stats = [
-  { icon: "pin", value: "117", label: "Places pinned", delta: "+6 wk" },
-  { icon: "globe", value: "9", label: "Countries", delta: null },
-  { icon: "plane", value: "48.2k", label: "Miles logged", delta: "+1.4k" },
-  { icon: "flag", value: "14", label: "Day streak", delta: null },
-];
+const {
+  stats: rawStats,
+  displayDistance,
+  displayDistanceDelta,
+  displayDistanceLabel,
+  loadError: statsError,
+  fetchStats,
+} = useStats();
+
+onMounted(() => {
+  fetchStats();
+});
+
+const stats = computed(() => [
+  {
+    icon: "pin",
+    value: formatCompact(rawStats.value.placesCount),
+    label: "Places pinned",
+    delta:
+      rawStats.value.placesThisWeek > 0
+        ? `+${rawStats.value.placesThisWeek} wk`
+        : null,
+  },
+  {
+    icon: "globe",
+    value: formatCompact(rawStats.value.countriesCount),
+    label: "Countries",
+    delta: null,
+  },
+  {
+    icon: "plane",
+    value: formatCompact(displayDistance.value),
+    label: displayDistanceLabel.value,
+    delta:
+      displayDistanceDelta.value > 0
+        ? `+${formatCompact(displayDistanceDelta.value)} wk`
+        : null,
+  },
+  {
+    icon: "flag",
+    value: formatCompact(rawStats.value.currentStreak),
+    label: "Day streak",
+    delta: null,
+  },
+]);
 
 const mapPins = [
   { tip: "Reykjavík · 4 entries", left: "24%", top: "40%", sm: false },

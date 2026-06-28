@@ -1,9 +1,36 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { ref, computed } from "vue";
 import { mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import TripsPage from "../trips/index.vue";
 import { useTripsStore } from "~/stores/trips";
 import type { Trip } from "~/stores/trips";
+
+const mockTripsStats = ref({
+  placesCount: 117,
+  countriesCount: 9,
+  totalDistanceMi: 48218,
+  totalDistanceKm: 77600,
+  currentStreak: 14,
+  placesThisWeek: 6,
+  distanceMiThisWeek: 1400,
+  distanceKmThisWeek: 2254,
+  distanceUnit: "mi",
+});
+
+vi.mock("~/composables/useStats", () => ({
+  useStats: vi.fn(() => ({
+    stats: mockTripsStats,
+    displayDistance: computed(() => mockTripsStats.value.totalDistanceMi),
+    displayDistanceDelta: computed(
+      () => mockTripsStats.value.distanceMiThisWeek,
+    ),
+    displayDistanceLabel: computed(() => "Miles logged"),
+    isLoading: ref(false),
+    loadError: ref(null),
+    fetchStats: vi.fn().mockResolvedValue(undefined),
+  })),
+}));
 
 const SAMPLE_TRIPS: Trip[] = [
   {

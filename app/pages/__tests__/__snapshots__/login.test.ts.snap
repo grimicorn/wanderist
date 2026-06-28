@@ -8,22 +8,18 @@ exports[`Login page (/login) > renders without crashing and matches snapshot 1`]
     <div data-v-43592d06="" class="brand-top"><a data-v-43592d06="" class="brand"><svg data-v-43592d06="" data-icon="" name="compass" size="26" class="brand__mark"></svg><span data-v-43592d06="" class="brand__name">wander<b data-v-43592d06="">ist</b></span></a>
       <div data-v-43592d06="" class="theme-toggle"></div>
     </div>
-    <div class="brand-mid" data-v-43592d06="">
-      <div class="label" data-v-43592d06="">// 117 places · 9 countries</div>
-      <h1 style="margin-top:14px;" data-v-43592d06="">Your map is<br data-v-43592d06=""><b data-v-43592d06="">waiting.</b></h1>
+    <div data-v-43592d06="" class="brand-mid">
+      <div data-v-43592d06="" class="label"> // 117 places · 9 countries </div>
+      <h1 data-v-43592d06="" style="margin-top: 14px;">Your map is<br data-v-43592d06=""><b data-v-43592d06="">waiting.</b></h1>
       <p data-v-43592d06=""> Pick up where you left off — every pin, journal entry and photo, exactly where you dropped it. </p>
-      <div class="stamp" data-v-43592d06="">
+      <div data-v-43592d06="" class="stamp">
         <div data-v-43592d06="">
-          <div class="k" data-v-43592d06="">Last entry</div>
-          <div class="v" data-v-43592d06="">Reykjavík</div>
+          <div data-v-43592d06="" class="k">Streak</div>
+          <div data-v-43592d06="" class="v">14 days</div>
         </div>
         <div data-v-43592d06="">
-          <div class="k" data-v-43592d06="">Streak</div>
-          <div class="v" data-v-43592d06="">14 days</div>
-        </div>
-        <div data-v-43592d06="">
-          <div class="k" data-v-43592d06="">Miles logged</div>
-          <div class="v" data-v-43592d06="">48,210</div>
+          <div data-v-43592d06="" class="k">Miles logged</div>
+          <div data-v-43592d06="" class="v">48.2k</div>
         </div>
       </div>
     </div>

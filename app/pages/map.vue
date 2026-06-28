@@ -2,7 +2,8 @@
   <div class="map-stage" :data-mapstyle="mapStyle">
     <AppTopbar title="Map" crumb="Home">
       <span class="tag tag--accent"
-        >{{ placesStore.places.length }} places</span
+        >{{ placesStore.places.length }} places ·
+        {{ mapStats.countriesCount }} countries</span
       >
       <button class="btn btn--primary btn--sm" @click="onDropPin">
         <AppIcon name="plus" :size="14" />
@@ -43,6 +44,11 @@
     <!-- Map init error (bad token, WebGL unsupported, etc.) -->
     <div v-if="mapError" class="places-error" role="alert">
       Map failed to load: {{ mapError }}
+    </div>
+
+    <!-- Stats load error -->
+    <div v-if="statsError" class="places-error" role="alert">
+      Stats unavailable: {{ statsError }}
     </div>
 
     <!-- Drop-pin mode indicator -->
@@ -224,11 +230,18 @@ import type { Place } from "~/stores/places";
 import { useMapbox } from "~/composables/useMapbox";
 import { resolveMapboxStyleLabel } from "~/composables/useMapboxStyles";
 import type { DropPinResult, MapInstance } from "~/composables/useMapbox";
+import { useStats } from "~/composables/useStats";
+
 definePageMeta({ layout: "app", middleware: "auth" });
 useHead({ title: "Wanderist — Map" });
 
 const placesStore = usePlacesStore();
 const mapbox = useMapbox();
+const {
+  stats: mapStats,
+  fetchStats: fetchMapStats,
+  loadError: statsError,
+} = useStats();
 
 const mapPanelRef = ref<HTMLElement | null>(null);
 const activeMapInstance = ref<MapInstance | null>(null);
@@ -444,6 +457,7 @@ watch(
 onMounted(async () => {
   await placesStore.fetchPlaces().catch(() => undefined);
   await initializeMap();
+  fetchMapStats();
 });
 
 onBeforeUnmount(() => {

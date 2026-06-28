@@ -1,8 +1,33 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { ref, computed } from "vue";
 import { mount, flushPromises } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import MapPage from "../map.vue";
 import { pageGlobalConfig as globalConfig } from "./test-utils";
+
+const mockMapStats = ref({
+  placesCount: 117,
+  countriesCount: 9,
+  totalDistanceMi: 48218,
+  totalDistanceKm: 77600,
+  currentStreak: 14,
+  placesThisWeek: 6,
+  distanceMiThisWeek: 1400,
+  distanceKmThisWeek: 2254,
+  distanceUnit: "mi",
+});
+
+vi.mock("~/composables/useStats", () => ({
+  useStats: vi.fn(() => ({
+    stats: mockMapStats,
+    displayDistance: computed(() => mockMapStats.value.totalDistanceMi),
+    displayDistanceDelta: computed(() => mockMapStats.value.distanceMiThisWeek),
+    displayDistanceLabel: computed(() => "Miles logged"),
+    isLoading: ref(false),
+    loadError: ref(null),
+    fetchStats: vi.fn().mockResolvedValue(undefined),
+  })),
+}));
 
 // useApiClient is a Nuxt auto-import used by usePlacesStore.
 const mockApiFetch = vi.fn().mockResolvedValue([]);

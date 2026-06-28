@@ -1,4 +1,5 @@
 import { useApiClient } from "~/composables/useApiClient";
+import { extractErrorMessage } from "~/utils/extractErrorMessage";
 import type { DISTANCE_UNIT } from "../../server/db/schema";
 
 export interface UserPreferences {
@@ -77,30 +78,4 @@ export function usePreferences() {
     fetchPreferences,
     savePreferences,
   };
-}
-
-const UNEXPECTED_ERROR_MESSAGE = "An unexpected error occurred";
-
-function extractErrorMessage(error: unknown): string {
-  if (!error || typeof error !== "object") {
-    return UNEXPECTED_ERROR_MESSAGE;
-  }
-  const errorObj = error as Record<string, unknown>;
-
-  // ofetch wraps server errors: the Nitro statusMessage lands in error.data
-  const data = errorObj.data;
-  if (data && typeof data === "object") {
-    const dataObj = data as Record<string, unknown>;
-    if (typeof dataObj.statusMessage === "string") {
-      return dataObj.statusMessage;
-    }
-  }
-
-  if (typeof errorObj.statusMessage === "string") {
-    return errorObj.statusMessage;
-  }
-  if (typeof errorObj.message === "string") {
-    return errorObj.message;
-  }
-  return UNEXPECTED_ERROR_MESSAGE;
 }

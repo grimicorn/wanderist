@@ -1,7 +1,33 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+import { ref, computed } from "vue";
 import { mount } from "@vue/test-utils";
 import HomePage from "../home.vue";
 import { pageGlobalConfig as globalConfig } from "./test-utils";
+
+const mockFetchStats = vi.fn().mockResolvedValue(undefined);
+const mockStatsRef = ref({
+  placesCount: 117,
+  countriesCount: 9,
+  totalDistanceMi: 48218,
+  totalDistanceKm: 77600,
+  currentStreak: 14,
+  placesThisWeek: 6,
+  distanceMiThisWeek: 1400,
+  distanceKmThisWeek: 2254,
+  distanceUnit: "mi",
+});
+
+vi.mock("~/composables/useStats", () => ({
+  useStats: vi.fn(() => ({
+    stats: mockStatsRef,
+    displayDistance: computed(() => mockStatsRef.value.totalDistanceMi),
+    displayDistanceDelta: computed(() => mockStatsRef.value.distanceMiThisWeek),
+    displayDistanceLabel: computed(() => "Miles logged"),
+    isLoading: ref(false),
+    loadError: ref(null),
+    fetchStats: mockFetchStats,
+  })),
+}));
 
 describe("Home / Dashboard page (/home)", () => {
   it("renders without crashing and matches snapshot", () => {
@@ -21,9 +47,11 @@ describe("Home / Dashboard page (/home)", () => {
     expect(wrapper.findAll(".stat")).toHaveLength(4);
   });
 
-  it("renders stat values correctly", () => {
+  it("renders stat values from useStats composable", () => {
     const wrapper = mount(HomePage, globalConfig);
     const nums = wrapper.findAll(".stat__num").map((el) => el.text());
+    // Values are derived from the mocked useStats (117 places, 9 countries,
+    // 48218 mi → "48.2k", 14 streak).
     expect(nums).toContain("117");
     expect(nums).toContain("9");
     expect(nums).toContain("48.2k");

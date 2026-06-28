@@ -21,7 +21,9 @@
       </div>
 
       <div class="brand-mid">
-        <div class="label">// 117 places · 9 countries</div>
+        <div class="label">
+          // {{ loginPlacesLabel }} places · {{ loginCountriesLabel }} countries
+        </div>
         <h1 style="margin-top: 14px">Your map is<br /><b>waiting.</b></h1>
         <p>
           Pick up where you left off — every pin, journal entry and photo,
@@ -29,16 +31,12 @@
         </p>
         <div class="stamp">
           <div>
-            <div class="k">Last entry</div>
-            <div class="v">Reykjavík</div>
-          </div>
-          <div>
             <div class="k">Streak</div>
-            <div class="v">14 days</div>
+            <div class="v">{{ loginStreakLabel }}</div>
           </div>
           <div>
-            <div class="k">Miles logged</div>
-            <div class="v">48,210</div>
+            <div class="k">{{ displayDistanceLabel }}</div>
+            <div class="v">{{ loginDistanceValue }}</div>
           </div>
         </div>
       </div>
@@ -69,9 +67,30 @@
 </template>
 
 <script setup lang="ts">
-useHead({ title: "Wanderist — Sign in" });
+import { formatCompact } from "~/utils/formatNumber";
+import { useStats } from "~/composables/useStats";
 
+useHead({ title: "Wanderist — Sign in" });
 definePageMeta({ layout: false });
+
+// Representative placeholder values for the marketing panel.
+// Always displayed — the login page is public and should never reflect a
+// previous user's real stats from the shared useState cache, which persists
+// across client-side navigation after sign-out without a full page reload.
+const PLACEHOLDER_PLACES = 117;
+const PLACEHOLDER_COUNTRIES = 9;
+const PLACEHOLDER_STREAK = 14;
+const PLACEHOLDER_DISTANCE = 48218;
+
+// Still destructure displayDistanceLabel from useStats so the unit label
+// ("Miles logged" / "Km logged") matches the user's preference when available,
+// without exposing any real numeric stat values.
+const { displayDistanceLabel } = useStats();
+
+const loginPlacesLabel = formatCompact(PLACEHOLDER_PLACES);
+const loginCountriesLabel = formatCompact(PLACEHOLDER_COUNTRIES);
+const loginStreakLabel = `${PLACEHOLDER_STREAK} days`;
+const loginDistanceValue = formatCompact(PLACEHOLDER_DISTANCE);
 </script>
 
 <style scoped>
