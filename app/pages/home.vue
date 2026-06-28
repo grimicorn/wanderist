@@ -7,7 +7,7 @@
       <button class="icon-btn" aria-label="Alerts">
         <AppIcon name="bell" :size="18" />
       </button>
-      <button class="btn btn--primary btn--sm">
+      <button class="btn btn--primary btn--sm" @click="openNewEntry?.()">
         <AppIcon name="plus" :size="14" />
         new entry
       </button>
@@ -222,6 +222,11 @@ async function handleImportAll(): Promise<void> {
   await importInstagramPhotos();
   isImporting.value = false;
 }
+
+const openNewEntry = inject<(() => void) | undefined>(
+  "openNewEntry",
+  undefined,
+);
 
 const stats = [
   { icon: "pin", value: "117", label: "Places pinned", delta: "+6 wk" },

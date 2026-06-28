@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mount } from "@vue/test-utils";
 import { ref } from "vue";
 import ExplorePage from "../explore.vue";
+import type { SearchGroups } from "~/composables/useSearch";
 
 const iconStub = { template: "<svg data-icon />" };
 const topbarStub = {
@@ -27,6 +28,22 @@ vi.stubGlobal("useFollows", () => ({
 
 vi.stubGlobal("useApiClient", () => ({ apiFetch: vi.fn() }));
 
+const heroSearchQuery = ref("");
+const heroSearchResults = ref<SearchGroups>({
+  places: [],
+  trips: [],
+  entries: [],
+  people: [],
+});
+const mockHeroSearch = vi.fn();
+vi.stubGlobal("useSearch", () => ({
+  query: heroSearchQuery,
+  results: heroSearchResults,
+  isLoading: ref(false),
+  error: ref(null),
+  search: mockHeroSearch,
+}));
+
 const globalConfig = {
   global: {
     stubs: {
@@ -42,6 +59,13 @@ describe("Explore page (/explore)", () => {
     followingIds.value = new Set();
     pendingUserIds.value = new Set();
     followError.value = null;
+    heroSearchQuery.value = "";
+    heroSearchResults.value = {
+      places: [],
+      trips: [],
+      entries: [],
+      people: [],
+    };
   });
 
   it("renders without crashing and matches snapshot", () => {

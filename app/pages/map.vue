@@ -90,7 +90,7 @@
         <div class="label">// your places</div>
         <div class="places__search">
           <AppIcon name="search" :size="15" />
-          <input v-model="search" placeholder="Search places…" />
+          <input v-model="searchQuery" placeholder="Search places…" />
         </div>
       </div>
       <div class="chips">
@@ -224,7 +224,6 @@ import type { Place } from "~/stores/places";
 import { useMapbox } from "~/composables/useMapbox";
 import { resolveMapboxStyleLabel } from "~/composables/useMapboxStyles";
 import type { DropPinResult, MapInstance } from "~/composables/useMapbox";
-
 definePageMeta({ layout: "app", middleware: "auth" });
 useHead({ title: "Wanderist — Map" });
 
@@ -248,8 +247,9 @@ const mapStyles = [
 
 const selectedPlace = ref<Place | null>(null);
 const activeFilter = ref("All");
-const search = ref("");
 const mapStyle = ref("outdoors");
+
+const searchQuery = ref("");
 const layersPopOpen = ref(false);
 const isDropPinMode = ref(false);
 const dropPinCoords = ref<DropPinResult | null>(null);
@@ -265,16 +265,16 @@ const pinnedPlaces = computed(() =>
 );
 
 const filteredPlaces = computed(() => {
-  const query = search.value.trim().toLowerCase();
+  const term = searchQuery.value.trim().toLowerCase();
 
-  if (!query) {
+  if (!term) {
     return placesStore.places;
   }
 
   return placesStore.places.filter(
     (place) =>
-      place.name.toLowerCase().includes(query) ||
-      (place.subtitle ?? "").toLowerCase().includes(query),
+      place.name.toLowerCase().includes(term) ||
+      (place.subtitle ?? "").toLowerCase().includes(term),
   );
 });
 

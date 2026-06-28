@@ -84,10 +84,18 @@ const projectGlobals = {
   useClerkAuth: "readonly",
   useApiClient: "readonly",
   useFollows: "readonly",
+  useSearch: "readonly",
   useMapbox: "readonly",
   useMapboxStyles: "readonly",
   resolveMapboxStyleLabel: "readonly",
   resolveMapboxStyleUrl: "readonly",
+  useAccountActions: "readonly",
+  usePreferences: "readonly",
+  useMediaUpload: "readonly",
+  useEntryDraft: "readonly",
+  useEntriesStore: "readonly",
+  useTripsStore: "readonly",
+  usePlacesStore: "readonly",
 };
 
 export default [

@@ -8,8 +8,8 @@ exports[`Journal page (/journal) > renders without crashing and matches snapshot
   <div data-v-59046aa4="" class="jcols">
     <!-- Feed -->
     <div data-v-59046aa4="" class="feed">
-      <!-- Compose bar -->
-      <div data-v-59046aa4="" class="compose"><span data-v-59046aa4="" class="compose__av"><svg data-v-59046aa4="" data-icon="" name="user" size="18"></svg></span><input data-v-59046aa4="" placeholder="Write an entry, or drop today's photos…">
+      <!-- Compose bar — clicking anywhere opens the new-entry drawer -->
+      <div data-v-59046aa4="" class="compose" role="button" tabindex="0" aria-label="Write a new entry"><span data-v-59046aa4="" class="compose__av"><svg data-v-59046aa4="" data-icon="" name="user" size="18"></svg></span><input data-v-59046aa4="" readonly="" placeholder="Write an entry, or drop today's photos…">
         <div data-v-59046aa4="" class="acts"><button data-v-59046aa4="" class="icon-btn" aria-label="Add photo"><svg data-v-59046aa4="" data-icon="" name="image" size="18"></svg></button><button data-v-59046aa4="" class="icon-btn" aria-label="Add location"><svg data-v-59046aa4="" data-icon="" name="pin" size="18"></svg></button></div>
       </div>
       <div data-v-59046aa4="" class="day-div"><span data-v-59046aa4="" class="label">// today · iceland</span></div><!-- Post 1 -->
