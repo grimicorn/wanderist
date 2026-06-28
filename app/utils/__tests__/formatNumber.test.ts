@@ -64,5 +64,31 @@ describe("formatCompact", () => {
     it("returns '9.9k' for 9900", () => {
       expect(formatCompact(9_900)).toBe("9.9k");
     });
+
+    it("returns '999.9k' for 999900 (just under 1M boundary)", () => {
+      expect(formatCompact(999_900)).toBe("999.9k");
+    });
+
+    it("rolls over to '1M' when k-rounding reaches 1000k (e.g. 999999)", () => {
+      expect(formatCompact(999_999)).toBe("1M");
+    });
+  });
+
+  describe("1 000 000 and above — compact M notation", () => {
+    it("returns '1M' for exactly 1 000 000", () => {
+      expect(formatCompact(1_000_000)).toBe("1M");
+    });
+
+    it("returns '1.4M' for 1 400 000", () => {
+      expect(formatCompact(1_400_000)).toBe("1.4M");
+    });
+
+    it("does not show trailing .0 — '2M' not '2.0M'", () => {
+      expect(formatCompact(2_000_000)).toBe("2M");
+    });
+
+    it("returns '10M' for 10 000 000", () => {
+      expect(formatCompact(10_000_000)).toBe("10M");
+    });
   });
 });

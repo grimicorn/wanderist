@@ -11,6 +11,8 @@ exports[`Map page (/map) > renders the map stage and matches snapshot 1`] = `
   <!--v-if-->
   <!-- Map init error (bad token, WebGL unsupported, etc.) -->
   <!--v-if-->
+  <!-- Stats load error -->
+  <!--v-if-->
   <!-- Drop-pin mode indicator -->
   <!--v-if-->
   <!-- Drop-pin create form -->

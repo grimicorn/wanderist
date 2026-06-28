@@ -46,6 +46,11 @@
       Map failed to load: {{ mapError }}
     </div>
 
+    <!-- Stats load error -->
+    <div v-if="statsError" class="places-error" role="alert">
+      Stats unavailable: {{ statsError }}
+    </div>
+
     <!-- Drop-pin mode indicator -->
     <div v-if="isDropPinMode" class="drop-pin-banner" role="status">
       Click the map to place a pin, then complete the form below.
@@ -232,7 +237,11 @@ useHead({ title: "Wanderist — Map" });
 
 const placesStore = usePlacesStore();
 const mapbox = useMapbox();
-const { stats: mapStats, fetchStats: fetchMapStats } = useStats();
+const {
+  stats: mapStats,
+  fetchStats: fetchMapStats,
+  loadError: statsError,
+} = useStats();
 
 const mapPanelRef = ref<HTMLElement | null>(null);
 const activeMapInstance = ref<MapInstance | null>(null);

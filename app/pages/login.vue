@@ -73,42 +73,24 @@ import { useStats } from "~/composables/useStats";
 useHead({ title: "Wanderist — Sign in" });
 definePageMeta({ layout: false });
 
-// Representative placeholder values for the marketing panel when no real user
-// stats are in the shared cache (i.e. the visitor is not yet authenticated).
+// Representative placeholder values for the marketing panel.
+// Always displayed — the login page is public and should never reflect a
+// previous user's real stats from the shared useState cache, which persists
+// across client-side navigation after sign-out without a full page reload.
 const PLACEHOLDER_PLACES = 117;
 const PLACEHOLDER_COUNTRIES = 9;
 const PLACEHOLDER_STREAK = 14;
 const PLACEHOLDER_DISTANCE = 48218;
 
-// Read from the shared useState cache only — do not make an auth-gated API
-// call from this page. If the user has already authenticated during this
-// session, the cache holds their real stats; otherwise fall back to
-// representative placeholder copy so the panel never shows zeros.
-const { stats, displayDistance, displayDistanceLabel } = useStats();
+// Still destructure displayDistanceLabel from useStats so the unit label
+// ("Miles logged" / "Km logged") matches the user's preference when available,
+// without exposing any real numeric stat values.
+const { displayDistanceLabel } = useStats();
 
-const hasRealStats = computed(() => stats.value.placesCount > 0);
-
-const loginPlacesLabel = computed(() =>
-  formatCompact(
-    hasRealStats.value ? stats.value.placesCount : PLACEHOLDER_PLACES,
-  ),
-);
-const loginCountriesLabel = computed(() =>
-  formatCompact(
-    hasRealStats.value ? stats.value.countriesCount : PLACEHOLDER_COUNTRIES,
-  ),
-);
-const loginStreakLabel = computed(() => {
-  const streak = hasRealStats.value
-    ? stats.value.currentStreak
-    : PLACEHOLDER_STREAK;
-  return `${streak} days`;
-});
-const loginDistanceValue = computed(() =>
-  formatCompact(
-    hasRealStats.value ? displayDistance.value : PLACEHOLDER_DISTANCE,
-  ),
-);
+const loginPlacesLabel = formatCompact(PLACEHOLDER_PLACES);
+const loginCountriesLabel = formatCompact(PLACEHOLDER_COUNTRIES);
+const loginStreakLabel = `${PLACEHOLDER_STREAK} days`;
+const loginDistanceValue = formatCompact(PLACEHOLDER_DISTANCE);
 </script>
 
 <style scoped>
