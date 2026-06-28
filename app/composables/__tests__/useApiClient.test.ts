@@ -111,6 +111,16 @@ describe("useApiClient", () => {
     await expect(apiFetch("/api/health")).rejects.toThrow("Token fetch failed");
   });
 
+  it("does not inject Authorization header for absolute external URLs", async () => {
+    mockGetToken.mockResolvedValue("test-token");
+    const { apiFetch } = useApiClient();
+
+    await apiFetch("https://external.example.com/resource");
+
+    const calledHeaders = mockFetch.mock.calls[0][1].headers as Headers;
+    expect(calledHeaders.get("Authorization")).toBeNull();
+  });
+
   it("passes extra options through to $fetch", async () => {
     mockGetToken.mockResolvedValue("test-token");
     const { apiFetch } = useApiClient();

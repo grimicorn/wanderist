@@ -24,6 +24,18 @@ vi.mock("../../server/db/index", () => ({
   getDb: vi.fn(),
 }));
 
+// Spy on drizzle-orm's eq and and so we can assert the ownership filter
+// is constructed with both the id column and the userId column.
+vi.mock("drizzle-orm", async (importOriginal) => {
+  const original = await importOriginal<typeof import("drizzle-orm")>();
+  return {
+    ...original,
+    eq: vi.fn(original.eq),
+    and: vi.fn(original.and),
+  };
+});
+
+import { eq, and } from "drizzle-orm";
 import { requireUser } from "../../server/utils/auth";
 import { getDb } from "../../server/db/index";
 import {
@@ -35,6 +47,8 @@ import {
 
 const mockRequireUser = vi.mocked(requireUser);
 const mockGetDb = vi.mocked(getDb);
+const mockEq = vi.mocked(eq);
+const mockAnd = vi.mocked(and);
 
 function makeMockEvent() {
   return {} as Parameters<typeof loadOwnedOrThrow>[0];
@@ -82,6 +96,30 @@ describe("loadOwnedOrThrow", () => {
     expect(result).toEqual(expectedRow);
   });
 
+  it("scopes the query to both the row id and the authenticated userId", async () => {
+    const idColumn = makeMockColumn();
+    const userIdColumn = makeMockColumn();
+    mockRequireUser.mockReturnValue("user-abc");
+    const mockDb = makeDbWithRows([{ id: "row-1", userId: "user-abc" }]);
+    mockGetDb.mockReturnValue(mockDb as unknown as ReturnType<typeof getDb>);
+
+    await loadOwnedOrThrow(
+      makeMockEvent(),
+      makeMockTable(),
+      idColumn,
+      userIdColumn,
+      "row-1",
+    );
+
+    // Verify eq was called with the userId column and the authenticated userId
+    // to ensure the ownership filter is present and not silently stripped.
+    expect(mockEq).toHaveBeenCalledWith(userIdColumn, "user-abc");
+    // Verify eq was also called with the id column and the requested id
+    expect(mockEq).toHaveBeenCalledWith(idColumn, "row-1");
+    // Verify and() combined both conditions
+    expect(mockAnd).toHaveBeenCalledTimes(1);
+  });
+
   it("throws 401 when requireUser throws", async () => {
     const unauthorizedError = createError({
       statusCode: 401,
@@ -121,7 +159,8 @@ describe("loadOwnedOrThrow", () => {
   it("throws 404 when no rows match (ownership mismatch)", async () => {
     mockRequireUser.mockReturnValue("user-2");
     // DB returns empty because the WHERE clause includes userId = user-2
-    // but the row belongs to user-1; the DB mock simulates that correctly
+    // but the row belongs to user-1; the DB mock simulates that correctly.
+    // The ownership filter assertion test above verifies the userId is wired in.
     const mockDb = makeDbWithRows([]);
     mockGetDb.mockReturnValue(mockDb as unknown as ReturnType<typeof getDb>);
 
@@ -234,6 +273,17 @@ describe("requireString", () => {
 describe("optionalString", () => {
   it("returns the string when provided", () => {
     expect(optionalString("hello", "bio")).toBe("hello");
+  });
+
+  it("returns the string as-is for empty string (caller owns trimming)", () => {
+    // optionalString does not reject or normalize empty strings — it only
+    // validates the type. Pinned here so future changes surface explicitly.
+    expect(optionalString("", "bio")).toBe("");
+  });
+
+  it("returns the string as-is for whitespace-only string", () => {
+    // Same contract: optionalString passes "  " through; callers must trim if needed.
+    expect(optionalString("   ", "bio")).toBe("   ");
   });
 
   it("returns undefined for undefined", () => {
