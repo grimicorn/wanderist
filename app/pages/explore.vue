@@ -189,7 +189,7 @@
               <button
                 class="btn btn--sm"
                 :class="person.following ? 'btn--primary' : 'btn--outline'"
-                @click="toggleFollow(person.handle)"
+                @click="toggleFollow(person.userId)"
               >
                 <template v-if="person.following">
                   <AppIcon name="check" :size="14" />
@@ -206,7 +206,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, onMounted, computed } from "vue";
 
 definePageMeta({ layout: "app", middleware: "auth" });
 useHead({ title: "Wanderist — Explore" });
@@ -299,43 +299,61 @@ const guides = [
   },
 ];
 
-const people = ref([
+// Placeholder people list. The userId field maps to the Clerk user ID stored in
+// the DB and is used by the follow API. In a real implementation this list would
+// come from an API response that includes user IDs.
+const PEOPLE = [
   {
+    userId: "user_placeholder_elsa",
     name: "Elsa Farþegi",
     handle: "@elsa_far",
     location: "Reykjavík",
     places: 84,
-    following: false,
   },
   {
+    userId: "user_placeholder_marco",
     name: "Marco Reis",
     handle: "@marco.travels",
     location: "Lisbon",
     places: 2100,
-    following: false,
   },
   {
+    userId: "user_placeholder_yuki",
     name: "Yuki Tanaka",
     handle: "@yuki",
     location: "Tokyo",
     places: 510,
-    following: true,
   },
   {
+    userId: "user_placeholder_maya",
     name: "Maya Rambles",
     handle: "@mayarambles",
     location: "Oslo",
     places: 332,
-    following: false,
   },
-]);
+];
 
-function toggleFollow(handle: string) {
-  const person = people.value.find((p) => p.handle === handle);
-  if (person) {
-    person.following = !person.following;
-  }
+const {
+  fetchFollowing,
+  toggleFollow: toggleFollowById,
+  isFollowing,
+} = useFollows();
+
+// Derive follow state from the composable so it stays in sync with persisted state.
+const people = computed(() =>
+  PEOPLE.map((person) => ({
+    ...person,
+    following: isFollowing(person.userId),
+  })),
+);
+
+async function toggleFollow(userId: string): Promise<void> {
+  await toggleFollowById(userId);
 }
+
+onMounted(async () => {
+  await fetchFollowing();
+});
 </script>
 
 <style scoped>

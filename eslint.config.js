@@ -82,6 +82,8 @@ const projectGlobals = {
   useScrollReveal: "readonly",
   useClerkUser: "readonly",
   useClerkAuth: "readonly",
+  useApiClient: "readonly",
+  useFollows: "readonly",
 };
 
 export default [
