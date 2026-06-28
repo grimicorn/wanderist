@@ -25,7 +25,6 @@ const {
   mockReadRawBody,
   mockGetHeader,
   mockGetUser,
-  mockCreateClerkClient,
 } = vi.hoisted(() => {
   const mockOnConflictDoUpdate = vi.fn().mockResolvedValue(undefined);
   const mockValues = vi.fn(() => ({
@@ -42,9 +41,6 @@ const {
   const mockSelect = vi.fn(() => ({ from: mockFrom }));
 
   const mockGetUser = vi.fn();
-  const mockCreateClerkClient = vi.fn(() => ({
-    users: { getUser: mockGetUser },
-  }));
 
   return {
     mockVerifySvixSignature: vi.fn(),
@@ -60,7 +56,6 @@ const {
     mockReadRawBody: vi.fn(),
     mockGetHeader: vi.fn(),
     mockGetUser,
-    mockCreateClerkClient,
   };
 });
 
@@ -80,11 +75,7 @@ vi.mock("../server/db/index", () => ({
   }),
 }));
 
-vi.mock("@clerk/backend", () => ({
-  createClerkClient: mockCreateClerkClient,
-}));
-
-// auth.ts now imports getClerkClient from the shared clerk util, so mock that too.
+// auth.ts and middleware both import getClerkClient from the shared clerk util.
 vi.mock("../server/utils/clerk", () => ({
   getClerkClient: () => ({ users: { getUser: mockGetUser } }),
 }));
@@ -207,11 +198,7 @@ describe("clerk webhook handler", () => {
   it("deletes the user row on user.deleted", async () => {
     mockVerifySvixSignature.mockReturnValue({
       type: "user.deleted",
-      data: {
-        id: "user_abc123",
-        email_addresses: [],
-        primary_email_address_id: "",
-      },
+      data: { id: "user_abc123" },
     });
 
     const result = await (
@@ -301,6 +288,20 @@ describe("clerk webhook handler", () => {
         email_addresses: [],
         primary_email_address_id: "",
       },
+    });
+
+    const result = await (
+      clerkWebhookHandler as (event: object) => Promise<unknown>
+    )(buildMockEvent());
+
+    expect(mockInsert).not.toHaveBeenCalled();
+    expect(result).toEqual({ ok: true });
+  });
+
+  it("returns ok and skips insert when email_addresses is absent in the payload", async () => {
+    mockVerifySvixSignature.mockReturnValue({
+      type: "user.created",
+      data: { id: "user_no_email_field" },
     });
 
     const result = await (

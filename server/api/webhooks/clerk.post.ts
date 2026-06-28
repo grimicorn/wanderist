@@ -1,3 +1,4 @@
+import type { H3Event } from "h3";
 import { eq } from "drizzle-orm";
 import { getDb } from "../../db/index";
 import { users } from "../../db/schema";
@@ -22,8 +23,8 @@ interface ClerkEmailAddress {
 // user.created and user.updated payloads include full user data.
 interface ClerkUserUpsertPayload {
   id: string;
-  email_addresses: ClerkEmailAddress[];
-  primary_email_address_id: string;
+  email_addresses?: ClerkEmailAddress[];
+  primary_email_address_id?: string;
 }
 
 // user.deleted payloads only carry the id; email fields are absent.
@@ -47,9 +48,7 @@ function getWebhookSecret(): string {
   return secret;
 }
 
-function extractSvixHeaders(
-  event: Parameters<typeof getHeader>[0],
-): SvixHeaders {
+function extractSvixHeaders(event: H3Event): SvixHeaders {
   return {
     [SVIX_ID_HEADER]: getHeader(event, SVIX_ID_HEADER) ?? "",
     [SVIX_TIMESTAMP_HEADER]: getHeader(event, SVIX_TIMESTAMP_HEADER) ?? "",
@@ -60,10 +59,9 @@ function extractSvixHeaders(
 function extractPrimaryEmail(
   payload: ClerkUserUpsertPayload,
 ): string | undefined {
-  const primaryAddress = payload.email_addresses.find(
+  return payload.email_addresses?.find(
     (address) => address.id === payload.primary_email_address_id,
-  );
-  return primaryAddress?.email_address;
+  )?.email_address;
 }
 
 async function handleUserUpsert(
@@ -73,6 +71,8 @@ async function handleUserUpsert(
 
   // Clerk users created via phone or SSO may have no primary email.
   // Acknowledge and skip rather than returning a non-2xx that causes Svix retries.
+  // On user.updated, if the email was removed, we keep the existing DB value since
+  // the users.email column is NOT NULL.
   if (!email) {
     return;
   }

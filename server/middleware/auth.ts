@@ -1,3 +1,4 @@
+import type { H3Event } from "h3";
 import { getClerkClient } from "../utils/clerk";
 
 const API_PATH_PREFIX = "/api/";
@@ -11,18 +12,14 @@ function isWebhookPath(path: string): boolean {
   return path.startsWith(WEBHOOK_PATH_PREFIX);
 }
 
-function extractBearerToken(
-  event: Parameters<typeof getHeader>[0],
-): string | null {
+function extractBearerToken(event: H3Event): string | null {
   const token = getHeader(event, "authorization")
     ?.replace(/^Bearer\s+/i, "")
     .trim();
   return token ?? null;
 }
 
-async function verifyBearerToken(
-  event: Parameters<typeof getHeader>[0],
-): Promise<string> {
+async function verifyBearerToken(event: H3Event): Promise<string> {
   const token = extractBearerToken(event);
   if (!token) {
     throw createError({ statusCode: 401, statusMessage: "Unauthorized" });
