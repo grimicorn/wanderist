@@ -35,7 +35,7 @@
             <div class="v">{{ loginStreakLabel }}</div>
           </div>
           <div>
-            <div class="k">{{ displayDistanceLabel }}</div>
+            <div class="k">{{ PLACEHOLDER_DISTANCE_LABEL }}</div>
             <div class="v">{{ loginDistanceValue }}</div>
           </div>
         </div>
@@ -68,7 +68,6 @@
 
 <script setup lang="ts">
 import { formatCompact } from "~/utils/formatNumber";
-import { useStats } from "~/composables/useStats";
 
 useHead({ title: "Wanderist — Sign in" });
 definePageMeta({ layout: false });
@@ -77,15 +76,14 @@ definePageMeta({ layout: false });
 // Always displayed — the login page is public and should never reflect a
 // previous user's real stats from the shared useState cache, which persists
 // across client-side navigation after sign-out without a full page reload.
+// The distance label is hardcoded to match the unit implied by the placeholder
+// value (48218 mi) so the label and value always agree regardless of any
+// cached preference from a prior user session.
 const PLACEHOLDER_PLACES = 117;
 const PLACEHOLDER_COUNTRIES = 9;
 const PLACEHOLDER_STREAK = 14;
 const PLACEHOLDER_DISTANCE = 48218;
-
-// Still destructure displayDistanceLabel from useStats so the unit label
-// ("Miles logged" / "Km logged") matches the user's preference when available,
-// without exposing any real numeric stat values.
-const { displayDistanceLabel } = useStats();
+const PLACEHOLDER_DISTANCE_LABEL = "Miles logged";
 
 const loginPlacesLabel = formatCompact(PLACEHOLDER_PLACES);
 const loginCountriesLabel = formatCompact(PLACEHOLDER_COUNTRIES);
