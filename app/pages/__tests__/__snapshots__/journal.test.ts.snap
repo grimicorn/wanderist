@@ -11,90 +11,46 @@ exports[`Journal page (/journal) > renders without crashing and matches snapshot
       <!-- Compose bar — clicking anywhere opens the new-entry drawer -->
       <div data-v-59046aa4="" class="compose" role="button" tabindex="0" aria-label="Write a new entry"><span data-v-59046aa4="" class="compose__av"><svg data-v-59046aa4="" data-icon="" name="user" size="18"></svg></span><input data-v-59046aa4="" readonly="" placeholder="Write an entry, or drop today's photos…">
         <div data-v-59046aa4="" class="acts"><button data-v-59046aa4="" class="icon-btn" aria-label="Add photo"><svg data-v-59046aa4="" data-icon="" name="image" size="18"></svg></button><button data-v-59046aa4="" class="icon-btn" aria-label="Add location"><svg data-v-59046aa4="" data-icon="" name="pin" size="18"></svg></button></div>
-      </div>
-      <div data-v-59046aa4="" class="day-div"><span data-v-59046aa4="" class="label">// today · iceland</span></div><!-- Post 1 -->
+      </div><!-- Loading state -->
+      <!-- Timeline tab: entries grouped by day -->
+      <div data-v-59046aa4="" class="day-div"><span data-v-59046aa4="" class="label">// Jun 12</span></div>
       <article data-v-59046aa4="" class="post">
-        <div data-v-59046aa4="" class="post__head"><span data-v-59046aa4="" class="post__av"><svg data-v-59046aa4="" data-icon="" name="user" size="18"></svg></span>
-          <div data-v-59046aa4="" class="post__who"><b data-v-59046aa4="">Dan H.</b>
-            <div data-v-59046aa4="" class="post__meta"><svg data-v-59046aa4="" data-icon="" name="pin" size="11"></svg> Reykjavík, Iceland · 4:12am </div>
-          </div><button data-v-59046aa4="" class="post__menu icon-btn" style="border: none none;" aria-label="More"><svg data-v-59046aa4="" data-icon="" name="chevron" size="16" style="transform: rotate(90deg);"></svg></button>
-        </div>
-        <div class="post__media grid" data-v-59046aa4="">
-          <div class="ph" data-v-59046aa4="">
-            <div class="topo" style="opacity:0.4;" data-v-59046aa4=""></div><span class="ph__tag" data-v-59046aa4="">harbor · 01</span>
-          </div>
-          <div class="ph" data-v-59046aa4="">
-            <div class="topo" style="opacity:0.4;" data-v-59046aa4=""></div>
-          </div>
-          <div class="ph" data-v-59046aa4="">
-            <div class="topo" style="opacity:0.4;" data-v-59046aa4=""></div><span class="more-badge" data-v-59046aa4="">+4</span>
-          </div>
-        </div>
-        <div data-v-59046aa4="" class="post__body">
-          <div data-v-59046aa4="" class="post__actions"><button data-v-59046aa4="" class="like"><svg data-v-59046aa4="" data-icon="" name="heart" size="17"></svg><span data-v-59046aa4="" class="cnt">24</span></button><button data-v-59046aa4=""><svg data-v-59046aa4="" data-icon="" name="journal" size="17"></svg> 3 </button><button data-v-59046aa4="" style="margin-left: auto;"><svg data-v-59046aa4="" data-icon="" name="star" size="17"></svg></button></div>
-          <h3 class="post__title" data-v-59046aa4="">Harbor at 4am</h3>
-          <p class="post__text" data-v-59046aa4=""> Cold morning, the whole harbor still asleep. Found coffee at a window and watched the boats come in. The light up here doesn't behave like light anywhere else. </p>
-          <div class="tag-row" data-v-59046aa4=""><span class="tag tag--accent" data-v-59046aa4="">iceland</span><span class="tag" data-v-59046aa4="">ring road</span><span class="tag" data-v-59046aa4="">day 6</span></div>
-        </div>
+        <h3 class="post__title">Harbor at 4am</h3><button class="like"><span class="cnt">24</span></button>
       </article>
-      <div data-v-59046aa4="" class="day-div"><span data-v-59046aa4="" class="label">// jun 8 · portugal</span></div><!-- Post 2 -->
+      <div data-v-59046aa4="" class="day-div"><span data-v-59046aa4="" class="label">// Jun 8</span></div>
       <article data-v-59046aa4="" class="post">
-        <div data-v-59046aa4="" class="post__head"><span data-v-59046aa4="" class="post__av"><svg data-v-59046aa4="" data-icon="" name="user" size="18"></svg></span>
-          <div data-v-59046aa4="" class="post__who"><b data-v-59046aa4="">Dan H.</b>
-            <div data-v-59046aa4="" class="post__meta"><svg data-v-59046aa4="" data-icon="" name="pin" size="11"></svg> Lisbon, Portugal · 6:40pm </div>
-          </div><button data-v-59046aa4="" class="post__menu icon-btn" style="border: none none;" aria-label="More"><svg data-v-59046aa4="" data-icon="" name="chevron" size="16" style="transform: rotate(90deg);"></svg></button>
-        </div>
-        <div data-v-59046aa4="" class="post__media single">
-          <div data-v-59046aa4="" class="ph">
-            <div data-v-59046aa4="" class="topo" style="opacity: 0.4;"></div><span data-v-59046aa4="" class="ph__tag">viewpoint · alfama</span>
-          </div>
-        </div>
-        <div data-v-59046aa4="" class="post__body">
-          <div data-v-59046aa4="" class="post__actions"><button data-v-59046aa4="" class="like liked"><svg data-v-59046aa4="" data-icon="" name="heart" size="17"></svg><span data-v-59046aa4="" class="cnt">41</span></button><button data-v-59046aa4=""><svg data-v-59046aa4="" data-icon="" name="journal" size="17"></svg> 7 </button><button data-v-59046aa4="" style="margin-left: auto;"><svg data-v-59046aa4="" data-icon="" name="star" size="17"></svg></button></div>
-          <h3 data-v-59046aa4="" class="post__title">Tram 28, again</h3>
-          <p data-v-59046aa4="" class="post__text"> Took the long way through Alfama. Pastéis first, then up to the viewpoint I keep coming back to. Imported these straight from Instagram. </p>
-          <div data-v-59046aa4="" class="tag-row"><span data-v-59046aa4="" class="tag tag--accent">portugal</span><span data-v-59046aa4="" class="tag"><svg data-v-59046aa4="" data-icon="" name="instagram" size="11" style="vertical-align: -1px;"></svg> imported </span><span data-v-59046aa4="" class="tag">12 photos</span></div>
-        </div>
+        <h3 class="post__title">Tram 28, again</h3><button class="like"><span class="cnt">41</span></button>
       </article>
+      <!--v-if-->
     </div><!-- Right rail -->
     <aside data-v-59046aa4="" class="rail">
+      <!-- Active trip card -->
       <div data-v-59046aa4="" class="rail-card">
-        <h4 data-v-59046aa4="" class="display"> Active trip <a data-v-59046aa4="" class="label label--plain" style="font-size: 10px;">stats</a></h4>
-        <div class="trip-hero ph" style="height:90px;border-radius:8px;position:relative;overflow:hidden;" data-v-59046aa4="">
-          <div class="topo" style="opacity:0.5;" data-v-59046aa4=""></div>
+        <h4 data-v-59046aa4="" class="display"> Active trip <a data-v-59046aa4="" href="/trips/trip-1" class="label label--plain" style="font-size: 10px;">stats</a></h4>
+        <div data-v-59046aa4="" class="trip-hero ph" style="height: 90px; border-radius: 8px; position: relative; overflow: hidden;">
+          <div data-v-59046aa4="" class="topo" style="opacity: 0.5;"></div>
         </div>
-        <div style="font-family:var(--font-display);font-weight:600;font-size:15px;margin-top:10px;" data-v-59046aa4=""> Iceland, the ring road </div>
-        <div class="progress" style="height:6px;border-radius:99px;background:var(--line);overflow:hidden;margin:10px 0 6px;" data-v-59046aa4=""><span style="display:block;height:100%;width:64%;background:var(--accent);border-radius:99px;" data-v-59046aa4=""></span></div>
-        <div class="hstack" style="justify-content:space-between;font-size:11px;color:var(--muted);" data-v-59046aa4=""><span data-v-59046aa4="">day 6 of 9</span><span data-v-59046aa4="">4 entries</span></div>
-      </div>
+        <div data-v-59046aa4="" style="font-family: var(--font-display); font-weight: 600; font-size: 15px; margin-top: 10px;">Iceland, the ring road</div>
+        <div data-v-59046aa4="" class="progress" style="height: 6px; border-radius: 99px; background: var(--line); overflow: hidden; margin: 10px 0px 6px;"><span data-v-59046aa4="" style="display: block; height: 100%; width: 100%; background: var(--accent); border-radius: 99px;"></span></div>
+        <div data-v-59046aa4="" class="hstack" style="justify-content: space-between; font-size: 11px; color: var(--muted);"><span data-v-59046aa4="">day 9 of 9</span><span data-v-59046aa4="">1 entry</span></div>
+      </div><!-- Trips list -->
       <div data-v-59046aa4="" class="rail-card">
         <h4 data-v-59046aa4="" class="display">Trips</h4>
         <div data-v-59046aa4="" class="trip-pill"><span data-v-59046aa4="" class="trip-pill__sw" style="background: var(--bg-tint);"><span data-v-59046aa4="" class="topo" style="opacity: 0.6;"></span></span>
           <div data-v-59046aa4="">
-            <div data-v-59046aa4="" class="trip-pill__name">Iceland 2026</div>
-            <div data-v-59046aa4="" class="trip-pill__sub">4 entries · ongoing</div>
+            <div data-v-59046aa4="" class="trip-pill__name">Iceland, the ring road</div>
+            <div data-v-59046aa4="" class="trip-pill__sub">1 entry · ongoing</div>
           </div>
         </div>
         <div data-v-59046aa4="" class="trip-pill"><span data-v-59046aa4="" class="trip-pill__sw" style="background: var(--bg-tint);"><span data-v-59046aa4="" class="topo" style="opacity: 0.6;"></span></span>
           <div data-v-59046aa4="">
             <div data-v-59046aa4="" class="trip-pill__name">Portugal 2026</div>
-            <div data-v-59046aa4="" class="trip-pill__sub">6 entries</div>
+            <div data-v-59046aa4="" class="trip-pill__sub">0 entries · past</div>
           </div>
         </div>
-        <div data-v-59046aa4="" class="trip-pill"><span data-v-59046aa4="" class="trip-pill__sw" style="background: var(--bg-tint);"><span data-v-59046aa4="" class="topo" style="opacity: 0.6;"></span></span>
-          <div data-v-59046aa4="">
-            <div data-v-59046aa4="" class="trip-pill__name">Japan 2025</div>
-            <div data-v-59046aa4="" class="trip-pill__sub">9 entries</div>
-          </div>
-        </div>
-      </div>
-      <div data-v-59046aa4="" class="rail-card onthisday">
-        <h4 data-v-59046aa4="" class="display">On this day · 2024</h4>
-        <div data-v-59046aa4="" class="ph">
-          <div data-v-59046aa4="" class="topo" style="opacity: 0.4;"></div><span data-v-59046aa4="" class="ph__tag">sydney · 2024</span>
-        </div>
-        <div data-v-59046aa4="" class="post__meta" style="font-size: 11px;"><svg data-v-59046aa4="" data-icon="" name="pin" size="11"></svg> Sydney, Australia — two years ago today. </div>
-      </div>
+        <!--v-if-->
+      </div><!-- On this day -->
+      <!--v-if-->
     </aside>
   </div>
 </div>"
