@@ -1,22 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import {
+  installNitroGlobals,
+  unwrapHandler,
+  makeSelectChain,
+  makeInsertChain,
+} from "./_helpers";
 
-vi.stubGlobal(
-  "defineEventHandler",
-  (handler: (event: unknown) => unknown) => handler,
-);
-vi.stubGlobal(
-  "createError",
-  (options: { statusCode: number; statusMessage: string }) => {
-    const error = new Error(options.statusMessage) as Error & {
-      statusCode: number;
-      statusMessage: string;
-    };
-    error.statusCode = options.statusCode;
-    error.statusMessage = options.statusMessage;
-    return error;
-  },
-);
-vi.stubGlobal("readBody", vi.fn());
+installNitroGlobals();
 
 vi.mock("../../../server/utils/auth", () => ({
   ensureUser: vi.fn(),
@@ -47,28 +37,8 @@ const mockReadBody = vi.mocked(
   readBody as (event: unknown) => Promise<unknown>,
 );
 
-function makeInsertChain(conflictResult = undefined) {
-  const onConflictDoNothing = vi.fn().mockResolvedValue(conflictResult);
-  const values = vi.fn().mockReturnValue({ onConflictDoNothing });
-  const insert = vi.fn().mockReturnValue({ values });
-  return { insert, values, onConflictDoNothing };
-}
-
-function makeSelectChain(rows: Record<string, unknown>[]) {
-  const limit = vi.fn().mockResolvedValue(rows);
-  const where = vi.fn().mockReturnValue({ limit });
-  const from = vi.fn().mockReturnValue({ where });
-  const select = vi.fn().mockReturnValue({ from });
-  return { select };
-}
-
 const handler = await import("../../../server/api/follows/index.post");
-
-function getHandler() {
-  return "default" in handler
-    ? (handler.default as (event: unknown) => Promise<unknown>)
-    : (handler as unknown as (event: unknown) => Promise<unknown>);
-}
+const callHandler = () => unwrapHandler(handler as Record<string, unknown>)({});
 
 describe("POST /api/follows", () => {
   beforeEach(() => {
@@ -86,7 +56,7 @@ describe("POST /api/follows", () => {
       ...insertChain,
     } as unknown as ReturnType<typeof getDb>);
 
-    const result = await getHandler()({});
+    const result = await callHandler();
     expect(result).toEqual({ ok: true });
   });
 
@@ -101,7 +71,7 @@ describe("POST /api/follows", () => {
       ...insertChain,
     } as unknown as ReturnType<typeof getDb>);
 
-    await expect(getHandler()({})).resolves.toEqual({ ok: true });
+    await expect(callHandler()).resolves.toEqual({ ok: true });
   });
 
   it("throws 422 when the follower tries to follow themselves", async () => {
@@ -110,7 +80,7 @@ describe("POST /api/follows", () => {
 
     mockGetDb.mockReturnValue({} as unknown as ReturnType<typeof getDb>);
 
-    await expect(getHandler()({})).rejects.toMatchObject({ statusCode: 422 });
+    await expect(callHandler()).rejects.toMatchObject({ statusCode: 422 });
   });
 
   it("throws 404 when the followee user does not exist", async () => {
@@ -122,7 +92,7 @@ describe("POST /api/follows", () => {
       selectChain as unknown as ReturnType<typeof getDb>,
     );
 
-    await expect(getHandler()({})).rejects.toMatchObject({ statusCode: 404 });
+    await expect(callHandler()).rejects.toMatchObject({ statusCode: 404 });
   });
 
   it("throws 400 when followeeId is missing from the body", async () => {
@@ -131,7 +101,7 @@ describe("POST /api/follows", () => {
 
     mockGetDb.mockReturnValue({} as unknown as ReturnType<typeof getDb>);
 
-    await expect(getHandler()({})).rejects.toMatchObject({ statusCode: 400 });
+    await expect(callHandler()).rejects.toMatchObject({ statusCode: 400 });
   });
 
   it("throws 400 when followeeId is an empty string", async () => {
@@ -140,7 +110,7 @@ describe("POST /api/follows", () => {
 
     mockGetDb.mockReturnValue({} as unknown as ReturnType<typeof getDb>);
 
-    await expect(getHandler()({})).rejects.toMatchObject({ statusCode: 400 });
+    await expect(callHandler()).rejects.toMatchObject({ statusCode: 400 });
   });
 
   it("throws 401 when the user is not authenticated", async () => {
@@ -149,6 +119,6 @@ describe("POST /api/follows", () => {
     );
     mockReadBody.mockResolvedValue({ followeeId: "followee-1" });
 
-    await expect(getHandler()({})).rejects.toMatchObject({ statusCode: 401 });
+    await expect(callHandler()).rejects.toMatchObject({ statusCode: 401 });
   });
 });

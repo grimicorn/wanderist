@@ -5,6 +5,9 @@ import { ensureUser } from "../../utils/auth";
 import { requireString } from "../../utils/db-helpers";
 
 export default defineEventHandler(async (event) => {
+  // ensureUser (not requireUser) because the INSERT has a FK on follows.follower_id
+  // referencing users.id. If the Clerk webhook hasn't landed yet the users row
+  // may not exist, so we materialise it here before writing the follow row.
   const followerId = await ensureUser(event);
 
   const body = await readBody<{ followeeId?: unknown }>(event);

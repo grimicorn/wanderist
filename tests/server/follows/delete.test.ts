@@ -1,22 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import {
+  installNitroGlobals,
+  unwrapHandler,
+  makeDeleteChain,
+} from "./_helpers";
 
-vi.stubGlobal(
-  "defineEventHandler",
-  (handler: (event: unknown) => unknown) => handler,
-);
-vi.stubGlobal(
-  "createError",
-  (options: { statusCode: number; statusMessage: string }) => {
-    const error = new Error(options.statusMessage) as Error & {
-      statusCode: number;
-      statusMessage: string;
-    };
-    error.statusCode = options.statusCode;
-    error.statusMessage = options.statusMessage;
-    return error;
-  },
-);
-vi.stubGlobal("getRouterParam", vi.fn());
+installNitroGlobals();
 
 vi.mock("../../../server/utils/auth", () => ({
   requireUser: vi.fn(),
@@ -36,19 +25,8 @@ const mockGetRouterParam = vi.mocked(
   getRouterParam as (event: unknown, name: string) => string | undefined,
 );
 
-function makeDeleteChain() {
-  const where = vi.fn().mockResolvedValue(undefined);
-  const del = vi.fn().mockReturnValue({ where });
-  return { delete: del, _where: where };
-}
-
 const handler = await import("../../../server/api/follows/[followeeId].delete");
-
-function getHandler() {
-  return "default" in handler
-    ? (handler.default as (event: unknown) => Promise<unknown>)
-    : (handler as unknown as (event: unknown) => Promise<unknown>);
-}
+const callHandler = () => unwrapHandler(handler as Record<string, unknown>)({});
 
 describe("DELETE /api/follows/:followeeId", () => {
   beforeEach(() => {
@@ -61,7 +39,7 @@ describe("DELETE /api/follows/:followeeId", () => {
     const chain = makeDeleteChain();
     mockGetDb.mockReturnValue(chain as unknown as ReturnType<typeof getDb>);
 
-    const result = await getHandler()({});
+    const result = await callHandler();
     expect(result).toEqual({ ok: true });
   });
 
@@ -71,7 +49,7 @@ describe("DELETE /api/follows/:followeeId", () => {
     const chain = makeDeleteChain();
     mockGetDb.mockReturnValue(chain as unknown as ReturnType<typeof getDb>);
 
-    await expect(getHandler()({})).resolves.toEqual({ ok: true });
+    await expect(callHandler()).resolves.toEqual({ ok: true });
   });
 
   it("only deletes the current user's own follow row (auth scoping)", async () => {
@@ -80,11 +58,9 @@ describe("DELETE /api/follows/:followeeId", () => {
     const chain = makeDeleteChain();
     mockGetDb.mockReturnValue(chain as unknown as ReturnType<typeof getDb>);
 
-    await getHandler()({});
+    await callHandler();
 
     expect(mockRequireUser).toHaveBeenCalledTimes(1);
-    // The delete WHERE clause is built with the authenticated userId (follower-1),
-    // so even if a different userId were supplied via the URL it would have no effect.
     expect(chain.delete).toHaveBeenCalledTimes(1);
   });
 
@@ -94,7 +70,7 @@ describe("DELETE /api/follows/:followeeId", () => {
 
     mockGetDb.mockReturnValue({} as unknown as ReturnType<typeof getDb>);
 
-    await expect(getHandler()({})).rejects.toMatchObject({ statusCode: 400 });
+    await expect(callHandler()).rejects.toMatchObject({ statusCode: 400 });
   });
 
   it("throws 401 when the user is not authenticated", async () => {
@@ -103,6 +79,6 @@ describe("DELETE /api/follows/:followeeId", () => {
     });
     mockGetRouterParam.mockReturnValue("followee-1");
 
-    await expect(getHandler()({})).rejects.toMatchObject({ statusCode: 401 });
+    await expect(callHandler()).rejects.toMatchObject({ statusCode: 401 });
   });
 });

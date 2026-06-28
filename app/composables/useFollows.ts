@@ -15,7 +15,16 @@ export function useFollows() {
     "follows:followingIds",
     () => new Set(),
   );
-  const pendingUserIds = ref<Set<string>>(new Set());
+  // pendingUserIds is global (useState) so the in-flight dedup guard holds
+  // across multiple components using useFollows() simultaneously (e.g. a
+  // follow button in a profile card and on the explore page).
+  const pendingUserIds = useState<Set<string>>(
+    "follows:pendingUserIds",
+    () => new Set(),
+  );
+  // error is local (ref) rather than global because it is contextual to the
+  // component that triggered the action. Different components should display
+  // their own error state independently.
   const error = ref<string | null>(null);
 
   async function fetchFollowing(): Promise<void> {
