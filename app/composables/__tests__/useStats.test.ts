@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { ref } from "vue";
 
 const mockApiFetch = vi.fn();
 
-vi.stubGlobal("useState", (key: string, init: () => unknown) => {
-  const { ref } = require("vue");
+vi.stubGlobal("useState", (_key: string, init: () => unknown) => {
   return ref(init());
 });
 
@@ -68,6 +68,20 @@ describe("useStats", () => {
       await fetchStats();
 
       expect(loadError.value).toBe("Internal Server Error");
+    });
+
+    it("resets stats to defaults when the API call fails", async () => {
+      mockApiFetch.mockResolvedValueOnce(SAMPLE_STATS);
+      const { fetchStats, stats } = useStats();
+      await fetchStats();
+      expect(stats.value.placesCount).toBe(117);
+
+      mockApiFetch.mockRejectedValue(new Error("network down"));
+      await fetchStats();
+
+      expect(stats.value.placesCount).toBe(0);
+      expect(stats.value.totalDistanceMi).toBe(0);
+      expect(stats.value.currentStreak).toBe(0);
     });
 
     it("falls back to error.statusMessage when data is absent", async () => {
