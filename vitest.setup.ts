@@ -39,12 +39,58 @@ Object.assign(globalThis, {
   defineStore,
   // App composables — stubs for environments that don't import them explicitly
   useApiClient: vi.fn(() => ({ apiFetch: vi.fn().mockResolvedValue([]) })),
+  useEntryDraft: vi.fn(() => ({
+    saveDraft: vi.fn(),
+    loadDraft: vi.fn().mockReturnValue(null),
+    clearDraft: vi.fn(),
+  })),
   useMediaUpload: vi.fn(() => ({
-    upload: vi
-      .fn()
-      .mockResolvedValue({ id: "media-1", url: "/test-image.jpg" }),
+    upload: vi.fn().mockResolvedValue({
+      id: "media-1",
+      url: "https://example.com/photo.jpg",
+    }),
     isUploading: vue.ref(false),
     error: vue.ref(null),
+  })),
+  useEntriesStore: vi.fn(() => ({
+    entries: vue.ref([]),
+    isLoading: vue.ref(false),
+    error: vue.ref(null),
+    createEntry: vi.fn().mockResolvedValue({ id: "entry-1" }),
+    fetchEntries: vi
+      .fn()
+      .mockResolvedValue({ entries: [], tab: "timeline", page: 1 }),
+    fetchEntry: vi.fn(),
+    updateEntry: vi.fn(),
+    deleteEntry: vi.fn(),
+    likeEntry: vi.fn(),
+    unlikeEntry: vi.fn(),
+  })),
+  useTripsStore: vi.fn(() => ({
+    tripList: [],
+    currentTripDetail: vue.ref(null),
+    isLoadingList: vue.ref(false),
+    isLoadingDetail: vue.ref(false),
+    listError: vue.ref(null),
+    detailError: vue.ref(null),
+    fetchTrips: vi.fn().mockResolvedValue(undefined),
+    fetchTripById: vi.fn(),
+    createTrip: vi.fn(),
+    patchTrip: vi.fn(),
+    deleteTrip: vi.fn(),
+    createStop: vi.fn(),
+    patchStop: vi.fn(),
+    deleteStop: vi.fn(),
+    reorderStops: vi.fn(),
+  })),
+  usePlacesStore: vi.fn(() => ({
+    places: [],
+    isLoading: vue.ref(false),
+    error: vue.ref(null),
+    fetchPlaces: vi.fn().mockResolvedValue(undefined),
+    createPlace: vi.fn(),
+    updatePlace: vi.fn(),
+    deletePlace: vi.fn(),
   })),
   useAccountActions: vi.fn(() => ({
     isLoading: vue.readonly(vue.ref(false)),
