@@ -91,6 +91,9 @@ export const users = pgTable("users", {
     .defaultNow()
     .notNull()
     .$onUpdate(() => new Date()),
+  // Soft-delete: stamped with the deletion-request time. A scheduled job purges
+  // the row (and all FK CASCADE children) once `deletedAt + grace_period < now`.
+  deletedAt: timestamp("deleted_at"),
 });
 
 // ---------------------------------------------------------------------------

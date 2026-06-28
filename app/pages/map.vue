@@ -4,36 +4,84 @@
       <span class="tag tag--accent"
         >{{ placesStore.places.length }} places</span
       >
-      <button class="btn btn--primary btn--sm">
+      <button class="btn btn--primary btn--sm" @click="onDropPin">
         <AppIcon name="plus" :size="14" />
         drop a pin
       </button>
     </AppTopbar>
 
-    <!-- Map placeholder (Mapbox GL mounts here in production) -->
-    <div class="map-panel">
-      <div class="topo map-topo" />
-      <span class="map-mount">mapbox gl · #mapPanel</span>
-      <span class="map-attr">© Mapbox © OpenStreetMap</span>
+    <!-- Map panel: Mapbox GL mounts here when token is present -->
+    <div ref="mapPanelRef" class="map-panel">
+      <template v-if="!mapboxReady">
+        <div class="topo map-topo" />
+        <span class="map-mount">mapbox gl · #mapPanel</span>
+      </template>
+      <span v-if="!mapboxReady" class="map-attr">© Mapbox © OpenStreetMap</span>
     </div>
 
-    <!-- Pins — lat/lng-to-pixel mapping is handled by Mapbox (#15).
-         Until that lands, only places with coordinates render a pin. -->
-    <button
-      v-for="place in pinnedPlaces"
-      :key="place.id"
-      class="pin-abs sm"
-      :class="{ 'is-active': selectedPlace?.id === place.id }"
-      :aria-label="place.name"
-      @click="selectPlace(place)"
-    >
-      <span class="pin-ring" />
-      <AppIcon name="pin" :size="18" class="pin" />
-    </button>
+    <!-- Fallback pins rendered in DOM only when Mapbox is not active.
+         When Mapbox is active, markers are owned by the map. -->
+    <template v-if="!mapboxReady">
+      <button
+        v-for="place in pinnedPlaces"
+        :key="place.id"
+        class="pin-abs sm"
+        :class="{ 'is-active': selectedPlace?.id === place.id }"
+        :aria-label="place.name"
+        @click="selectPlace(place)"
+      >
+        <span class="pin-ring" />
+        <AppIcon name="pin" :size="18" class="pin" />
+      </button>
+    </template>
 
-    <!-- Load error state -->
+    <!-- Places load error -->
     <div v-if="placesStore.error" class="places-error" role="alert">
       {{ placesStore.error }}
+    </div>
+
+    <!-- Map init error (bad token, WebGL unsupported, etc.) -->
+    <div v-if="mapError" class="places-error" role="alert">
+      Map failed to load: {{ mapError }}
+    </div>
+
+    <!-- Drop-pin mode indicator -->
+    <div v-if="isDropPinMode" class="drop-pin-banner" role="status">
+      Click the map to place a pin, then complete the form below.
+      <button class="btn btn--sm" @click="cancelDropPin">Cancel</button>
+    </div>
+
+    <!-- Drop-pin create form -->
+    <div
+      v-if="dropPinCoords"
+      class="drop-pin-form"
+      role="dialog"
+      aria-label="Create place"
+    >
+      <div class="drop-pin-form__title">New place</div>
+      <div class="drop-pin-form__coords">
+        {{ dropPinCoords.latitude.toFixed(4) }},
+        {{ dropPinCoords.longitude.toFixed(4) }}
+      </div>
+      <input
+        v-model="newPlaceName"
+        class="drop-pin-form__input"
+        placeholder="Place name…"
+        aria-label="Place name"
+      />
+      <div class="hstack gap-8">
+        <button
+          class="btn btn--primary btn--sm"
+          :disabled="!newPlaceName.trim() || isCreatingPlace"
+          @click="submitDropPin"
+        >
+          Save
+        </button>
+        <button class="btn btn--sm" @click="dismissDropPinForm">Cancel</button>
+      </div>
+      <div v-if="createPlaceError" class="drop-pin-form__error" role="alert">
+        {{ createPlaceError }}
+      </div>
     </div>
 
     <!-- Places panel -->
@@ -145,8 +193,10 @@
         <AppIcon name="layers" :size="18" />
       </button>
       <div class="zoom">
-        <button aria-label="Zoom in"><AppIcon name="plus" :size="16" /></button>
-        <button aria-label="Zoom out">
+        <button aria-label="Zoom in" @click="onZoomIn">
+          <AppIcon name="plus" :size="16" />
+        </button>
+        <button aria-label="Zoom out" @click="onZoomOut">
           <svg
             class="ico"
             viewBox="0 0 24 24"
@@ -168,19 +218,23 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, onBeforeUnmount, watch } from "vue";
 import { usePlacesStore } from "~/stores/places";
 import type { Place } from "~/stores/places";
+import { useMapbox } from "~/composables/useMapbox";
+import { resolveMapboxStyleLabel } from "~/composables/useMapboxStyles";
+import type { DropPinResult, MapInstance } from "~/composables/useMapbox";
 
 definePageMeta({ layout: "app", middleware: "auth" });
 useHead({ title: "Wanderist — Map" });
 
 const placesStore = usePlacesStore();
+const mapbox = useMapbox();
 
-onMounted(() => {
-  // fetchPlaces sets placesStore.error on failure; the template surfaces it.
-  placesStore.fetchPlaces().catch(() => undefined);
-});
+const mapPanelRef = ref<HTMLElement | null>(null);
+const activeMapInstance = ref<MapInstance | null>(null);
+const mapboxReady = ref(false);
+const isUnmounted = ref(false);
 
 const filters = ["All", "2026", "Journaled", "Wishlist"];
 const mapStyles = [
@@ -191,20 +245,18 @@ const mapStyles = [
   { value: "dark", label: "Dark" },
   { value: "custom", label: "Wanderist violet" },
 ];
-const mapStyleLabels: Record<string, string> = {
-  outdoors: "outdoors-v12",
-  streets: "streets-v12",
-  satellite: "satellite-streets-v12",
-  light: "light-v11",
-  dark: "dark-v11",
-  custom: "wanderist-violet",
-};
 
 const selectedPlace = ref<Place | null>(null);
 const activeFilter = ref("All");
 const search = ref("");
 const mapStyle = ref("outdoors");
 const layersPopOpen = ref(false);
+const isDropPinMode = ref(false);
+const dropPinCoords = ref<DropPinResult | null>(null);
+const newPlaceName = ref("");
+const isCreatingPlace = ref(false);
+const createPlaceError = ref<string | null>(null);
+const mapError = ref<string | null>(null);
 
 const pinnedPlaces = computed(() =>
   placesStore.places.filter(
@@ -214,9 +266,11 @@ const pinnedPlaces = computed(() =>
 
 const filteredPlaces = computed(() => {
   const query = search.value.trim().toLowerCase();
+
   if (!query) {
     return placesStore.places;
   }
+
   return placesStore.places.filter(
     (place) =>
       place.name.toLowerCase().includes(query) ||
@@ -224,22 +278,182 @@ const filteredPlaces = computed(() => {
   );
 });
 
-const mapStyleLegend = computed(
-  () => mapStyleLabels[mapStyle.value] ?? mapStyle.value,
-);
+const mapStyleLegend = computed(() => resolveMapboxStyleLabel(mapStyle.value));
 
-function selectPlace(place: Place) {
+function selectPlace(place: Place): void {
+  const previousId = selectedPlace.value?.id ?? null;
   selectedPlace.value = place;
+
+  if (activeMapInstance.value) {
+    mapbox.setMarkerActive(place.id, previousId);
+  }
 }
 
-function closeDetail() {
+function closeDetail(): void {
+  if (activeMapInstance.value && selectedPlace.value) {
+    mapbox.setMarkerActive(null, selectedPlace.value.id);
+  }
   selectedPlace.value = null;
 }
 
-function setMapStyle(style: string) {
+function setMapStyle(style: string): void {
   mapStyle.value = style;
   layersPopOpen.value = false;
+
+  if (activeMapInstance.value) {
+    mapbox.setStyle(activeMapInstance.value, style);
+  }
 }
+
+function onZoomIn(): void {
+  if (activeMapInstance.value) {
+    mapbox.zoomIn(activeMapInstance.value);
+  }
+}
+
+function onZoomOut(): void {
+  if (activeMapInstance.value) {
+    mapbox.zoomOut(activeMapInstance.value);
+  }
+}
+
+function onDropPin(): void {
+  if (!activeMapInstance.value) {
+    return;
+  }
+
+  isDropPinMode.value = true;
+  dropPinCoords.value = null;
+  newPlaceName.value = "";
+  createPlaceError.value = null;
+
+  mapbox.startDropPin(activeMapInstance.value, (coords) => {
+    isDropPinMode.value = false;
+    dropPinCoords.value = coords;
+  });
+}
+
+function cancelDropPin(): void {
+  isDropPinMode.value = false;
+  mapbox.cancelDropPin();
+}
+
+function dismissDropPinForm(): void {
+  dropPinCoords.value = null;
+  newPlaceName.value = "";
+  createPlaceError.value = null;
+  mapbox.cancelDropPin();
+}
+
+async function submitDropPin(): Promise<void> {
+  if (!dropPinCoords.value || !newPlaceName.value.trim()) {
+    return;
+  }
+
+  isCreatingPlace.value = true;
+  createPlaceError.value = null;
+
+  try {
+    const created = await placesStore.createPlace({
+      name: newPlaceName.value.trim(),
+      latitude: dropPinCoords.value.latitude,
+      longitude: dropPinCoords.value.longitude,
+    });
+
+    dropPinCoords.value = null;
+    newPlaceName.value = "";
+    mapbox.cancelDropPin();
+
+    if (activeMapInstance.value) {
+      await mapbox.syncMarkers(
+        activeMapInstance.value,
+        placesStore.places,
+        selectedPlace.value?.id ?? null,
+        selectPlace,
+      );
+    }
+
+    selectPlace(created);
+  } catch (error) {
+    createPlaceError.value =
+      error instanceof Error ? error.message : "Failed to create place";
+  } finally {
+    isCreatingPlace.value = false;
+  }
+}
+
+async function initializeMap(): Promise<void> {
+  if (!mapPanelRef.value || !mapbox.hasToken()) {
+    return;
+  }
+
+  const mapInstance = await mapbox.initMap(
+    mapPanelRef.value,
+    mapStyle.value,
+    (error) => {
+      mapError.value = error.message;
+    },
+  );
+
+  if (!mapInstance) {
+    return;
+  }
+
+  // Guard against the component unmounting while initMap was awaiting
+  if (isUnmounted.value) {
+    mapbox.destroyMap(mapInstance);
+    return;
+  }
+
+  activeMapInstance.value = mapInstance;
+
+  mapInstance.on("load", async () => {
+    if (isUnmounted.value) {
+      return;
+    }
+
+    mapboxReady.value = true;
+
+    await mapbox.syncMarkers(
+      mapInstance,
+      placesStore.places,
+      selectedPlace.value?.id ?? null,
+      selectPlace,
+    );
+  });
+}
+
+// Shallow watch is sufficient: usePlacesStore always reassigns places.value
+// (spread/map/filter) rather than mutating the array in place.
+watch(
+  () => placesStore.places,
+  async (places) => {
+    if (!activeMapInstance.value || !mapboxReady.value) {
+      return;
+    }
+
+    await mapbox.syncMarkers(
+      activeMapInstance.value,
+      places,
+      selectedPlace.value?.id ?? null,
+      selectPlace,
+    );
+  },
+);
+
+onMounted(async () => {
+  await placesStore.fetchPlaces().catch(() => undefined);
+  await initializeMap();
+});
+
+onBeforeUnmount(() => {
+  isUnmounted.value = true;
+
+  if (activeMapInstance.value) {
+    mapbox.destroyMap(activeMapInstance.value);
+    activeMapInstance.value = null;
+  }
+});
 </script>
 
 <style scoped>
@@ -751,6 +965,81 @@ function setMapStyle(style: string) {
   border: 1px solid var(--line);
   padding: 6px 10px;
   border-radius: 99px;
+}
+
+.drop-pin-banner {
+  position: absolute;
+  top: 72px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  background: var(--surface);
+  border: 1px solid var(--accent-line);
+  border-radius: var(--radius);
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--ink);
+  box-shadow: var(--shadow-lg);
+}
+
+.drop-pin-form {
+  position: absolute;
+  top: 72px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  width: 280px;
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.drop-pin-form__title {
+  font-size: 14px;
+  font-weight: 600;
+}
+.drop-pin-form__coords {
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.drop-pin-form__input {
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--ink);
+  outline: none;
+  width: 100%;
+}
+.drop-pin-form__input:focus {
+  border-color: var(--accent-line);
+}
+.drop-pin-form__error {
+  font-size: 12px;
+  color: var(--error, #c0392b);
+}
+
+.places-error {
+  position: absolute;
+  top: 80px;
+  right: 16px;
+  z-index: 20;
+  background: var(--surface);
+  border: 1px solid var(--error, #c0392b);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--error, #c0392b);
+  box-shadow: var(--shadow);
 }
 
 @media (max-width: 760px) {
