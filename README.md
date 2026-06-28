@@ -57,6 +57,17 @@ npm run db:studio
 
 Authentication is handled by [Clerk](https://clerk.com) via the `@clerk/nuxt` module. Server middleware at `server/middleware/auth.ts` verifies the session on every request and makes the user available at `event.context.userId` in API route handlers.
 
+### Clerk webhook setup
+
+Clerk webhooks keep the `users` table in sync with Clerk's user directory. The webhook handler lives at `server/api/webhooks/clerk.post.ts` and listens for `user.created`, `user.updated`, and `user.deleted` events.
+
+To configure the webhook in the Clerk Dashboard:
+
+1. Go to **Clerk Dashboard → Webhooks → Add Endpoint**.
+2. Set the endpoint URL to `https://<your-domain>/api/webhooks/clerk`.
+3. Subscribe to the `user.created`, `user.updated`, and `user.deleted` events.
+4. Copy the **Signing Secret** (starts with `whsec_`) and set it as `NUXT_CLERK_WEBHOOK_SECRET` in your environment.
+
 ## Development
 
 Start the dev server at `http://localhost:3000`:
@@ -151,6 +162,7 @@ Required repository secrets (Settings → Secrets → Actions):
 - `E2E_DATABASE_URL`
 - `NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
 - `NUXT_CLERK_SECRET_KEY`
+- `NUXT_CLERK_WEBHOOK_SECRET`
 - `SENTRY_AUTH_TOKEN`
 - `SENTRY_DSN`
 - `SENTRY_ORG`

@@ -1,33 +1,47 @@
-import { createClerkClient } from "@clerk/backend";
+import type { H3Event } from "h3";
+import { getClerkClient } from "../utils/clerk";
 
-let cachedClerkClient: ReturnType<typeof createClerkClient> | null = null;
+const API_PATH_PREFIX = "/api/";
+const WEBHOOK_PATH_PREFIX = "/api/webhooks/";
 
-function getClerkClient() {
-  if (cachedClerkClient) return cachedClerkClient;
-  const secretKey = process.env.NUXT_CLERK_SECRET_KEY;
-  if (!secretKey) {
-    throw new Error("NUXT_CLERK_SECRET_KEY is not set");
-  }
-  cachedClerkClient = createClerkClient({ secretKey });
-  return cachedClerkClient;
+function isApiPath(path: string): boolean {
+  return path.startsWith(API_PATH_PREFIX);
 }
 
-export default defineEventHandler(async (event) => {
-  if (!event.path.startsWith("/api/")) return;
+function isWebhookPath(path: string): boolean {
+  return path.startsWith(WEBHOOK_PATH_PREFIX);
+}
 
-  const clerkClient = getClerkClient();
-
+function extractBearerToken(event: H3Event): string | null {
   const token = getHeader(event, "authorization")
     ?.replace(/^Bearer\s+/i, "")
     .trim();
+  return token ?? null;
+}
+
+async function verifyBearerToken(event: H3Event): Promise<string> {
+  const token = extractBearerToken(event);
   if (!token) {
     throw createError({ statusCode: 401, statusMessage: "Unauthorized" });
   }
-
+  const clerkClient = getClerkClient();
   try {
     const { sub } = await clerkClient.verifyToken(token);
-    event.context.userId = sub;
+    return sub;
   } catch {
     throw createError({ statusCode: 401, statusMessage: "Unauthorized" });
   }
+}
+
+export default defineEventHandler(async (event) => {
+  if (!isApiPath(event.path)) {
+    return;
+  }
+
+  // Webhook routes authenticate via Svix signature, not a bearer token.
+  if (isWebhookPath(event.path)) {
+    return;
+  }
+
+  event.context.userId = await verifyBearerToken(event);
 });
