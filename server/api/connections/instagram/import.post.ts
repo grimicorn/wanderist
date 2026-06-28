@@ -78,7 +78,7 @@ async function fetchAlreadyImportedIds(
 }
 
 async function resolveOrCreatePlace(
-  db: DbClient,
+  transactionDb: DbClient,
   userId: string,
   item: InstagramMediaItem,
 ): Promise<string> {
@@ -86,7 +86,7 @@ async function resolveOrCreatePlace(
   const latitude = item.location!.latitude;
   const longitude = item.location!.longitude;
 
-  const existingRows = await db
+  const existingRows = await transactionDb
     .select({ id: places.id })
     .from(places)
     .where(
@@ -103,7 +103,7 @@ async function resolveOrCreatePlace(
     return existingRows[0].id;
   }
 
-  const [placeRow] = await db
+  const [placeRow] = await transactionDb
     .insert(places)
     .values({
       id: crypto.randomUUID(),
@@ -132,19 +132,20 @@ async function importSinglePhoto(
   const mediaId = crypto.randomUUID();
   const storageKey = `${userId}/${mediaId}`;
 
-  // Commit DB rows first; then write the blob. This ordering ensures a failed
-  // transaction (e.g. a race on the unique index) never leaves an orphaned blob
-  // in object storage. The tradeoff is that a failed blob write leaves a media
-  // row with a broken URL, but that state is recoverable (re-import will retry
-  // since the source_id unique row exists, skipping the entry and not making
-  // things worse).
+  // Commit DB rows first; then write the blob. This ordering ensures a race on
+  // the (user_id, source, source_id) unique index rolls back cleanly without
+  // leaving an orphaned blob. The tradeoff: if putMediaBlob fails after the
+  // transaction commits, the media row exists but its URL is broken. In that
+  // case the item will be skipped on the next import run (source_id is already
+  // in the table), so the broken-URL entry requires manual cleanup. Accepted
+  // as the less-common failure mode vs. blob orphans on concurrent imports.
   await database.transaction(async (transaction) => {
-    const db = transaction as unknown as DbClient;
+    const transactionDb = transaction as unknown as DbClient;
 
-    const placeId = await resolveOrCreatePlace(db, userId, item);
+    const placeId = await resolveOrCreatePlace(transactionDb, userId, item);
 
     const entryId = crypto.randomUUID();
-    const [entryRow] = await db
+    const [entryRow] = await transactionDb
       .insert(entries)
       .values({
         id: entryId,
@@ -161,7 +162,7 @@ async function importSinglePhoto(
       throw new Error(`Failed to insert entry for Instagram item ${item.id}`);
     }
 
-    const [mediaRow] = await db
+    const [mediaRow] = await transactionDb
       .insert(media)
       .values({
         id: mediaId,
@@ -179,7 +180,7 @@ async function importSinglePhoto(
       );
     }
 
-    await db.insert(entryPhotos).values({
+    await transactionDb.insert(entryPhotos).values({
       id: crypto.randomUUID(),
       entryId: entryRow.id,
       mediaId: mediaRow.id,
