@@ -52,8 +52,13 @@ const {
   const mockDbDeleteWhere = vi.fn().mockResolvedValue(undefined);
   const mockDbDelete = vi.fn(() => ({ where: mockDbDeleteWhere }));
 
+  // mockDbSelectWhere is awaitable (for the dedupe query that has no .limit())
+  // and also exposes .limit() for the connection-lookup query.
   const mockDbSelectLimit = vi.fn().mockResolvedValue([]);
-  const mockDbSelectWhere = vi.fn(() => ({ limit: mockDbSelectLimit }));
+  const mockDbSelectWhere = vi.fn().mockImplementation(() => {
+    const thenable = Promise.resolve([] as unknown[]);
+    return Object.assign(thenable, { limit: mockDbSelectLimit });
+  });
   const mockDbSelectFrom = vi.fn(() => ({ where: mockDbSelectWhere }));
   const mockDbSelect = vi.fn(() => ({ from: mockDbSelectFrom }));
 
@@ -443,10 +448,40 @@ describe("DELETE /api/connections/instagram", () => {
 // ---------------------------------------------------------------------------
 
 describe("POST /api/connections/instagram/import", () => {
+  function makeTransactionDb(): object {
+    return {
+      insert: vi.fn(() => ({
+        values: vi.fn(() => ({
+          returning: vi.fn().mockResolvedValue([{ id: "new-id" }]),
+        })),
+      })),
+    };
+  }
+
+  function makeDbWithTransaction(): object {
+    const mockTransaction = vi
+      .fn()
+      .mockImplementation(async (callback: (db: object) => Promise<unknown>) =>
+        callback(makeTransactionDb()),
+      );
+    return {
+      insert: mockDbInsert,
+      delete: mockDbDelete,
+      select: mockDbSelect,
+      transaction: mockTransaction,
+    };
+  }
+
   beforeEach(() => {
     vi.clearAllMocks();
     mockEnsureUser.mockResolvedValue("user-1");
+    // Connection lookup uses .where().limit() — return the connected account row.
     mockDbSelectLimit.mockResolvedValue([{ accessToken: "encrypted-token" }]);
+    // Dedupe query uses .where() directly (no .limit) — default to no already-imported IDs.
+    mockDbSelectWhere.mockImplementation(() => {
+      const thenable = Promise.resolve([] as unknown[]);
+      return Object.assign(thenable, { limit: mockDbSelectLimit });
+    });
     mockDecryptToken.mockReturnValue("long-token");
     mockFetchInstagramMedia.mockResolvedValue({ data: [] });
     mockFilterGeotaggedMedia.mockReturnValue([]);
@@ -481,7 +516,7 @@ describe("POST /api/connections/instagram/import", () => {
     expect(mockFetchInstagramMedia).toHaveBeenCalledWith("long-token");
   });
 
-  it("calls fetchInstagramImage for each geotagged item", async () => {
+  it("calls fetchInstagramImage for each new geotagged item", async () => {
     const geotaggedItem = {
       id: "ig-media-1",
       media_type: "IMAGE",
@@ -492,34 +527,81 @@ describe("POST /api/connections/instagram/import", () => {
     };
     mockFilterGeotaggedMedia.mockReturnValue([geotaggedItem]);
     mockFetchInstagramImage.mockResolvedValue(Buffer.from("img"));
-    mockDbInsertOnConflict.mockResolvedValue([{ id: "row-id" }]);
-    mockDbInsertValues.mockReturnValue({
-      onConflictDoUpdate: mockDbInsertOnConflict,
-      returning: vi.fn().mockResolvedValue([{ id: "row-id" }]),
-    });
-
-    const mockTransaction = vi.fn().mockImplementation(async (callback) => {
-      const transactionDb = {
-        insert: vi.fn(() => ({
-          values: vi.fn(() => ({
-            returning: vi.fn().mockResolvedValue([{ id: "new-id" }]),
-          })),
-        })),
-      };
-      return callback(transactionDb);
-    });
-    mockGetDb.mockReturnValue({
-      insert: mockDbInsert,
-      delete: mockDbDelete,
-      select: mockDbSelect,
-      transaction: mockTransaction,
-    });
+    mockGetDb.mockReturnValue(makeDbWithTransaction());
 
     await call(importHandler, makeEvent());
 
     expect(mockFetchInstagramImage).toHaveBeenCalledWith(
       "https://cdn.instagram.com/photo.jpg",
     );
+  });
+
+  it("skips items already imported and increments skipped count", async () => {
+    const alreadyImportedItem = {
+      id: "ig-media-already",
+      media_type: "IMAGE",
+      media_url: "https://cdn.instagram.com/old.jpg",
+      timestamp: "2024-01-01T00:00:00Z",
+      permalink: "https://www.instagram.com/p/old/",
+      location: { name: "Rome", latitude: 41.9028, longitude: 12.4964 },
+    };
+    const newItem = {
+      id: "ig-media-new",
+      media_type: "IMAGE",
+      media_url: "https://cdn.instagram.com/new.jpg",
+      timestamp: "2024-06-01T00:00:00Z",
+      permalink: "https://www.instagram.com/p/new/",
+      location: { name: "Madrid", latitude: 40.4168, longitude: -3.7038 },
+    };
+
+    mockFilterGeotaggedMedia.mockReturnValue([alreadyImportedItem, newItem]);
+    mockFetchInstagramImage.mockResolvedValue(Buffer.from("img"));
+
+    // Dedupe query returns the already-imported source_id.
+    mockDbSelectWhere.mockImplementationOnce(() => {
+      // First call: connection lookup — needs .limit()
+      const thenable = Promise.resolve([] as unknown[]);
+      return Object.assign(thenable, { limit: mockDbSelectLimit });
+    });
+    mockDbSelectWhere.mockImplementationOnce(() => {
+      // Second call: dedupe query — awaited directly, returns existing sourceId.
+      return Promise.resolve([{ sourceId: "ig-media-already" }]);
+    });
+
+    mockGetDb.mockReturnValue(makeDbWithTransaction());
+
+    const result = await call(importHandler, makeEvent());
+
+    expect(result).toMatchObject({ imported: 1, skipped: 1, errors: [] });
+    expect(mockFetchInstagramImage).toHaveBeenCalledTimes(1);
+    expect(mockFetchInstagramImage).toHaveBeenCalledWith(
+      "https://cdn.instagram.com/new.jpg",
+    );
+  });
+
+  it("re-import of all already-imported items returns 0 imported", async () => {
+    const item = {
+      id: "ig-media-1",
+      media_type: "IMAGE",
+      media_url: "https://cdn.instagram.com/photo.jpg",
+      timestamp: "2024-01-01T00:00:00Z",
+      permalink: "https://www.instagram.com/p/abc/",
+      location: { name: "Paris", latitude: 48.8566, longitude: 2.3522 },
+    };
+    mockFilterGeotaggedMedia.mockReturnValue([item]);
+
+    mockDbSelectWhere.mockImplementationOnce(() => {
+      const thenable = Promise.resolve([] as unknown[]);
+      return Object.assign(thenable, { limit: mockDbSelectLimit });
+    });
+    mockDbSelectWhere.mockImplementationOnce(() =>
+      Promise.resolve([{ sourceId: "ig-media-1" }]),
+    );
+
+    const result = await call(importHandler, makeEvent());
+
+    expect(result).toEqual({ imported: 0, skipped: 1, errors: [] });
+    expect(mockFetchInstagramImage).not.toHaveBeenCalled();
   });
 
   it("throws 401 when the user is not authenticated", async () => {
@@ -532,10 +614,24 @@ describe("POST /api/connections/instagram/import", () => {
     });
   });
 
-  it("scopes the connection lookup to the authenticated user", async () => {
+  it("scopes the connection lookup and dedupe query to the authenticated user", async () => {
+    // Provide a geotagged item so the dedupe query runs (it is skipped when
+    // the media list is empty).
+    const item = {
+      id: "ig-media-scope-test",
+      media_type: "IMAGE",
+      media_url: "https://cdn.instagram.com/photo.jpg",
+      timestamp: "2024-01-01T00:00:00Z",
+      permalink: "https://www.instagram.com/p/abc/",
+      location: { name: "Paris", latitude: 48.8566, longitude: 2.3522 },
+    };
+    mockFilterGeotaggedMedia.mockReturnValue([item]);
+    mockFetchInstagramImage.mockResolvedValue(Buffer.from("img"));
+    mockGetDb.mockReturnValue(makeDbWithTransaction());
+
     await call(importHandler, makeEvent());
 
-    // The select chain passed through where() — user scoping was applied.
-    expect(mockDbSelectWhere).toHaveBeenCalledTimes(1);
+    // Both select chains pass through where() — ownership scoping was applied twice.
+    expect(mockDbSelectWhere).toHaveBeenCalledTimes(2);
   });
 });

@@ -1,3 +1,4 @@
+// fallow-ignore-file code-duplication
 import { sql } from "drizzle-orm";
 import {
   boolean,
@@ -101,6 +102,10 @@ export const users = pgTable("users", {
 // Stores provider-agnostic references (url/storage key) to uploaded files.
 // ---------------------------------------------------------------------------
 
+export const MEDIA_SOURCE = {
+  INSTAGRAM: "instagram",
+} as const;
+
 export const media = pgTable(
   "media",
   {
@@ -114,9 +119,22 @@ export const media = pgTable(
     width: integer("width"),
     height: integer("height"),
     contentType: text("content_type"),
+    // Import idempotency: records which external service produced this media row
+    // and the provider-assigned ID for it. Nullable so pre-existing rows are
+    // unaffected. A unique index on (user_id, source, source_id) prevents the
+    // same external item from being imported twice for the same user.
+    source: text("source"),
+    sourceId: text("source_id"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
-  (table) => [index("media_user_id_idx").on(table.userId)],
+  (table) => [
+    index("media_user_id_idx").on(table.userId),
+    unique("media_user_source_source_id_unique").on(
+      table.userId,
+      table.source,
+      table.sourceId,
+    ),
+  ],
 );
 
 // ---------------------------------------------------------------------------

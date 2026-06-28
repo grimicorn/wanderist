@@ -5,13 +5,13 @@
  * the Instagram CDN, stores them via the media-storage-and-uploads layer, and
  * creates journal entries linked to the matching place for each photo.
  *
- * Idempotent: items whose `externalId` already exists in `media` for this user
- * are skipped rather than duplicated.
+ * Idempotent: items whose Instagram media ID already exists in `media.source_id`
+ * for this user are skipped rather than duplicated.
  *
  * Returns a summary: { imported: number, skipped: number, errors: string[] }
  */
 
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { ensureUser } from "../../../utils/auth";
 import { getDb } from "../../../db/index";
 import {
@@ -21,6 +21,7 @@ import {
   places,
   entryPhotos,
   CONNECTED_ACCOUNT_PROVIDER,
+  MEDIA_SOURCE,
   VISIBILITY,
 } from "../../../db/schema";
 import { putMediaBlob } from "../../../utils/mediaStore";
@@ -50,6 +51,27 @@ function detectContentType(mediaUrl: string): string {
   return "image/jpeg";
 }
 
+async function fetchAlreadyImportedIds(
+  userId: string,
+  instagramIds: string[],
+): Promise<Set<string>> {
+  if (instagramIds.length === 0) {
+    return new Set();
+  }
+  const database = getDb();
+  const rows = await database
+    .select({ sourceId: media.sourceId })
+    .from(media)
+    .where(
+      and(
+        eq(media.userId, userId),
+        eq(media.source, MEDIA_SOURCE.INSTAGRAM),
+        inArray(media.sourceId, instagramIds),
+      ),
+    );
+  return new Set(rows.map((row) => row.sourceId).filter(Boolean) as string[]);
+}
+
 async function importSinglePhoto(
   userId: string,
   item: InstagramMediaItem,
@@ -70,10 +92,8 @@ async function importSinglePhoto(
         userId,
         url: storageKey,
         contentType,
-        // Store the Instagram media ID for idempotency checks.
-        // The `media` table's `url` column holds the storage key;
-        // we use the contentType field as the discriminator.
-        // Instagram IDs are stored in the external_id convention below.
+        source: MEDIA_SOURCE.INSTAGRAM,
+        sourceId: item.id,
       })
       .returning({ id: media.id });
 
@@ -155,27 +175,22 @@ export default defineEventHandler(async (event) => {
   const mediaResponse = await fetchInstagramMedia(accessToken);
   const geotagged = filterGeotaggedMedia(mediaResponse.data);
 
-  // Idempotency: find which Instagram media IDs we already have stored.
-  // We encode the Instagram item ID in the media URL field as
-  // `instagram:<item.id>:<userId>/<mediaId>` — but since we can't change
-  // the existing schema structure here, we skip based on media rows whose
-  // `url` field matches the `userId/<uuid>` pattern AND the corresponding
-  // entry's externalId. Instead, we use a simpler approach: check which
-  // item IDs have already been imported by querying entries whose body
-  // contains the item ID as a source marker.
-  //
-  // Practical idempotency: entries created from Instagram imports have their
-  // body set to the caption. We store the item ID in the entry title as
-  // a prefix check would be fragile. The cleanest solution for now is to
-  // accept that re-running may duplicate if the caption is ambiguous, and
-  // document that a proper `source_id` column on entries/media is a future
-  // schema migration. The per-item try/catch surfaces any DB unique violations.
+  const instagramIds = geotagged.map((item) => item.id);
+  const alreadyImportedIds = await fetchAlreadyImportedIds(
+    userId,
+    instagramIds,
+  );
 
   let imported = 0;
   let skipped = 0;
   const errors: string[] = [];
 
   for (const item of geotagged) {
+    if (alreadyImportedIds.has(item.id)) {
+      skipped += 1;
+      continue;
+    }
+
     try {
       await importSinglePhoto(userId, item);
       imported += 1;
