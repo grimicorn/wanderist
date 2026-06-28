@@ -11,7 +11,7 @@
           {{ tab }}
         </button>
       </div>
-      <button class="btn btn--primary btn--sm">
+      <button class="btn btn--primary btn--sm" @click="openNewEntry?.()">
         <AppIcon name="plus" :size="14" />
         new entry
       </button>
@@ -20,17 +20,37 @@
     <div class="jcols">
       <!-- Feed -->
       <div class="feed">
-        <!-- Compose bar -->
-        <div class="compose">
+        <!-- Compose bar — clicking anywhere opens the new-entry drawer -->
+        <div
+          class="compose"
+          role="button"
+          tabindex="0"
+          aria-label="Write a new entry"
+          @click="openNewEntry?.()"
+          @keydown.enter="openNewEntry?.()"
+          @keydown.space.prevent="openNewEntry?.()"
+        >
           <span class="compose__av">
             <AppIcon name="user" :size="18" />
           </span>
-          <input placeholder="Write an entry, or drop today's photos…" />
+          <input
+            readonly
+            placeholder="Write an entry, or drop today's photos…"
+            @focus="openNewEntry?.()"
+          />
           <div class="acts">
-            <button class="icon-btn" aria-label="Add photo">
+            <button
+              class="icon-btn"
+              aria-label="Add photo"
+              @click.stop="openNewEntry?.()"
+            >
               <AppIcon name="image" :size="18" />
             </button>
-            <button class="icon-btn" aria-label="Add location">
+            <button
+              class="icon-btn"
+              aria-label="Add location"
+              @click.stop="openNewEntry?.()"
+            >
               <AppIcon name="pin" :size="18" />
             </button>
           </div>
@@ -278,6 +298,11 @@
 
 <script setup lang="ts">
 import { ref } from "vue";
+
+const openNewEntry = inject<(() => void) | undefined>(
+  "openNewEntry",
+  undefined,
+);
 
 definePageMeta({ layout: "app", middleware: "auth" });
 useHead({ title: "Wanderist — Journal" });
