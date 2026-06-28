@@ -20,6 +20,12 @@ Object.assign(globalThis, {
   useNuxtApp: vi.fn(() => ({})),
   useRuntimeConfig: vi.fn(() => ({ public: { mapboxToken: "" } })),
   useScrollReveal: vi.fn(),
+  useAsyncData: vi.fn(() => ({
+    data: vue.ref(null),
+    pending: vue.ref(false),
+    error: vue.ref(null),
+    refresh: vi.fn(),
+  })),
   // Clerk composables
   useClerkAuth: vi.fn(() => ({
     isSignedIn: vue.ref(false),

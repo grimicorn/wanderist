@@ -160,9 +160,11 @@ describe("Trips page (/trips)", () => {
     expect(wrapper.find(".tag--ongoing").exists()).toBe(true);
   });
 
-  it("shows progress bar for active trip", () => {
+  it("shows the featured ongoing trip by name", () => {
     const wrapper = mount(TripsPage, buildGlobalConfig(pinia));
-    expect(wrapper.find(".progress").exists()).toBe(true);
+    const feature = wrapper.find(".feature");
+    expect(feature.exists()).toBe(true);
+    expect(feature.html()).toContain("Iceland, the ring road");
   });
 
   it("shows trip names from the store", () => {
