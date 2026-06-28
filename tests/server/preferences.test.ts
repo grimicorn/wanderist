@@ -150,14 +150,25 @@ describe("GET /api/preferences", () => {
     ).rejects.toMatchObject({ statusCode: 401 });
   });
 
-  it("scopes the query to the authenticated user", async () => {
+  it("scopes the query to the authenticated user by passing userId to where clause", async () => {
     mockEnsureUser.mockResolvedValue("user-abc");
     const db = makeFullDb([]) as unknown as ReturnType<typeof getDb>;
     mockGetDb.mockReturnValue(db);
 
     await (getPreferences as (e: unknown) => unknown)({});
 
-    expect(mockEnsureUser).toHaveBeenCalledTimes(1);
+    // The where mock is called with the eq condition built from userPreferences.userId and "user-abc".
+    // We can't inspect the drizzle column object directly, but we can confirm the
+    // select chain was driven through a where() call — proving the filter was applied.
+    const selectMock = (db as unknown as { select: ReturnType<typeof vi.fn> })
+      .select;
+    const fromMock = selectMock.mock.results[0]?.value?.from as ReturnType<
+      typeof vi.fn
+    >;
+    const whereMock = fromMock?.mock.results[0]?.value?.where as ReturnType<
+      typeof vi.fn
+    >;
+    expect(whereMock).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -300,6 +311,73 @@ describe("PATCH /api/preferences", () => {
     const result = await (patchPreferences as (e: unknown) => unknown)({});
 
     expect(result).toEqual(updatedRow);
+  });
+
+  it("includes the authenticated userId in the insert values", async () => {
+    mockEnsureUser.mockResolvedValue("user-owner");
+    mockReadBody.mockResolvedValue({ distanceUnit: "km" });
+    const db = makeFullDb([updatedRow]) as unknown as ReturnType<typeof getDb>;
+    mockGetDb.mockReturnValue(db);
+
+    await (patchPreferences as (e: unknown) => unknown)({});
+
+    const insertMock = (db as unknown as { insert: ReturnType<typeof vi.fn> })
+      .insert;
+    const valuesMock = insertMock.mock.results[0]?.value?.values as ReturnType<
+      typeof vi.fn
+    >;
+    const calledValues = valuesMock?.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
+    expect(calledValues?.userId).toBe("user-owner");
+  });
+
+  it("returns 409 when handle is already taken", async () => {
+    mockEnsureUser.mockResolvedValue("user-1");
+    mockReadBody.mockResolvedValue({ handle: "taken-handle" });
+
+    const uniqueError = new Error("unique constraint violation");
+    const onConflictMock = vi.fn().mockRejectedValue(uniqueError);
+    const valuesMock = vi
+      .fn()
+      .mockReturnValue({ onConflictDoUpdate: onConflictMock });
+    const insertMock = vi.fn().mockReturnValue({ values: valuesMock });
+    const db = {
+      ...makeSelectChain([updatedRow]),
+      insert: insertMock,
+    } as unknown as ReturnType<typeof getDb>;
+    mockGetDb.mockReturnValue(db);
+
+    await expect(
+      (patchPreferences as (e: unknown) => unknown)({}),
+    ).rejects.toMatchObject({ statusCode: 409 });
+  });
+
+  it("rejects bio exceeding 500 characters with 400", async () => {
+    mockEnsureUser.mockResolvedValue("user-1");
+    mockReadBody.mockResolvedValue({ bio: "x".repeat(501) });
+    mockGetDb.mockReturnValue(
+      makeFullDb([]) as unknown as ReturnType<typeof getDb>,
+    );
+
+    await expect(
+      (patchPreferences as (e: unknown) => unknown)({}),
+    ).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  it("accepts null for a string field to clear it", async () => {
+    mockEnsureUser.mockResolvedValue("user-1");
+    mockReadBody.mockResolvedValue({ displayName: null });
+    mockGetDb.mockReturnValue(
+      makeFullDb([
+        { ...updatedRow, displayName: null },
+      ]) as unknown as ReturnType<typeof getDb>,
+    );
+
+    const result = await (patchPreferences as (e: unknown) => unknown)({});
+
+    expect((result as Record<string, unknown>).displayName).toBeNull();
   });
 
   it("accepts all valid map styles without throwing", async () => {

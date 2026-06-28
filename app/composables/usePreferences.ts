@@ -80,14 +80,15 @@ export function usePreferences() {
 }
 
 function extractErrorMessage(error: unknown): string {
-  if (error && typeof error === "object") {
-    const errorObj = error as Record<string, unknown>;
-    if (typeof errorObj.statusMessage === "string") {
-      return errorObj.statusMessage;
-    }
-    if (typeof errorObj.message === "string") {
-      return errorObj.message;
-    }
+  if (!error || typeof error !== "object") {
+    return "An unexpected error occurred";
+  }
+  const errorObj = error as Record<string, unknown>;
+  if (typeof errorObj.statusMessage === "string") {
+    return errorObj.statusMessage;
+  }
+  if (typeof errorObj.message === "string") {
+    return errorObj.message;
   }
   return "An unexpected error occurred";
 }

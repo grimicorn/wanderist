@@ -414,9 +414,18 @@ function populateEmailFromClerk(): void {
   profile.email = primaryEmail?.emailAddress ?? "";
 }
 
+// Populate once from whatever preferences are in state at mount time, then
+// fetch the real values. Once we have real server data, populate again and
+// lock the watch so later preference syncs (e.g. from other tabs) do not
+// reset fields the user is actively editing.
+const hasLoadedFromServer = ref(false);
+
 watch(
   preferences,
   () => {
+    if (hasLoadedFromServer.value) {
+      return;
+    }
     populateFromPreferences();
   },
   { immediate: true },
@@ -432,6 +441,10 @@ watch(
 
 onMounted(async () => {
   await fetchPreferences();
+  // fetchPreferences() updates preferences.value; the watch above fires and
+  // populates the form. Mark as loaded so subsequent preference changes do
+  // not overwrite the user's in-progress edits.
+  hasLoadedFromServer.value = true;
 });
 
 const showPasswordFields = ref(false);
@@ -441,12 +454,16 @@ const deleteConfirm = ref("");
 const activeSection = ref("profile");
 const sectionsRef = ref<HTMLElement | null>(null);
 
+function nullableString(value: string): string | null {
+  return value.trim() === "" ? null : value;
+}
+
 async function saveChanges(): Promise<void> {
   const succeeded = await savePreferences({
-    displayName: profile.name || undefined,
-    handle: profile.handle || undefined,
-    homeBase: profile.homeBase || undefined,
-    bio: profile.bio || undefined,
+    displayName: nullableString(profile.name),
+    handle: nullableString(profile.handle),
+    homeBase: nullableString(profile.homeBase),
+    bio: nullableString(profile.bio),
     publicProfile: privacy.publicProfile,
     preciseLocation: privacy.preciseLocation,
     showOnExplore: privacy.showOnExplore,
