@@ -1,14 +1,10 @@
 import { eq } from "drizzle-orm";
-import { assertOwnership } from "../../utils/db-helpers";
+import { assertOwnership, requireRouterParam } from "../../utils/db-helpers";
 import { getDb } from "../../db/index";
 import { places } from "../../db/schema";
 
 export default defineEventHandler(async (event) => {
-  const id = getRouterParam(event, "id");
-
-  if (!id) {
-    throw createError({ statusCode: 400, statusMessage: "id is required" });
-  }
+  const id = requireRouterParam(event, "id");
 
   await assertOwnership(event, places, places.id, places.userId, id);
 

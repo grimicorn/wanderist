@@ -174,9 +174,8 @@ describe("Map page (/map)", () => {
   it("shows the legend with current style name and pin count from store", async () => {
     const wrapper = await mountWithPlaces();
     expect(wrapper.find(".legend").text()).toContain("outdoors-v12");
-    expect(wrapper.find(".legend").text()).toContain(
-      `${SAMPLE_PLACES.length} pins`,
-    );
+    // Only 2 of the 3 sample places have lat/lng (Lisbon has null coords).
+    expect(wrapper.find(".legend").text()).toContain("2 pins");
   });
 
   it("filters place list when search is typed", async () => {

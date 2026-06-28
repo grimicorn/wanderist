@@ -12,8 +12,11 @@ export default defineEventHandler(async (event) => {
   const filters: SQL[] = [eq(places.userId, userId)];
 
   const categoryFilter = query.category;
-  if (typeof categoryFilter === "string" && categoryFilter.trim() !== "") {
-    filters.push(eq(places.category, categoryFilter));
+  if (typeof categoryFilter === "string") {
+    const categoryTrimmed = categoryFilter.trim();
+    if (categoryTrimmed !== "") {
+      filters.push(eq(places.category, categoryTrimmed));
+    }
   }
 
   const rows = await database

@@ -4,7 +4,8 @@ import { places } from "../../db/schema";
 import {
   requireString,
   optionalString,
-  optionalNumber,
+  optionalLatitude,
+  optionalLongitude,
 } from "../../utils/db-helpers";
 
 function generateId(): string {
@@ -22,8 +23,8 @@ export default defineEventHandler(async (event) => {
   const subtitle = optionalString(body?.subtitle, "subtitle");
   const country = optionalString(body?.country, "country");
   const category = optionalString(body?.category, "category");
-  const latitude = optionalNumber(body?.latitude, "latitude");
-  const longitude = optionalNumber(body?.longitude, "longitude");
+  const latitude = optionalLatitude(body?.latitude);
+  const longitude = optionalLongitude(body?.longitude);
 
   const id = generateId();
 

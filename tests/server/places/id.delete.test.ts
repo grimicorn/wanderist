@@ -3,14 +3,12 @@ import { stubNitroGlobals } from "../test-utils";
 
 stubNitroGlobals();
 
-const mockGetRouterParam = vi.fn();
-vi.stubGlobal("getRouterParam", mockGetRouterParam);
-
 vi.mock("../../../server/utils/auth", () => ({
   requireUser: vi.fn(),
 }));
 
 vi.mock("../../../server/utils/db-helpers", () => ({
+  requireRouterParam: vi.fn(),
   assertOwnership: vi.fn(),
 }));
 
@@ -23,9 +21,13 @@ vi.mock("drizzle-orm", async (importOriginal) => {
   return { ...original, eq: vi.fn(original.eq) };
 });
 
-import { assertOwnership } from "../../../server/utils/db-helpers";
+import {
+  requireRouterParam,
+  assertOwnership,
+} from "../../../server/utils/db-helpers";
 import { getDb } from "../../../server/db/index";
 
+const mockRequireRouterParam = vi.mocked(requireRouterParam);
 const mockAssertOwnership = vi.mocked(assertOwnership);
 const mockGetDb = vi.mocked(getDb);
 
@@ -43,7 +45,7 @@ describe("DELETE /api/places/:id", () => {
   });
 
   it("deletes the place and returns success", async () => {
-    mockGetRouterParam.mockReturnValue("place-1");
+    mockRequireRouterParam.mockReturnValue("place-1");
     mockAssertOwnership.mockResolvedValue(undefined);
     const mockDb = makeDbForDelete();
     mockGetDb.mockReturnValue(mockDb as unknown as ReturnType<typeof getDb>);
@@ -56,7 +58,13 @@ describe("DELETE /api/places/:id", () => {
   });
 
   it("throws 400 when id param is missing", async () => {
-    mockGetRouterParam.mockReturnValue(undefined);
+    const missingError = createError({
+      statusCode: 400,
+      statusMessage: "id is required",
+    });
+    mockRequireRouterParam.mockImplementation(() => {
+      throw missingError;
+    });
 
     const defaultHandler = "default" in handler ? handler.default : handler;
 
@@ -66,7 +74,7 @@ describe("DELETE /api/places/:id", () => {
   });
 
   it("throws 404 when place is not owned", async () => {
-    mockGetRouterParam.mockReturnValue("place-1");
+    mockRequireRouterParam.mockReturnValue("place-1");
     const notFoundError = createError({
       statusCode: 404,
       statusMessage: "Not found",
@@ -81,7 +89,7 @@ describe("DELETE /api/places/:id", () => {
   });
 
   it("throws 401 when not authenticated", async () => {
-    mockGetRouterParam.mockReturnValue("place-1");
+    mockRequireRouterParam.mockReturnValue("place-1");
     const unauthorizedError = createError({
       statusCode: 401,
       statusMessage: "Unauthorized",
@@ -96,7 +104,7 @@ describe("DELETE /api/places/:id", () => {
   });
 
   it("calls assertOwnership before deleting", async () => {
-    mockGetRouterParam.mockReturnValue("place-1");
+    mockRequireRouterParam.mockReturnValue("place-1");
     mockAssertOwnership.mockResolvedValue(undefined);
     const mockDb = makeDbForDelete();
     mockGetDb.mockReturnValue(mockDb as unknown as ReturnType<typeof getDb>);

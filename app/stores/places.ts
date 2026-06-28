@@ -9,8 +9,9 @@ export interface Place {
   latitude: number | null;
   longitude: number | null;
   category: string | null;
-  createdAt: Date;
-  updatedAt: Date;
+  // JSON-serialized ISO strings from the API; not Date objects at runtime.
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface CreatePlaceInput {
@@ -22,14 +23,7 @@ export interface CreatePlaceInput {
   category?: string;
 }
 
-export interface UpdatePlaceInput {
-  name?: string;
-  subtitle?: string;
-  country?: string;
-  latitude?: number;
-  longitude?: number;
-  category?: string;
-}
+export type UpdatePlaceInput = Partial<CreatePlaceInput>;
 
 export const usePlacesStore = defineStore("places", () => {
   const { apiFetch } = useApiClient();

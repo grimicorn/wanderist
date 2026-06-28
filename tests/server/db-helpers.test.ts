@@ -14,6 +14,10 @@ vi.stubGlobal(
   },
 );
 
+// Stub getRouterParam — used by requireRouterParam
+const mockGetRouterParam = vi.fn();
+vi.stubGlobal("getRouterParam", mockGetRouterParam);
+
 // Mock the auth util before importing db-helpers
 vi.mock("../../server/utils/auth", () => ({
   requireUser: vi.fn(),
@@ -41,9 +45,12 @@ import { getDb } from "../../server/db/index";
 import {
   loadOwnedOrThrow,
   assertOwnership,
+  requireRouterParam,
   requireString,
   optionalString,
   optionalNumber,
+  optionalLatitude,
+  optionalLongitude,
 } from "../../server/utils/db-helpers";
 
 const mockRequireUser = vi.mocked(requireUser);
@@ -370,6 +377,141 @@ describe("optionalNumber", () => {
       expect.objectContaining({
         statusMessage: expect.stringContaining("longitude"),
       }),
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// requireRouterParam
+// ---------------------------------------------------------------------------
+
+describe("requireRouterParam", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("returns the param value when present", () => {
+    mockGetRouterParam.mockReturnValue("place-123");
+    const result = requireRouterParam(
+      {} as Parameters<typeof requireRouterParam>[0],
+      "id",
+    );
+    expect(result).toBe("place-123");
+  });
+
+  it("throws 400 when the param is undefined", () => {
+    mockGetRouterParam.mockReturnValue(undefined);
+    expect(() =>
+      requireRouterParam({} as Parameters<typeof requireRouterParam>[0], "id"),
+    ).toThrow(expect.objectContaining({ statusCode: 400 }));
+  });
+
+  it("throws 400 when the param is an empty string (falsy)", () => {
+    mockGetRouterParam.mockReturnValue("");
+    expect(() =>
+      requireRouterParam({} as Parameters<typeof requireRouterParam>[0], "id"),
+    ).toThrow(expect.objectContaining({ statusCode: 400 }));
+  });
+
+  it("includes the param name in the error message", () => {
+    mockGetRouterParam.mockReturnValue(undefined);
+    expect(() =>
+      requireRouterParam(
+        {} as Parameters<typeof requireRouterParam>[0],
+        "placeId",
+      ),
+    ).toThrow(
+      expect.objectContaining({
+        statusMessage: expect.stringContaining("placeId"),
+      }),
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// optionalLatitude
+// ---------------------------------------------------------------------------
+
+describe("optionalLatitude", () => {
+  it("returns a valid latitude", () => {
+    expect(optionalLatitude(48.8566)).toBe(48.8566);
+  });
+
+  it("returns -90 (boundary)", () => {
+    expect(optionalLatitude(-90)).toBe(-90);
+  });
+
+  it("returns 90 (boundary)", () => {
+    expect(optionalLatitude(90)).toBe(90);
+  });
+
+  it("returns undefined for undefined", () => {
+    expect(optionalLatitude(undefined)).toBeUndefined();
+  });
+
+  it("returns undefined for null", () => {
+    expect(optionalLatitude(null)).toBeUndefined();
+  });
+
+  it("throws 400 for latitude > 90", () => {
+    expect(() => optionalLatitude(91)).toThrow(
+      expect.objectContaining({ statusCode: 400 }),
+    );
+  });
+
+  it("throws 400 for latitude < -90", () => {
+    expect(() => optionalLatitude(-91)).toThrow(
+      expect.objectContaining({ statusCode: 400 }),
+    );
+  });
+
+  it("throws 400 for a non-number value", () => {
+    expect(() => optionalLatitude("48.8")).toThrow(
+      expect.objectContaining({ statusCode: 400 }),
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// optionalLongitude
+// ---------------------------------------------------------------------------
+
+describe("optionalLongitude", () => {
+  it("returns a valid longitude", () => {
+    expect(optionalLongitude(2.3522)).toBe(2.3522);
+  });
+
+  it("returns -180 (boundary)", () => {
+    expect(optionalLongitude(-180)).toBe(-180);
+  });
+
+  it("returns 180 (boundary)", () => {
+    expect(optionalLongitude(180)).toBe(180);
+  });
+
+  it("returns undefined for undefined", () => {
+    expect(optionalLongitude(undefined)).toBeUndefined();
+  });
+
+  it("returns undefined for null", () => {
+    expect(optionalLongitude(null)).toBeUndefined();
+  });
+
+  it("throws 400 for longitude > 180", () => {
+    expect(() => optionalLongitude(181)).toThrow(
+      expect.objectContaining({ statusCode: 400 }),
+    );
+  });
+
+  it("throws 400 for longitude < -180", () => {
+    expect(() => optionalLongitude(-181)).toThrow(
+      expect.objectContaining({ statusCode: 400 }),
+    );
+  });
+
+  it("throws 400 for a non-number value", () => {
+    expect(() => optionalLongitude("2.35")).toThrow(
+      expect.objectContaining({ statusCode: 400 }),
     );
   });
 });

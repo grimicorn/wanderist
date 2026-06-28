@@ -7,7 +7,7 @@ exports[`Map page (/map) > renders the map stage and matches snapshot 1`] = `
     <div data-v-346616cd="" class="topo map-topo"></div><span data-v-346616cd="" class="map-mount">mapbox gl · #mapPanel</span><span data-v-346616cd="" class="map-attr">© Mapbox © OpenStreetMap</span>
   </div>
   <!-- Pins — lat/lng-to-pixel mapping is handled by Mapbox (#15).
-         Until that lands, pins with no pixel coordinates are not rendered. --><button data-v-346616cd="" class="pin-abs sm" aria-label="Reykjavík"><span data-v-346616cd="" class="pin-ring"></span><svg data-v-346616cd="" data-icon="" name="pin" size="18" class="pin"></svg></button><button data-v-346616cd="" class="pin-abs sm" aria-label="Tokyo"><span data-v-346616cd="" class="pin-ring"></span><svg data-v-346616cd="" data-icon="" name="pin" size="18" class="pin"></svg></button>
+         Until that lands, only places with coordinates render a pin. --><button data-v-346616cd="" class="pin-abs sm" aria-label="Reykjavík"><span data-v-346616cd="" class="pin-ring"></span><svg data-v-346616cd="" data-icon="" name="pin" size="18" class="pin"></svg></button><button data-v-346616cd="" class="pin-abs sm" aria-label="Tokyo"><span data-v-346616cd="" class="pin-ring"></span><svg data-v-346616cd="" data-icon="" name="pin" size="18" class="pin"></svg></button><!-- Load error state -->
   <!--v-if-->
   <!-- Places panel -->
   <div data-v-346616cd="" class="places">
@@ -54,6 +54,6 @@ exports[`Map page (/map) > renders the map stage and matches snapshot 1`] = `
           <line data-v-346616cd="" x1="5" y1="12" x2="19" y2="12"></line>
         </svg></button></div>
   </div>
-  <div data-v-346616cd="" class="legend">outdoors-v12 · 3 pins </div>
+  <div data-v-346616cd="" class="legend">outdoors-v12 · 2 pins </div>
 </div>"
 `;

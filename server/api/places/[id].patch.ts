@@ -2,17 +2,15 @@ import { eq } from "drizzle-orm";
 import {
   assertOwnership,
   optionalString,
-  optionalNumber,
+  optionalLatitude,
+  optionalLongitude,
+  requireRouterParam,
 } from "../../utils/db-helpers";
 import { getDb } from "../../db/index";
 import { places } from "../../db/schema";
 
 export default defineEventHandler(async (event) => {
-  const id = getRouterParam(event, "id");
-
-  if (!id) {
-    throw createError({ statusCode: 400, statusMessage: "id is required" });
-  }
+  const id = requireRouterParam(event, "id");
 
   await assertOwnership(event, places, places.id, places.userId, id);
 
@@ -48,12 +46,12 @@ export default defineEventHandler(async (event) => {
     updates.category = category;
   }
 
-  const latitude = optionalNumber(body?.latitude, "latitude");
+  const latitude = optionalLatitude(body?.latitude);
   if (latitude !== undefined) {
     updates.latitude = latitude;
   }
 
-  const longitude = optionalNumber(body?.longitude, "longitude");
+  const longitude = optionalLongitude(body?.longitude);
   if (longitude !== undefined) {
     updates.longitude = longitude;
   }

@@ -18,19 +18,23 @@
     </div>
 
     <!-- Pins — lat/lng-to-pixel mapping is handled by Mapbox (#15).
-         Until that lands, pins with no pixel coordinates are not rendered. -->
-    <template v-for="place in placesStore.places" :key="place.id">
-      <button
-        v-if="place.latitude !== null && place.longitude !== null"
-        class="pin-abs sm"
-        :class="{ 'is-active': selectedPlace?.id === place.id }"
-        :aria-label="place.name"
-        @click="selectPlace(place)"
-      >
-        <span class="pin-ring" />
-        <AppIcon name="pin" :size="18" class="pin" />
-      </button>
-    </template>
+         Until that lands, only places with coordinates render a pin. -->
+    <button
+      v-for="place in pinnedPlaces"
+      :key="place.id"
+      class="pin-abs sm"
+      :class="{ 'is-active': selectedPlace?.id === place.id }"
+      :aria-label="place.name"
+      @click="selectPlace(place)"
+    >
+      <span class="pin-ring" />
+      <AppIcon name="pin" :size="18" class="pin" />
+    </button>
+
+    <!-- Load error state -->
+    <div v-if="placesStore.error" class="places-error" role="alert">
+      {{ placesStore.error }}
+    </div>
 
     <!-- Places panel -->
     <div class="places">
@@ -158,7 +162,7 @@
     </div>
 
     <div class="legend">
-      {{ mapStyleLegend }} · {{ placesStore.places.length }} pins
+      {{ mapStyleLegend }} · {{ pinnedPlaces.length }} pins
     </div>
   </div>
 </template>
@@ -173,8 +177,9 @@ useHead({ title: "Wanderist — Map" });
 
 const placesStore = usePlacesStore();
 
-onMounted(async () => {
-  await placesStore.fetchPlaces();
+onMounted(() => {
+  // fetchPlaces sets placesStore.error on failure; the template surfaces it.
+  placesStore.fetchPlaces().catch(() => undefined);
 });
 
 const filters = ["All", "2026", "Journaled", "Wishlist"];
@@ -200,6 +205,12 @@ const activeFilter = ref("All");
 const search = ref("");
 const mapStyle = ref("outdoors");
 const layersPopOpen = ref(false);
+
+const pinnedPlaces = computed(() =>
+  placesStore.places.filter(
+    (place) => place.latitude !== null && place.longitude !== null,
+  ),
+);
 
 const filteredPlaces = computed(() => {
   const query = search.value.trim().toLowerCase();

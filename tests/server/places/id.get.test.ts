@@ -3,19 +3,21 @@ import { stubNitroGlobals } from "../test-utils";
 
 stubNitroGlobals();
 
-const mockGetRouterParam = vi.fn();
-vi.stubGlobal("getRouterParam", mockGetRouterParam);
-
 vi.mock("../../../server/utils/auth", () => ({
   requireUser: vi.fn(),
 }));
 
 vi.mock("../../../server/utils/db-helpers", () => ({
+  requireRouterParam: vi.fn(),
   loadOwnedOrThrow: vi.fn(),
 }));
 
-import { loadOwnedOrThrow } from "../../../server/utils/db-helpers";
+import {
+  requireRouterParam,
+  loadOwnedOrThrow,
+} from "../../../server/utils/db-helpers";
 
+const mockRequireRouterParam = vi.mocked(requireRouterParam);
 const mockLoadOwnedOrThrow = vi.mocked(loadOwnedOrThrow);
 
 const handler = await import("../../../server/api/places/[id].get");
@@ -31,7 +33,7 @@ describe("GET /api/places/:id", () => {
       userId: "user-1",
       name: "Tokyo",
     };
-    mockGetRouterParam.mockReturnValue("place-1");
+    mockRequireRouterParam.mockReturnValue("place-1");
     mockLoadOwnedOrThrow.mockResolvedValue(
       expectedPlace as unknown as Awaited<ReturnType<typeof loadOwnedOrThrow>>,
     );
@@ -44,7 +46,13 @@ describe("GET /api/places/:id", () => {
   });
 
   it("throws 400 when id param is missing", async () => {
-    mockGetRouterParam.mockReturnValue(undefined);
+    const missingError = createError({
+      statusCode: 400,
+      statusMessage: "id is required",
+    });
+    mockRequireRouterParam.mockImplementation(() => {
+      throw missingError;
+    });
 
     const defaultHandler = "default" in handler ? handler.default : handler;
 
@@ -54,7 +62,7 @@ describe("GET /api/places/:id", () => {
   });
 
   it("throws 404 when place is not found or not owned", async () => {
-    mockGetRouterParam.mockReturnValue("place-missing");
+    mockRequireRouterParam.mockReturnValue("place-missing");
     const notFoundError = createError({
       statusCode: 404,
       statusMessage: "Not found",
@@ -69,7 +77,7 @@ describe("GET /api/places/:id", () => {
   });
 
   it("throws 401 when not authenticated", async () => {
-    mockGetRouterParam.mockReturnValue("place-1");
+    mockRequireRouterParam.mockReturnValue("place-1");
     const unauthorizedError = createError({
       statusCode: 401,
       statusMessage: "Unauthorized",
