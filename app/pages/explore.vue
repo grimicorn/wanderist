@@ -74,7 +74,14 @@
           </template>
         </div>
         <div
-          v-else-if="heroSearch.trim() && !heroIsLoading && !heroError"
+          v-else-if="heroSearch.trim() && heroError"
+          class="xsearch-empty xsearch-empty--error"
+          role="alert"
+        >
+          {{ heroError }}
+        </div>
+        <div
+          v-else-if="heroSearch.trim() && !heroIsLoading"
           class="xsearch-empty"
         >
           No results for &ldquo;{{ heroSearch }}&rdquo;.
@@ -824,5 +831,8 @@ section.xsec {
   margin-top: 10px;
   font-size: 12.5px;
   color: var(--faint);
+}
+.xsearch-empty--error {
+  color: var(--error, #c0392b);
 }
 </style>

@@ -249,11 +249,7 @@ const selectedPlace = ref<Place | null>(null);
 const activeFilter = ref("All");
 const mapStyle = ref("outdoors");
 
-const {
-  query: searchQuery,
-  results: searchResults,
-  search: doSearch,
-} = useSearch();
+const searchQuery = ref("");
 const layersPopOpen = ref(false);
 const isDropPinMode = ref(false);
 const dropPinCoords = ref<DropPinResult | null>(null);
@@ -269,16 +265,17 @@ const pinnedPlaces = computed(() =>
 );
 
 const filteredPlaces = computed(() => {
-  if (!searchQuery.value.trim()) {
+  const term = searchQuery.value.trim().toLowerCase();
+
+  if (!term) {
     return placesStore.places;
   }
 
-  const matchedIds = new Set(searchResults.value.places.map((item) => item.id));
-  return placesStore.places.filter((place) => matchedIds.has(place.id));
-});
-
-watch(searchQuery, (newQuery) => {
-  doSearch(newQuery);
+  return placesStore.places.filter(
+    (place) =>
+      place.name.toLowerCase().includes(term) ||
+      (place.subtitle ?? "").toLowerCase().includes(term),
+  );
 });
 
 const mapStyleLegend = computed(() => resolveMapboxStyleLabel(mapStyle.value));
