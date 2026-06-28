@@ -106,6 +106,11 @@ export const media = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: ON_DELETE.CASCADE }),
     url: text("url").notNull(),
+    // Optional metadata; null until a future image-processing step populates them.
+    // Columns are reserved so consumers (e.g. <AppImage>) can prevent layout shift.
+    width: integer("width"),
+    height: integer("height"),
+    contentType: text("content_type"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [index("media_user_id_idx").on(table.userId)],
