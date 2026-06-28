@@ -17,7 +17,7 @@ Object.assign(globalThis, {
     return () => `test-id-${++n}`;
   })(),
   useNuxtApp: vi.fn(() => ({})),
-  useRuntimeConfig: vi.fn(() => ({ public: {} })),
+  useRuntimeConfig: vi.fn(() => ({ public: { mapboxToken: "" } })),
   useScrollReveal: vi.fn(),
   // Clerk composables
   useClerkAuth: vi.fn(() => ({
