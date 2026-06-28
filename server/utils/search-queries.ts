@@ -28,7 +28,6 @@ export interface PersonResult {
   id: string;
   displayName: string | null;
   handle: string | null;
-  email: string;
 }
 
 export interface SearchResults {
@@ -116,7 +115,6 @@ export async function searchPeople(
       id: users.id,
       displayName: userPreferences.displayName,
       handle: userPreferences.handle,
-      email: users.email,
     })
     .from(users)
     .innerJoin(userPreferences, eq(users.id, userPreferences.userId))

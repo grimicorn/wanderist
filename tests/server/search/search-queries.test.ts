@@ -144,13 +144,12 @@ describe("searchPeople", () => {
     vi.clearAllMocks();
   });
 
-  it("returns public profiles matching the pattern", async () => {
+  it("returns public profiles matching the pattern (no email in result)", async () => {
     const expectedRows = [
       {
         id: "user-2",
         displayName: "Elsa Far",
         handle: "elsa_far",
-        email: "elsa@example.com",
       },
     ];
     const chain = makeQueryChain(expectedRows);

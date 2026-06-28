@@ -115,7 +115,6 @@ describe("GET /api/search", () => {
           id: "u-2",
           displayName: "Yuki",
           handle: "yuki",
-          email: "y@example.com",
         },
       ],
     };
@@ -138,5 +137,25 @@ describe("GET /api/search", () => {
     await callHandler();
 
     expect(mockRunSearch).toHaveBeenCalledWith("user-42", "tokyo");
+  });
+
+  it("returns empty groups when q exceeds the maximum query length", async () => {
+    const oversizedQuery = "a".repeat(101);
+    mockGetQuery.mockReturnValue({ q: oversizedQuery });
+
+    const result = await callHandler();
+
+    expect(result).toEqual(EMPTY_RESULTS);
+    expect(mockRunSearch).not.toHaveBeenCalled();
+  });
+
+  it("accepts a query exactly at the maximum allowed length", async () => {
+    const maxLengthQuery = "a".repeat(100);
+    mockGetQuery.mockReturnValue({ q: maxLengthQuery });
+    mockRunSearch.mockResolvedValue(EMPTY_RESULTS);
+
+    await callHandler();
+
+    expect(mockRunSearch).toHaveBeenCalledWith("user-1", maxLengthQuery);
   });
 });

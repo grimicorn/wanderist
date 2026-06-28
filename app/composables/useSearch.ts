@@ -43,7 +43,6 @@ interface PersonResult {
   id: string;
   displayName: string | null;
   handle: string | null;
-  email: string;
 }
 
 interface SearchApiResponse {
@@ -53,12 +52,13 @@ interface SearchApiResponse {
   people: PersonResult[];
 }
 
-const EMPTY_GROUPS: SearchGroups = {
-  places: [],
-  trips: [],
-  entries: [],
-  people: [],
-};
+const MAX_QUERY_LENGTH = 100;
+const DEBOUNCE_MS = 250;
+
+// Factory to avoid sharing array references across resets and initializations.
+function emptyGroups(): SearchGroups {
+  return { places: [], trips: [], entries: [], people: [] };
+}
 
 function mapPlace(place: PlaceResult): SearchItem {
   const subtitle =
@@ -94,7 +94,7 @@ function mapEntry(entry: EntryResult): SearchItem {
 function mapPerson(person: PersonResult): SearchItem {
   const title = person.handle
     ? `@${person.handle.replace(/^@/, "")}`
-    : (person.displayName ?? person.email);
+    : (person.displayName ?? "Wanderist traveler");
   const subtitle =
     person.displayName && person.handle ? person.displayName : undefined;
   return {
@@ -122,39 +122,74 @@ function mapApiResponse(response: SearchApiResponse): SearchGroups {
  * - `results`: reactive grouped search results (empty until query is non-empty)
  * - `isLoading`: true while the fetch is in flight
  * - `error`: set when the fetch fails; null otherwise
- * - `search`: call explicitly to trigger a search with the current query value
+ * - `search`: debounced; call with the current query string to trigger a fetch.
+ *   Stale responses are discarded so only the latest request's results apply.
  */
 export function useSearch() {
   const { apiFetch } = useApiClient();
 
   const query = ref("");
-  const results = ref<SearchGroups>({ ...EMPTY_GROUPS });
+  const results = ref<SearchGroups>(emptyGroups());
   const isLoading = ref(false);
   const error = ref<string | null>(null);
 
-  async function search(searchQuery: string): Promise<void> {
-    const trimmed = searchQuery.trim();
+  // Incremented on each search call; checked before applying the response so
+  // a slow earlier response cannot overwrite a newer one.
+  let activeRequestId = 0;
+  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
-    if (!trimmed) {
-      results.value = { ...EMPTY_GROUPS };
-      return;
-    }
-
+  async function executeSearch(
+    searchQuery: string,
+    requestId: number,
+  ): Promise<void> {
     isLoading.value = true;
     error.value = null;
 
     try {
       const response = await apiFetch<SearchApiResponse>(
-        `/api/search?q=${encodeURIComponent(trimmed)}`,
+        `/api/search?q=${encodeURIComponent(searchQuery)}`,
       );
+
+      if (requestId !== activeRequestId) {
+        return;
+      }
+
       results.value = mapApiResponse(response);
     } catch (fetchError) {
+      if (requestId !== activeRequestId) {
+        return;
+      }
+
       console.error("useSearch: search failed", fetchError);
       error.value = "Search failed. Please try again.";
-      results.value = { ...EMPTY_GROUPS };
+      results.value = emptyGroups();
     } finally {
-      isLoading.value = false;
+      if (requestId === activeRequestId) {
+        isLoading.value = false;
+      }
     }
+  }
+
+  function search(searchQuery: string): void {
+    const trimmed = searchQuery.trim().slice(0, MAX_QUERY_LENGTH);
+
+    activeRequestId += 1;
+
+    if (debounceTimer !== null) {
+      clearTimeout(debounceTimer);
+    }
+
+    if (!trimmed) {
+      results.value = emptyGroups();
+      isLoading.value = false;
+      return;
+    }
+
+    const requestId = activeRequestId;
+
+    debounceTimer = setTimeout(() => {
+      executeSearch(trimmed, requestId);
+    }, DEBOUNCE_MS);
   }
 
   return {
