@@ -33,14 +33,36 @@
     <div class="alert alert--info" style="margin-bottom: 22px">
       <AppIcon name="instagram" :size="18" class="alert__ico" />
       <div class="alert__body">
-        <p class="alert__title">12 geotagged photos from Lisbon are ready</p>
-        <p class="alert__msg">Import them straight into your Portugal trip.</p>
+        <p class="alert__title">
+          <template v-if="importError"
+            >Import failed: {{ importError }}</template
+          >
+          <template v-else-if="importResult">
+            {{ importResult.imported }} photo{{
+              importResult.imported === 1 ? "" : "s"
+            }}
+            imported
+            <template v-if="importResult.skipped > 0"
+              >, {{ importResult.skipped }} skipped</template
+            >
+          </template>
+          <template v-else>Geotagged photos from Instagram are ready</template>
+        </p>
+        <p class="alert__msg">
+          Import them straight into your journal entries.
+        </p>
       </div>
       <div class="hstack gap-8" style="margin-left: auto">
         <NuxtLink class="btn btn--ghost btn--sm" to="/settings#connections"
           >manage</NuxtLink
         >
-        <button class="btn btn--primary btn--sm">import all</button>
+        <button
+          class="btn btn--primary btn--sm"
+          :disabled="isImporting"
+          @click="handleImportAll"
+        >
+          {{ isImporting ? "importing…" : "import all" }}
+        </button>
       </div>
     </div>
 
@@ -184,9 +206,24 @@
 <script setup lang="ts">
 import { formatCompact } from "~/utils/formatNumber";
 import { useStats } from "~/composables/useStats";
+import { useConnections } from "~/composables/useConnections";
 
 definePageMeta({ layout: "app", middleware: "auth" });
 useHead({ title: "Wanderist — Home" });
+
+const {
+  importResult,
+  actionError: importError,
+  importInstagramPhotos,
+} = useConnections();
+
+const isImporting = ref(false);
+
+async function handleImportAll(): Promise<void> {
+  isImporting.value = true;
+  await importInstagramPhotos();
+  isImporting.value = false;
+}
 
 const openNewEntry = inject<(() => void) | undefined>(
   "openNewEntry",

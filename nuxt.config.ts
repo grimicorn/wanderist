@@ -19,6 +19,7 @@ export default defineNuxtConfig({
     databaseUrl: process.env.E2E_DATABASE_URL || process.env.DATABASE_URL || "",
     public: {
       sentryDsn: "",
+      siteOrigin: "",
       mapboxToken: "",
     },
   },

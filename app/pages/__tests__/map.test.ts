@@ -244,12 +244,28 @@ describe("Map page (/map)", () => {
     expect(wrapper.find(".legend").text()).toContain("2 pins");
   });
 
-  it("filters place list when search is typed", async () => {
+  it("filters place list when search is typed (client-side name/subtitle match)", async () => {
     const wrapper = await mountWithPlaces();
+
     const input = wrapper.find(".places__search input");
     await input.setValue("tokyo");
+    await wrapper.vm.$nextTick();
+
     expect(wrapper.findAll(".place-item")).toHaveLength(1);
     expect(wrapper.find(".place-item__name").text()).toBe("Tokyo");
+  });
+
+  it("shows all places when the search query is cleared", async () => {
+    const wrapper = await mountWithPlaces();
+
+    const input = wrapper.find(".places__search input");
+    await input.setValue("tokyo");
+    await wrapper.vm.$nextTick();
+    expect(wrapper.findAll(".place-item")).toHaveLength(1);
+
+    await input.setValue("");
+    await wrapper.vm.$nextTick();
+    expect(wrapper.findAll(".place-item")).toHaveLength(SAMPLE_PLACES.length);
   });
 
   it("shows the place count from store in the topbar tag", async () => {

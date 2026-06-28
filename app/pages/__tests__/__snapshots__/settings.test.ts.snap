@@ -49,19 +49,25 @@ exports[`Settings page (/settings) > renders without crashing and matches snapsh
             <h3 data-v-a376170b="" class="display" style="margin-top: 8px;"> Connected accounts </h3>
             <p data-v-a376170b="">Pull in geotagged photos and sign in faster.</p>
           </div>
+          <!--v-if-->
+          <!--v-if-->
+          <!--v-if-->
+          <!--v-if-->
+          <!--v-if-->
+          <!-- Instagram -->
           <div data-v-a376170b="" class="conn">
             <div data-v-a376170b="" class="conn__logo"><svg data-v-a376170b="" data-icon="" name="instagram" size="20"></svg></div>
             <div data-v-a376170b="" class="conn__meta"><b data-v-a376170b="">Instagram</b>
               <p data-v-a376170b="">Auto-import geotagged photos into your entries.</p>
             </div>
             <div data-v-a376170b="" class="right"><button data-v-a376170b="" class="btn btn--primary btn--sm"><svg data-v-a376170b="" data-icon="" name="plus" size="14"></svg> connect </button></div>
-          </div>
+          </div><!-- Google -->
           <div data-v-a376170b="" class="conn">
             <div data-v-a376170b="" class="conn__logo"><svg data-v-a376170b="" data-icon="" name="google" size="20"></svg></div>
             <div data-v-a376170b="" class="conn__meta"><b data-v-a376170b="">Google</b>
-              <p data-v-a376170b="">Signed in as you@domain.com</p>
+              <p data-v-a376170b="">Sign in faster with your Google account.</p>
             </div>
-            <div data-v-a376170b="" class="right"><span data-v-a376170b="" class="status-dot">connected</span><button data-v-a376170b="" class="btn btn--ghost btn--sm">disconnect</button></div>
+            <div data-v-a376170b="" class="right"><span data-v-a376170b="" class="muted" style="font-size: 12px;">not connected</span></div>
           </div>
         </section><!-- Prefs -->
         <section data-v-a376170b="" id="prefs" class="sect">

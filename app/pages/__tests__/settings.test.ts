@@ -100,6 +100,30 @@ vi.mock("~/composables/useApiClient", () => ({
   })),
 }));
 
+vi.mock("~/composables/useConnections", () => {
+  const { ref: vueRef, readonly: vueReadonly } = require("vue");
+
+  const defaultConnections = {
+    instagram: { connected: false },
+    google: { connected: false, emailAddress: null, identificationId: null },
+  };
+
+  return {
+    useConnections: vi.fn(() => ({
+      connections: vueReadonly(vueRef(defaultConnections)),
+      isLoading: vueReadonly(vueRef(false)),
+      loadError: vueReadonly(vueRef(null)),
+      actionError: vueReadonly(vueRef(null)),
+      importResult: vueReadonly(vueRef(null)),
+      fetchConnections: vi.fn().mockResolvedValue(undefined),
+      startInstagramConnect: vi.fn(),
+      disconnectInstagram: vi.fn().mockResolvedValue(true),
+      disconnectGoogle: vi.fn().mockResolvedValue(true),
+      importInstagramPhotos: vi.fn().mockResolvedValue(true),
+    })),
+  };
+});
+
 const iconStub = { template: "<svg data-icon />" };
 const inputStub = {
   template: "<input />",
