@@ -1,81 +1,48 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import { mount } from "@vue/test-utils";
-import { createPinia, setActivePinia } from "pinia";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { mount, flushPromises } from "@vue/test-utils";
+import { ref } from "vue";
 import AppCommandPalette from "../AppCommandPalette.vue";
-import { useTripsStore } from "~/stores/trips";
-import type { Trip } from "~/stores/trips";
 
-const SAMPLE_TRIPS: Trip[] = [
-  {
-    id: "t-1",
-    userId: "u-1",
-    name: "Iceland, the ring road",
-    status: "ongoing",
-    startDate: "2026-06-09T00:00:00.000Z",
-    endDate: "2026-06-17T00:00:00.000Z",
-    coverImageId: null,
-    distanceKm: 892,
-    visibility: "private",
-    createdAt: "2026-01-01T00:00:00.000Z",
-    updatedAt: "2026-01-01T00:00:00.000Z",
-  },
-  {
-    id: "t-2",
-    userId: "u-1",
-    name: "Portugal 2026",
-    status: "upcoming",
-    startDate: null,
-    endDate: null,
-    coverImageId: null,
-    distanceKm: null,
-    visibility: "private",
-    createdAt: "2026-01-02T00:00:00.000Z",
-    updatedAt: "2026-01-02T00:00:00.000Z",
-  },
-  {
-    id: "t-3",
-    userId: "u-1",
-    name: "Japan 2025",
-    status: "past",
-    startDate: null,
-    endDate: null,
-    coverImageId: null,
-    distanceKm: null,
-    visibility: "private",
-    createdAt: "2025-11-01T00:00:00.000Z",
-    updatedAt: "2025-11-01T00:00:00.000Z",
-  },
-];
+const iconStub = { template: "<svg data-icon />" };
+const linkStub = { template: "<a><slot /></a>", props: ["to"] };
 
-function buildGlobalConfig(pinia: ReturnType<typeof createPinia>) {
-  return {
-    global: {
-      plugins: [pinia],
-      stubs: {
-        AppIcon: { template: "<svg data-icon />" },
-        NuxtLink: {
-          template: '<a :href="to"><slot /></a>',
-          props: ["to"],
-        },
-      },
+// Reactive search state shared across tests
+const mockQuery = ref("");
+const mockResults = ref({ places: [], trips: [], entries: [], people: [] });
+const mockIsLoading = ref(false);
+const mockError = ref<string | null>(null);
+const mockSearch = vi.fn();
+
+vi.stubGlobal("useSearch", () => ({
+  query: mockQuery,
+  results: mockResults,
+  isLoading: mockIsLoading,
+  error: mockError,
+  search: mockSearch,
+}));
+
+const globalConfig = {
+  global: {
+    stubs: {
+      AppIcon: iconStub,
+      NuxtLink: linkStub,
     },
-  };
-}
+  },
+};
 
 describe("AppCommandPalette", () => {
-  let pinia: ReturnType<typeof createPinia>;
-
   beforeEach(() => {
-    pinia = createPinia();
-    setActivePinia(pinia);
-    const tripsStore = useTripsStore();
-    tripsStore.tripList = [...SAMPLE_TRIPS];
+    vi.resetAllMocks();
+    mockQuery.value = "";
+    mockResults.value = { places: [], trips: [], entries: [], people: [] };
+    mockIsLoading.value = false;
+    mockError.value = null;
   });
 
   it("renders nothing when closed", () => {
     const wrapper = mount(AppCommandPalette, {
       props: { open: false },
-      ...buildGlobalConfig(pinia),
+      ...globalConfig,
     });
     expect(wrapper.find(".cmdk").exists()).toBe(false);
   });
@@ -83,7 +50,7 @@ describe("AppCommandPalette", () => {
   it("renders the panel when open and matches snapshot", () => {
     const wrapper = mount(AppCommandPalette, {
       props: { open: true },
-      ...buildGlobalConfig(pinia),
+      ...globalConfig,
     });
     expect(wrapper.find(".cmdk").exists()).toBe(true);
     expect(wrapper.html()).toMatchSnapshot();
@@ -92,7 +59,7 @@ describe("AppCommandPalette", () => {
   it("shows only quick actions when query is empty", () => {
     const wrapper = mount(AppCommandPalette, {
       props: { open: true },
-      ...buildGlobalConfig(pinia),
+      ...globalConfig,
     });
     const labels = wrapper.findAll(".cmdk__glabel").map((el) => el.text());
     expect(labels).toEqual(["Quick actions"]);
@@ -101,45 +68,94 @@ describe("AppCommandPalette", () => {
   it("shows 5 quick action items by default", () => {
     const wrapper = mount(AppCommandPalette, {
       props: { open: true },
-      ...buildGlobalConfig(pinia),
+      ...globalConfig,
     });
     expect(wrapper.findAll(".cmdk__item")).toHaveLength(5);
   });
 
-  it("filters results when query is typed", async () => {
+  it("shows API search results when query is typed", async () => {
     const wrapper = mount(AppCommandPalette, {
       props: { open: true },
-      ...buildGlobalConfig(pinia),
+      ...globalConfig,
     });
+
+    // Simulate a search returning place results
+    mockSearch.mockImplementation(() => {
+      mockResults.value = {
+        places: [
+          {
+            id: "p-1",
+            title: "Reykjavík",
+            subtitle: "Iceland",
+            icon: "pin",
+            href: "/map",
+          },
+        ],
+        trips: [],
+        entries: [],
+        people: [],
+      };
+    });
+
     await wrapper.find(".cmdk__input").setValue("reyk");
-    expect(wrapper.findAll(".cmdk__item").length).toBeGreaterThan(0);
-    expect(wrapper.html()).toContain("Reykjavík");
+    // Trigger the watch manually (watch fires synchronously in happy-dom)
+    await wrapper.vm.$nextTick();
+
+    expect(mockSearch).toHaveBeenCalledWith("reyk");
+    expect(wrapper.findAll(".cmdk__item")).toHaveLength(1);
+    expect(wrapper.find(".cmdk__t").text()).toContain("Reykjavík");
   });
 
-  it("shows empty state when query has no matches", async () => {
+  it("shows results from multiple groups when API returns results in several categories", async () => {
     const wrapper = mount(AppCommandPalette, {
       props: { open: true },
-      ...buildGlobalConfig(pinia),
+      ...globalConfig,
     });
-    await wrapper.find(".cmdk__input").setValue("zzznomatch");
+
+    // Simulate a search populating both places and trips
+    mockSearch.mockImplementation(() => {
+      mockResults.value = {
+        places: [{ id: "p-1", title: "Reykjavík", icon: "pin", href: "/map" }],
+        trips: [
+          {
+            id: "t-1",
+            title: "Iceland trip",
+            icon: "route",
+            href: "/trips/t-1",
+          },
+        ],
+        entries: [],
+        people: [],
+      };
+    });
+
+    await wrapper.find(".cmdk__input").setValue("ice");
+    await flushPromises();
+    await wrapper.vm.$nextTick();
+
+    const labels = wrapper.findAll(".cmdk__glabel").map((el) => el.text());
+    expect(labels).toContain("Places");
+    expect(labels).toContain("Trips");
+  });
+
+  it("shows empty state when query is set but API returns no results", async () => {
+    const wrapper = mount(AppCommandPalette, {
+      props: { open: true },
+      ...globalConfig,
+    });
+
+    // mockSearch is vi.fn() (no-op after resetAllMocks), so mockResults stays empty.
+    mockQuery.value = "zzznomatch";
+    await wrapper.vm.$nextTick();
+
     expect(wrapper.find(".cmdk__empty").exists()).toBe(true);
     expect(wrapper.find(".cmdk__empty").text()).toContain("zzznomatch");
-  });
-
-  it("shows results from multiple groups when query matches across categories", async () => {
-    const wrapper = mount(AppCommandPalette, {
-      props: { open: true },
-      ...buildGlobalConfig(pinia),
-    });
-    await wrapper.find(".cmdk__input").setValue("re");
-    const labels = wrapper.findAll(".cmdk__glabel").map((el) => el.text());
-    expect(labels.length).toBeGreaterThan(1);
   });
 
   it("emits close when scrim is clicked", async () => {
     const wrapper = mount(AppCommandPalette, {
       props: { open: true },
-      ...buildGlobalConfig(pinia),
+      ...globalConfig,
     });
     await wrapper.find(".cmdk__scrim").trigger("click");
     expect(wrapper.emitted("close")).toBeTruthy();
@@ -148,7 +164,7 @@ describe("AppCommandPalette", () => {
   it("emits close on Escape key", async () => {
     const wrapper = mount(AppCommandPalette, {
       props: { open: true },
-      ...buildGlobalConfig(pinia),
+      ...globalConfig,
     });
     await wrapper.find(".cmdk").trigger("keydown", { key: "Escape" });
     expect(wrapper.emitted("close")).toBeTruthy();
@@ -157,7 +173,7 @@ describe("AppCommandPalette", () => {
   it("moves active index down on ArrowDown", async () => {
     const wrapper = mount(AppCommandPalette, {
       props: { open: true },
-      ...buildGlobalConfig(pinia),
+      ...globalConfig,
     });
     await wrapper.find(".cmdk").trigger("keydown", { key: "ArrowDown" });
     const items = wrapper.findAll(".cmdk__item");
@@ -167,37 +183,19 @@ describe("AppCommandPalette", () => {
   it("renders footer keyboard hints", () => {
     const wrapper = mount(AppCommandPalette, {
       props: { open: true },
-      ...buildGlobalConfig(pinia),
+      ...globalConfig,
     });
     expect(wrapper.find(".cmdk__foot").exists()).toBe(true);
     expect(wrapper.find(".cmdk__brand").text()).toBe("wanderist");
   });
 
-  it("generates trip links using real trip ids from the store", async () => {
+  it("calls search when input value changes", async () => {
     const wrapper = mount(AppCommandPalette, {
       props: { open: true },
-      ...buildGlobalConfig(pinia),
+      ...globalConfig,
     });
-    await wrapper.find(".cmdk__input").setValue("iceland");
-    // The NuxtLink stub renders as <a> but does not forward `to` as `href`.
-    // Verify the item renders and that the underlying data routes to the correct id.
-    const items = wrapper.findAll(".cmdk__item");
-    const icelandItemText = items.find((item) =>
-      item.text().includes("Iceland"),
-    );
-    expect(icelandItemText).toBeTruthy();
-    // The NuxtLink stub renders `to` as `href`; verify the real trip id is used
-    expect(wrapper.html()).toContain("/trips/t-1");
-  });
 
-  it("shows trip names from the store in search results", async () => {
-    const wrapper = mount(AppCommandPalette, {
-      props: { open: true },
-      ...buildGlobalConfig(pinia),
-    });
-    await wrapper.find(".cmdk__input").setValue("portugal");
-    // Highlight wraps the matched substring in <mark>; check text content instead
-    const itemTexts = wrapper.findAll(".cmdk__item").map((item) => item.text());
-    expect(itemTexts.some((text) => text.includes("Portugal 2026"))).toBe(true);
+    await wrapper.find(".cmdk__input").setValue("tokyo");
+    expect(mockSearch).toHaveBeenCalledWith("tokyo");
   });
 });
