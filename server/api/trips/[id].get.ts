@@ -3,6 +3,7 @@ import { getDb } from "../../db/index";
 import { trips, tripStops, entries, entryPhotos } from "../../db/schema";
 import { requireTripId, loadOwnedTrip } from "../../utils/trip-helpers";
 
+type Database = ReturnType<typeof getDb>;
 type Trip = typeof trips.$inferSelect;
 type TripStop = typeof tripStops.$inferSelect;
 
@@ -21,7 +22,7 @@ interface TripDetailResponse {
 }
 
 async function fetchOrderedStops(
-  database: ReturnType<typeof import("../../db/index").getDb>,
+  database: Database,
   tripId: string,
 ): Promise<TripStop[]> {
   return database
@@ -32,7 +33,7 @@ async function fetchOrderedStops(
 }
 
 async function fetchPhotoCount(
-  database: ReturnType<typeof import("../../db/index").getDb>,
+  database: Database,
   tripId: string,
 ): Promise<number> {
   const rows = await database
@@ -44,31 +45,30 @@ async function fetchPhotoCount(
   return rows[0]?.total ?? 0;
 }
 
+function sumNullableField<T extends Record<string, unknown>>(
+  items: T[],
+  key: keyof T,
+): number | null {
+  return items.reduce<number | null>((accumulator, item) => {
+    const value = item[key];
+
+    if (value === null || value === undefined) {
+      return accumulator;
+    }
+
+    return (accumulator ?? 0) + (value as number);
+  }, null);
+}
+
 function computeFacts(
   trip: Trip,
   stops: TripStop[],
   photoCount: number,
 ): TripFacts {
-  const loggedDistanceKm = stops.reduce<number | null>((accumulator, stop) => {
-    if (stop.distanceKm === null || stop.distanceKm === undefined) {
-      return accumulator;
-    }
-
-    return (accumulator ?? 0) + stop.distanceKm;
-  }, null);
-
-  const nights = stops.reduce<number | null>((accumulator, stop) => {
-    if (stop.nights === null || stop.nights === undefined) {
-      return accumulator;
-    }
-
-    return (accumulator ?? 0) + stop.nights;
-  }, null);
-
   return {
     distanceKm: trip.distanceKm ?? null,
-    loggedDistanceKm,
-    nights,
+    loggedDistanceKm: sumNullableField(stops, "distanceKm"),
+    nights: sumNullableField(stops, "nights"),
     photoCount,
     stopCount: stops.length,
   };

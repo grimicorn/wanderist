@@ -1,4 +1,4 @@
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { getDb } from "../../../../db/index";
 import { tripStops } from "../../../../db/schema";
 import { requireTripId, loadOwnedTrip } from "../../../../utils/trip-helpers";
@@ -106,7 +106,7 @@ export default defineEventHandler(async (event) => {
       database
         .update(tripStops)
         .set({ sortOrder: index })
-        .where(eq(tripStops.id, stopId)),
+        .where(and(eq(tripStops.id, stopId), eq(tripStops.tripId, tripId))),
     ),
   );
 

@@ -153,4 +153,13 @@ describe("parseOptionalFloat", () => {
   it("throws 400 for a non-number", () => {
     expect(() => parseOptionalFloat("5", "distanceKm")).toThrow();
   });
+
+  it("throws 400 for Infinity", () => {
+    expect(() => parseOptionalFloat(Infinity, "distanceKm")).toThrow();
+    expect(() => parseOptionalFloat(-Infinity, "distanceKm")).toThrow();
+  });
+
+  it("throws 400 for a negative number", () => {
+    expect(() => parseOptionalFloat(-1, "distanceKm")).toThrow();
+  });
 });

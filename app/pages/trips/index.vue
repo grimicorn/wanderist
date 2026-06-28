@@ -146,7 +146,9 @@ onMounted(() => {
   // listError is set in the store on failure; TODO surface it in the UI
   // once an error/empty-state design is available (tracked in issue #17 or
   // wherever the trips-page visual design lands).
-  tripsStore.fetchTrips().catch(() => {});
+  tripsStore.fetchTrips().catch((error) => {
+    console.error("[trips] failed to load trips on mount", error);
+  });
 });
 
 const filteredTrips = computed<Trip[]>(() => {

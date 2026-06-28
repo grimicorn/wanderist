@@ -183,33 +183,29 @@ export const useTripsStore = defineStore("trips", () => {
     }
   }
 
+  function sumNullableField<T extends Record<string, unknown>>(
+    items: T[],
+    key: keyof T,
+  ): number | null {
+    return items.reduce<number | null>((accumulator, item) => {
+      const value = item[key];
+
+      if (value === null || value === undefined) {
+        return accumulator;
+      }
+
+      return (accumulator ?? 0) + (value as number);
+    }, null);
+  }
+
   function recomputeFacts(
     existingFacts: TripFacts,
     stops: TripStop[],
   ): TripFacts {
-    const loggedDistanceKm = stops.reduce<number | null>(
-      (accumulator, stop) => {
-        if (stop.distanceKm === null || stop.distanceKm === undefined) {
-          return accumulator;
-        }
-
-        return (accumulator ?? 0) + stop.distanceKm;
-      },
-      null,
-    );
-
-    const nights = stops.reduce<number | null>((accumulator, stop) => {
-      if (stop.nights === null || stop.nights === undefined) {
-        return accumulator;
-      }
-
-      return (accumulator ?? 0) + stop.nights;
-    }, null);
-
     return {
       distanceKm: existingFacts.distanceKm,
-      loggedDistanceKm,
-      nights,
+      loggedDistanceKm: sumNullableField(stops, "distanceKm"),
+      nights: sumNullableField(stops, "nights"),
       photoCount: existingFacts.photoCount,
       stopCount: stops.length,
     };

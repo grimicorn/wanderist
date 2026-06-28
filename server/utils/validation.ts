@@ -187,10 +187,10 @@ export function parseOptionalFloat(
     return null;
   }
 
-  if (typeof value !== "number" || isNaN(value)) {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
     throw createError({
       statusCode: 400,
-      statusMessage: `${fieldName} must be a number or null when provided`,
+      statusMessage: `${fieldName} must be a non-negative finite number or null when provided`,
     });
   }
 
