@@ -217,6 +217,7 @@ export const tripStops = pgTable(
     status: tripStopStatusEnum("status")
       .notNull()
       .default(TRIP_STOP_STATUS.PLANNED),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
     index("trip_stops_trip_id_idx").on(table.tripId),

@@ -192,6 +192,10 @@ describe("column presence", () => {
     expect(trips.coverImageId).toBeDefined();
   });
 
+  it("tripStops has createdAt", () => {
+    expect(tripStops.createdAt).toBeDefined();
+  });
+
   it("entries has tripId, placeId, visibility, likeCount", () => {
     expect(entries.tripId).toBeDefined();
     expect(entries.placeId).toBeDefined();
