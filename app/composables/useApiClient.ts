@@ -6,9 +6,9 @@
  *   const { apiFetch } = useApiClient();
  *   const data = await apiFetch('/api/health');
  *
- * The token is only injected for same-origin (relative) URLs. Absolute URLs
- * to external hosts do not receive the Clerk JWT so the session token cannot
- * be leaked to third parties.
+ * The token is only injected for /api/* paths. Absolute URLs, protocol-relative
+ * URLs (//host/...), and non-/api/ paths do not receive the Clerk JWT so the
+ * session token cannot be leaked to third parties.
  *
  * The token is resolved fresh per call so it auto-refreshes when the session
  * rotates. `getToken` is a ref containing the Clerk getToken function.
@@ -16,8 +16,11 @@
 export function useApiClient() {
   const { getToken } = useClerkAuth();
 
-  function isInternalUrl(url: string): boolean {
-    return url.startsWith("/");
+  function isApiPath(url: string): boolean {
+    // Only inject the token for /api/* paths. Protocol-relative URLs like
+    // //evil.com/... start with "/" but are external — restricting to /api/
+    // closes that loophole and matches the documented contract.
+    return url.startsWith("/api/");
   }
 
   async function resolveToken(): Promise<string | null> {
@@ -44,7 +47,7 @@ export function useApiClient() {
     url: string,
     options: Parameters<typeof $fetch>[1] = {},
   ): Promise<T> {
-    const token = isInternalUrl(url) ? await resolveToken() : null;
+    const token = isApiPath(url) ? await resolveToken() : null;
     const headers = buildHeaders(
       options.headers as HeadersInit | undefined,
       token,

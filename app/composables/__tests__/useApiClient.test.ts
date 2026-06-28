@@ -121,6 +121,26 @@ describe("useApiClient", () => {
     expect(calledHeaders.get("Authorization")).toBeNull();
   });
 
+  it("does not inject Authorization header for protocol-relative URLs", async () => {
+    mockGetToken.mockResolvedValue("test-token");
+    const { apiFetch } = useApiClient();
+
+    await apiFetch("//external.example.com/resource");
+
+    const calledHeaders = mockFetch.mock.calls[0][1].headers as Headers;
+    expect(calledHeaders.get("Authorization")).toBeNull();
+  });
+
+  it("does not inject Authorization header for non-/api/ internal paths", async () => {
+    mockGetToken.mockResolvedValue("test-token");
+    const { apiFetch } = useApiClient();
+
+    await apiFetch("/some-page");
+
+    const calledHeaders = mockFetch.mock.calls[0][1].headers as Headers;
+    expect(calledHeaders.get("Authorization")).toBeNull();
+  });
+
   it("passes extra options through to $fetch", async () => {
     mockGetToken.mockResolvedValue("test-token");
     const { apiFetch } = useApiClient();
