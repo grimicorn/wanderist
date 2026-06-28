@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mount } from "@vue/test-utils";
+import { ref } from "vue";
 import ExplorePage from "../explore.vue";
 
 const iconStub = { template: "<svg data-icon />" };
@@ -7,6 +8,24 @@ const topbarStub = {
   template: '<header class="topbar"><slot /></header>',
   props: ["title", "crumb"],
 };
+
+const mockToggleFollow = vi.fn();
+const mockFetchFollowing = vi.fn();
+const followingIds = ref<Set<string>>(new Set());
+const pendingUserIds = ref<Set<string>>(new Set());
+const followError = ref<string | null>(null);
+
+vi.stubGlobal("useFollows", () => ({
+  fetchFollowing: mockFetchFollowing,
+  toggleFollow: mockToggleFollow,
+  isFollowing: (userId: string) => followingIds.value.has(userId),
+  isPending: (userId: string) => pendingUserIds.value.has(userId),
+  followingIds,
+  pendingUserIds,
+  error: followError,
+}));
+
+vi.stubGlobal("useApiClient", () => ({ apiFetch: vi.fn() }));
 
 const globalConfig = {
   global: {
@@ -18,6 +37,13 @@ const globalConfig = {
 };
 
 describe("Explore page (/explore)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    followingIds.value = new Set();
+    pendingUserIds.value = new Set();
+    followError.value = null;
+  });
+
   it("renders without crashing and matches snapshot", () => {
     const wrapper = mount(ExplorePage, globalConfig);
     expect(wrapper.find(".xhero").exists()).toBe(true);
@@ -93,7 +119,14 @@ describe("Explore page (/explore)", () => {
     expect(wrapper.findAll(".person")).toHaveLength(4);
   });
 
-  it("shows one person already followed", () => {
+  it("calls fetchFollowing on mount", async () => {
+    mount(ExplorePage, globalConfig);
+    // onMounted is called synchronously in happy-dom
+    expect(mockFetchFollowing).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows a person as followed when their userId is in followingIds", async () => {
+    followingIds.value = new Set(["user_placeholder_yuki"]);
     const wrapper = mount(ExplorePage, globalConfig);
     const followBtns = wrapper.findAll(".person .btn");
     const followingBtn = followBtns.find((btn) =>
@@ -103,14 +136,59 @@ describe("Explore page (/explore)", () => {
     expect(followingBtn?.text()).toContain("following");
   });
 
-  it("toggles follow state when follow button is clicked", async () => {
+  it("shows no one followed when followingIds is empty", () => {
     const wrapper = mount(ExplorePage, globalConfig);
     const followBtns = wrapper.findAll(".person .btn");
-    const unfollowedBtn = followBtns.find(
-      (btn) => btn.text().trim() === "follow",
+    const followingBtn = followBtns.find((btn) =>
+      btn.classes().includes("btn--primary"),
     );
-    await unfollowedBtn?.trigger("click");
-    expect(unfollowedBtn?.classes()).toContain("btn--primary");
-    expect(unfollowedBtn?.text()).toContain("following");
+    expect(followingBtn).toBeUndefined();
+  });
+
+  it("calls toggleFollow with the correct userId when follow button is clicked", async () => {
+    mockToggleFollow.mockResolvedValue(undefined);
+    const wrapper = mount(ExplorePage, globalConfig);
+    const firstFollowBtn = wrapper.findAll(".person .btn")[0];
+    await firstFollowBtn.trigger("click");
+    expect(mockToggleFollow).toHaveBeenCalledWith("user_placeholder_elsa");
+  });
+
+  it("reflects updated follow state after toggleFollow resolves", async () => {
+    mockToggleFollow.mockImplementation(async (userId: string) => {
+      followingIds.value = new Set([...followingIds.value, userId]);
+    });
+    const wrapper = mount(ExplorePage, globalConfig);
+    const firstFollowBtn = wrapper.findAll(".person .btn")[0];
+    await firstFollowBtn.trigger("click");
+    await wrapper.vm.$nextTick();
+    expect(firstFollowBtn.classes()).toContain("btn--primary");
+    expect(firstFollowBtn.text()).toContain("following");
+  });
+
+  it("disables a follow button while its toggle is pending", async () => {
+    pendingUserIds.value = new Set(["user_placeholder_elsa"]);
+    const wrapper = mount(ExplorePage, globalConfig);
+    const firstFollowBtn = wrapper.findAll(".person .btn")[0];
+    expect((firstFollowBtn.element as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("shows an error alert when followError is set", async () => {
+    followError.value = "Could not update follow state";
+    const wrapper = mount(ExplorePage, {
+      global: {
+        stubs: {
+          AppIcon: iconStub,
+          AppTopbar: topbarStub,
+          AppAlert: {
+            template: '<div class="alert-stub" :data-message="message" />',
+            props: ["intent", "message", "dismissible"],
+          },
+        },
+      },
+    });
+    expect(wrapper.find(".alert-stub").exists()).toBe(true);
+    expect(wrapper.find(".alert-stub").attributes("data-message")).toBe(
+      "Could not update follow state",
+    );
   });
 });
