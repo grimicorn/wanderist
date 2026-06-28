@@ -34,7 +34,10 @@
       <AppIcon name="instagram" :size="18" class="alert__ico" />
       <div class="alert__body">
         <p class="alert__title">
-          <template v-if="importResult">
+          <template v-if="importError"
+            >Import failed: {{ importError }}</template
+          >
+          <template v-else-if="importResult">
             {{ importResult.imported }} photo{{
               importResult.imported === 1 ? "" : "s"
             }}
@@ -206,7 +209,11 @@ import { useConnections } from "~/composables/useConnections";
 definePageMeta({ layout: "app", middleware: "auth" });
 useHead({ title: "Wanderist — Home" });
 
-const { importResult, importInstagramPhotos } = useConnections();
+const {
+  importResult,
+  actionError: importError,
+  importInstagramPhotos,
+} = useConnections();
 
 const isImporting = ref(false);
 

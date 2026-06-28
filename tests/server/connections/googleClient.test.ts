@@ -108,6 +108,25 @@ describe("disconnectGoogleAccount", () => {
     expect(deleteUrl).toContain("user-1");
   });
 
+  it("handles a paginated { data: [] } response shape from Clerk BAPI", async () => {
+    stubFetch({
+      data: [
+        {
+          id: "eac_real",
+          identification_id: "idn_abc",
+          provider: GOOGLE_PROVIDER_ID,
+        },
+      ],
+      total_count: 1,
+    });
+
+    await disconnectGoogleAccount("sk_secret", "user-1", "idn_abc");
+
+    expect(fetch).toHaveBeenCalledTimes(2);
+    const [deleteUrl] = vi.mocked(fetch).mock.calls[1] as [string, RequestInit];
+    expect(deleteUrl).toContain("eac_real");
+  });
+
   it("treats a missing account as already disconnected (success, no delete call)", async () => {
     vi.mocked(fetch).mockResolvedValueOnce({
       ok: true,

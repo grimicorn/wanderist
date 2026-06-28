@@ -38,11 +38,14 @@ describe("useConnections", () => {
 
   describe("fetchConnections", () => {
     it("populates google connection info from the API", async () => {
-      mockApiFetch.mockResolvedValueOnce({
-        connected: true,
-        emailAddress: "user@gmail.com",
-        identificationId: "idn_abc",
-      });
+      // fetchConnections fires two parallel calls: instagram then google.
+      mockApiFetch
+        .mockResolvedValueOnce({ connected: false })
+        .mockResolvedValueOnce({
+          connected: true,
+          emailAddress: "user@gmail.com",
+          identificationId: "idn_abc",
+        });
 
       const { fetchConnections, connections } = useConnections();
       await fetchConnections();
@@ -119,7 +122,10 @@ describe("useConnections", () => {
 
   describe("disconnectGoogle", () => {
     it("calls DELETE /api/connections/google with the identificationId", async () => {
+      // fetchConnections fires two parallel calls (instagram, google) then
+      // disconnectGoogle fires a third.
       mockApiFetch
+        .mockResolvedValueOnce({ connected: false })
         .mockResolvedValueOnce({
           connected: true,
           emailAddress: "u@g.com",
@@ -184,11 +190,21 @@ describe("useConnections", () => {
     });
   });
 
-  describe("markInstagramConnected", () => {
-    it("sets instagram.connected to true", () => {
-      const { markInstagramConnected, connections } = useConnections();
-      markInstagramConnected();
+  describe("fetchConnections", () => {
+    it("fetches both Instagram and Google connections in parallel", async () => {
+      mockApiFetch
+        .mockResolvedValueOnce({ connected: true })
+        .mockResolvedValueOnce({
+          connected: true,
+          emailAddress: "u@g.com",
+          identificationId: "idn_abc",
+        });
 
+      const { fetchConnections, connections } = useConnections();
+      await fetchConnections();
+
+      expect(mockApiFetch).toHaveBeenCalledWith("/api/connections/instagram");
+      expect(mockApiFetch).toHaveBeenCalledWith("/api/connections/google");
       expect(
         (connections as { value: { instagram: { connected: boolean } } }).value
           .instagram.connected,

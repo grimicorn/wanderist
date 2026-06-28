@@ -7,8 +7,8 @@
  * NOTE: Instagram's Basic Display API was deprecated in December 2024.
  * This implementation targets the Instagram Graph API, which requires a
  * Facebook App connected to a Business or Creator Instagram account. Users
- * must grant the `instagram_basic`, `instagram_manage_insights`, and
- * `pages_show_list` permissions during OAuth.
+ * must grant the `instagram_basic` and `instagram_manage_media` permissions
+ * during OAuth.
  */
 
 export const INSTAGRAM_GRAPH_BASE_URL = "https://graph.instagram.com";
@@ -25,7 +25,7 @@ export const INSTAGRAM_SCOPES = [
 ].join(",");
 
 export const INSTAGRAM_MEDIA_FIELDS =
-  "id,caption,media_type,timestamp,permalink,location";
+  "id,caption,media_type,timestamp,permalink,media_url,location";
 
 export const INSTAGRAM_MEDIA_LIMIT = 50;
 
@@ -53,14 +53,17 @@ export interface InstagramUserResponse {
 
 export interface InstagramMediaLocation {
   name: string;
-  latitude?: number;
-  longitude?: number;
+  // Coordinates are required — items without both are excluded by
+  // filterGeotaggedMedia before import.
+  latitude: number;
+  longitude: number;
 }
 
 export interface InstagramMediaItem {
   id: string;
   caption?: string;
   media_type: string;
+  media_url: string;
   timestamp: string;
   permalink: string;
   location?: InstagramMediaLocation;
@@ -207,7 +210,23 @@ export async function fetchInstagramMedia(
 }
 
 /**
- * Filters a list of media items to only those with geotag data.
+ * Fetches the raw image bytes from an Instagram CDN URL.
+ * Isolated here so the import handler can be tested without network access.
+ */
+export async function fetchInstagramImage(mediaUrl: string): Promise<Buffer> {
+  const response = await fetch(mediaUrl);
+  if (!response.ok) {
+    throw new Error(
+      `Failed to fetch Instagram image (${response.status}): ${mediaUrl}`,
+    );
+  }
+  const arrayBuffer = await response.arrayBuffer();
+  return Buffer.from(arrayBuffer);
+}
+
+/**
+ * Filters a list of media items to only those with complete geotag data
+ * (both latitude and longitude present, not just a location name).
  */
 export function filterGeotaggedMedia(
   items: InstagramMediaItem[],
@@ -215,6 +234,8 @@ export function filterGeotaggedMedia(
   return items.filter(
     (item) =>
       INSTAGRAM_GEOTAGGED_MEDIA_TYPES.has(item.media_type) &&
-      item.location !== undefined,
+      item.location !== undefined &&
+      typeof item.location.latitude === "number" &&
+      typeof item.location.longitude === "number",
   );
 }

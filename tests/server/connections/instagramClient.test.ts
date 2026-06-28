@@ -170,6 +170,7 @@ describe("fetchInstagramMedia", () => {
         {
           id: "m1",
           media_type: "IMAGE",
+          media_url: "https://cdn.ig.com/m1.jpg",
           timestamp: "2024-01-01T00:00:00Z",
           permalink: "https://ig.com/p/m1",
         },
@@ -191,11 +192,12 @@ describe("fetchInstagramMedia", () => {
 });
 
 describe("filterGeotaggedMedia", () => {
-  it("returns only items with a location field", () => {
+  it("returns only IMAGE items with a location that has coordinates", () => {
     const items: InstagramMediaItem[] = [
       {
         id: "1",
         media_type: "IMAGE",
+        media_url: "https://cdn.ig.com/1.jpg",
         timestamp: "2024-01-01T00:00:00Z",
         permalink: "https://ig.com/1",
         location: { name: "Paris", latitude: 48.8566, longitude: 2.3522 },
@@ -203,6 +205,7 @@ describe("filterGeotaggedMedia", () => {
       {
         id: "2",
         media_type: "IMAGE",
+        media_url: "https://cdn.ig.com/2.jpg",
         timestamp: "2024-01-02T00:00:00Z",
         permalink: "https://ig.com/2",
         // No location — should be filtered out.
@@ -210,9 +213,10 @@ describe("filterGeotaggedMedia", () => {
       {
         id: "3",
         media_type: "VIDEO",
+        media_url: "https://cdn.ig.com/3.mp4",
         timestamp: "2024-01-03T00:00:00Z",
         permalink: "https://ig.com/3",
-        location: { name: "Rome" },
+        location: { name: "Rome", latitude: 41.9028, longitude: 12.4964 },
         // VIDEO type — should be filtered out.
       },
     ];
@@ -228,6 +232,7 @@ describe("filterGeotaggedMedia", () => {
       {
         id: "1",
         media_type: "IMAGE",
+        media_url: "https://cdn.ig.com/1.jpg",
         timestamp: "2024-01-01T00:00:00Z",
         permalink: "https://ig.com/1",
       },
@@ -235,14 +240,15 @@ describe("filterGeotaggedMedia", () => {
     expect(filterGeotaggedMedia(items)).toHaveLength(0);
   });
 
-  it("includes CAROUSEL_ALBUM items that have a location", () => {
+  it("includes CAROUSEL_ALBUM items that have a location with lat/lon", () => {
     const items: InstagramMediaItem[] = [
       {
         id: "1",
         media_type: "CAROUSEL_ALBUM",
+        media_url: "https://cdn.ig.com/carousel.jpg",
         timestamp: "2024-01-01T00:00:00Z",
         permalink: "https://ig.com/1",
-        location: { name: "Tokyo" },
+        location: { name: "Tokyo", latitude: 35.6762, longitude: 139.6503 },
       },
     ];
     expect(filterGeotaggedMedia(items)).toHaveLength(1);

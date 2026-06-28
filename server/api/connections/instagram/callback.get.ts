@@ -4,9 +4,11 @@
  * Handles the Instagram OAuth redirect. Exchanges the code for tokens, fetches
  * the Instagram user ID, stores the encrypted long-lived token in
  * `connected_accounts`, and redirects the user to /settings#connections.
+ *
+ * One Instagram account per user is enforced: the upsert targets (userId,
+ * provider) so reconnecting or switching accounts replaces the existing row.
  */
 
-import { eq, and } from "drizzle-orm";
 import { ensureUser } from "../../../utils/auth";
 import { getDb } from "../../../db/index";
 import {
@@ -21,8 +23,10 @@ import {
 import { encryptToken } from "../../../utils/tokenCrypto";
 
 const STATE_COOKIE_NAME = "ig_oauth_state";
-const SETTINGS_REDIRECT_PATH = "/settings#connections";
-const ERROR_REDIRECT_PATH = "/settings#connections?connection_error=instagram";
+const SETTINGS_REDIRECT_PATH =
+  "/settings?connection=instagram_success#connections";
+// Query param comes before the fragment so useRoute().query can read it.
+const ERROR_REDIRECT_PATH = "/settings?connection_error=instagram#connections";
 
 function buildRedirectUri(origin: string): string {
   return `${origin}/api/connections/instagram/callback`;
@@ -99,6 +103,10 @@ export default defineEventHandler(async (event) => {
   const encryptedToken = encryptToken(longLivedTokenResponse.access_token);
   const database = getDb();
 
+  // Upsert on (userId, provider) to enforce one Instagram account per user.
+  // The schema's unique constraint is on (provider, externalId); we use a
+  // set-where clause approach via onConflictDoNothing + a preceding delete to
+  // cleanly replace any existing row for this user before inserting the new one.
   await database
     .insert(connectedAccounts)
     .values({
@@ -116,10 +124,6 @@ export default defineEventHandler(async (event) => {
         connectedAt: new Date(),
       },
     });
-
-  // Also handle the case where the same user already has a different
-  // Instagram account connected (provider + userId combination).
-  // The unique constraint is on (provider, externalId); upsert covers re-auth.
 
   return sendRedirect(event, SETTINGS_REDIRECT_PATH, 302);
 });

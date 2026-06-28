@@ -35,12 +35,12 @@ function extractErrorMessage(error: unknown): string {
     return UNEXPECTED_ERROR_MESSAGE;
   }
   const errorObj = error as Record<string, unknown>;
-  const data = errorObj.data;
-  if (data && typeof data === "object") {
-    const dataObj = data as Record<string, unknown>;
-    if (typeof dataObj.statusMessage === "string") {
-      return dataObj.statusMessage;
-    }
+  const data =
+    errorObj.data && typeof errorObj.data === "object"
+      ? (errorObj.data as Record<string, unknown>)
+      : null;
+  if (typeof data?.statusMessage === "string") {
+    return data.statusMessage;
   }
   if (typeof errorObj.statusMessage === "string") {
     return errorObj.statusMessage;
@@ -74,17 +74,12 @@ export function useConnections() {
     loadError.value = null;
 
     try {
-      const [google] = await Promise.all([
+      const [instagram, google] = await Promise.all([
+        apiFetch<InstagramConnectionState>("/api/connections/instagram"),
         apiFetch<GoogleConnectionState>("/api/connections/google"),
       ]);
+      connections.value.instagram = instagram;
       connections.value.google = google;
-
-      // Instagram: derive connected state from whether a token row exists.
-      // We surface it via the import endpoint returning 422 when not connected,
-      // but for the settings UI we need a lightweight status check. We store
-      // the connected flag locally after connect/disconnect operations and seed
-      // it from the import-readiness check on load.
-      // For now the status is persisted via optimistic updates below.
     } catch (error: unknown) {
       loadError.value = extractErrorMessage(error);
     } finally {
@@ -94,8 +89,8 @@ export function useConnections() {
 
   function startInstagramConnect(): void {
     // Navigates the top-level window to the OAuth start endpoint, which sets
-    // the state cookie and redirects to Instagram. The callback returns to
-    // /settings#connections.
+    // the state cookie and redirects to Instagram. The callback redirects back
+    // to /settings?connection=instagram_success#connections.
     window.location.href = "/api/connections/instagram/start";
   }
 
@@ -152,14 +147,6 @@ export function useConnections() {
     }
   }
 
-  /**
-   * Call after the OAuth callback redirects back to /settings to mark
-   * Instagram as connected without needing a separate status endpoint.
-   */
-  function markInstagramConnected(): void {
-    connections.value.instagram = { connected: true };
-  }
-
   return {
     connections: readonly(connections),
     isLoading: readonly(isLoading),
@@ -171,6 +158,5 @@ export function useConnections() {
     disconnectInstagram,
     disconnectGoogle,
     importInstagramPhotos,
-    markInstagramConnected,
   };
 }

@@ -45,7 +45,6 @@ Object.assign(globalThis, {
     disconnectInstagram: vi.fn().mockResolvedValue(true),
     disconnectGoogle: vi.fn().mockResolvedValue(true),
     importInstagramPhotos: vi.fn().mockResolvedValue(true),
-    markInstagramConnected: vi.fn(),
   })),
   usePreferences: vi.fn(() => ({
     preferences: vue.ref({

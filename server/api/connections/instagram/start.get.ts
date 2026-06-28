@@ -45,7 +45,7 @@ export default defineEventHandler(async (event) => {
 
   setCookie(event, STATE_COOKIE_NAME, state, {
     httpOnly: true,
-    secure: true,
+    secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     maxAge: STATE_COOKIE_MAX_AGE_SECONDS,
     path: "/",

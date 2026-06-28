@@ -28,6 +28,7 @@ const {
   mockExchangeForLongLivedToken,
   mockFetchInstagramUser,
   mockFetchInstagramMedia,
+  mockFetchInstagramImage,
   mockFilterGeotaggedMedia,
   mockEncryptToken,
   mockDecryptToken,
@@ -90,6 +91,9 @@ const {
       .fn()
       .mockResolvedValue({ id: "ig-123", username: "testuser" }),
     mockFetchInstagramMedia: vi.fn().mockResolvedValue({ data: [] }),
+    mockFetchInstagramImage: vi
+      .fn()
+      .mockResolvedValue(Buffer.from("fake-image-bytes")),
     mockFilterGeotaggedMedia: vi.fn().mockReturnValue([]),
     mockEncryptToken: vi.fn().mockReturnValue("encrypted-token"),
     mockDecryptToken: vi.fn().mockReturnValue("long-token"),
@@ -123,9 +127,11 @@ vi.mock("../../../server/utils/instagramClient", () => ({
   exchangeForLongLivedToken: mockExchangeForLongLivedToken,
   fetchInstagramUser: mockFetchInstagramUser,
   fetchInstagramMedia: mockFetchInstagramMedia,
+  fetchInstagramImage: mockFetchInstagramImage,
   filterGeotaggedMedia: mockFilterGeotaggedMedia,
   INSTAGRAM_SCOPES: "instagram_basic,instagram_manage_media",
-  INSTAGRAM_MEDIA_FIELDS: "id,caption,media_type,timestamp,permalink,location",
+  INSTAGRAM_MEDIA_FIELDS:
+    "id,caption,media_type,timestamp,permalink,media_url,location",
   INSTAGRAM_MEDIA_LIMIT: 50,
   INSTAGRAM_GEOTAGGED_MEDIA_TYPES: new Set(["IMAGE", "CAROUSEL_ALBUM"]),
 }));
@@ -165,6 +171,8 @@ const { default: startHandler } =
   await import("../../../server/api/connections/instagram/start.get");
 const { default: callbackHandler } =
   await import("../../../server/api/connections/instagram/callback.get");
+const { default: statusHandler } =
+  await import("../../../server/api/connections/instagram/index.get");
 const { default: deleteHandler } =
   await import("../../../server/api/connections/instagram/index.delete");
 const { default: importHandler } =
@@ -203,13 +211,29 @@ describe("GET /api/connections/instagram/start", () => {
       expect.anything(),
       "ig_oauth_state",
       expect.any(String),
-      expect.objectContaining({ httpOnly: true, secure: true }),
+      expect.objectContaining({ httpOnly: true }),
     );
     expect(mockSendRedirect).toHaveBeenCalledWith(
       expect.anything(),
       expect.stringContaining("instagram.com"),
       302,
     );
+  });
+
+  it("sets secure: true only in production", async () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+
+    await call(startHandler, makeEvent());
+
+    expect(mockSetCookie).toHaveBeenCalledWith(
+      expect.anything(),
+      "ig_oauth_state",
+      expect.any(String),
+      expect.objectContaining({ secure: true }),
+    );
+
+    process.env.NODE_ENV = originalNodeEnv;
   });
 
   it("throws 500 when INSTAGRAM_CLIENT_ID is missing", async () => {
@@ -266,14 +290,14 @@ describe("GET /api/connections/instagram/callback", () => {
     mockDbInsertOnConflict.mockResolvedValue(undefined);
   });
 
-  it("stores the encrypted token and redirects to /settings#connections on success", async () => {
+  it("stores the encrypted token and redirects to /settings with success query on success", async () => {
     await call(callbackHandler, makeEvent());
 
     expect(mockEncryptToken).toHaveBeenCalledWith("long-token");
     expect(mockDbInsert).toHaveBeenCalled();
     expect(mockSendRedirect).toHaveBeenCalledWith(
       expect.anything(),
-      "/settings#connections",
+      "/settings?connection=instagram_success#connections",
       302,
     );
   });
@@ -336,6 +360,42 @@ describe("GET /api/connections/instagram/callback", () => {
     expect(calledValues?.userId).toBe("user-1");
     expect(calledValues?.provider).toBe("instagram");
     expect(calledValues?.accessToken).toBe("encrypted-token");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/connections/instagram (status)
+// ---------------------------------------------------------------------------
+
+describe("GET /api/connections/instagram", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockRequireUser.mockReturnValue("user-1");
+    mockDbSelectLimit.mockResolvedValue([]);
+  });
+
+  it("returns { connected: false } when no row exists", async () => {
+    const result = await call(statusHandler, makeEvent());
+
+    expect(result).toEqual({ connected: false });
+  });
+
+  it("returns { connected: true } when a connection row exists", async () => {
+    mockDbSelectLimit.mockResolvedValue([{ id: "row-1" }]);
+
+    const result = await call(statusHandler, makeEvent());
+
+    expect(result).toEqual({ connected: true });
+  });
+
+  it("throws 401 when the user is not authenticated", async () => {
+    mockRequireUser.mockImplementation(() => {
+      throw Object.assign(new Error("Unauthorized"), { statusCode: 401 });
+    });
+
+    await expect(call(statusHandler, makeEvent())).rejects.toMatchObject({
+      statusCode: 401,
+    });
   });
 });
 
@@ -419,6 +479,47 @@ describe("POST /api/connections/instagram/import", () => {
 
     expect(mockDecryptToken).toHaveBeenCalledWith("encrypted-token");
     expect(mockFetchInstagramMedia).toHaveBeenCalledWith("long-token");
+  });
+
+  it("calls fetchInstagramImage for each geotagged item", async () => {
+    const geotaggedItem = {
+      id: "ig-media-1",
+      media_type: "IMAGE",
+      media_url: "https://cdn.instagram.com/photo.jpg",
+      timestamp: "2024-01-01T00:00:00Z",
+      permalink: "https://www.instagram.com/p/abc/",
+      location: { name: "Paris", latitude: 48.8566, longitude: 2.3522 },
+    };
+    mockFilterGeotaggedMedia.mockReturnValue([geotaggedItem]);
+    mockFetchInstagramImage.mockResolvedValue(Buffer.from("img"));
+    mockDbInsertOnConflict.mockResolvedValue([{ id: "row-id" }]);
+    mockDbInsertValues.mockReturnValue({
+      onConflictDoUpdate: mockDbInsertOnConflict,
+      returning: vi.fn().mockResolvedValue([{ id: "row-id" }]),
+    });
+
+    const mockTransaction = vi.fn().mockImplementation(async (callback) => {
+      const transactionDb = {
+        insert: vi.fn(() => ({
+          values: vi.fn(() => ({
+            returning: vi.fn().mockResolvedValue([{ id: "new-id" }]),
+          })),
+        })),
+      };
+      return callback(transactionDb);
+    });
+    mockGetDb.mockReturnValue({
+      insert: mockDbInsert,
+      delete: mockDbDelete,
+      select: mockDbSelect,
+      transaction: mockTransaction,
+    });
+
+    await call(importHandler, makeEvent());
+
+    expect(mockFetchInstagramImage).toHaveBeenCalledWith(
+      "https://cdn.instagram.com/photo.jpg",
+    );
   });
 
   it("throws 401 when the user is not authenticated", async () => {

@@ -48,6 +48,8 @@ exports[`Settings page (/settings) > renders without crashing and matches snapsh
           <!--v-if-->
           <!--v-if-->
           <!--v-if-->
+          <!--v-if-->
+          <!--v-if-->
           <!-- Instagram -->
           <div data-v-a376170b="" class="conn">
             <div data-v-a376170b="" class="conn__logo"><svg data-v-a376170b="" data-icon="" name="instagram" size="20"></svg></div>

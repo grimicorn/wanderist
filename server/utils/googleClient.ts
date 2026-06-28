@@ -96,7 +96,11 @@ export async function disconnectGoogleAccount(
     identification_id: string;
     provider: string;
   };
-  const accounts = (await listResponse.json()) as ExternalAccountEntry[];
+  type ListResponseBody =
+    | ExternalAccountEntry[]
+    | { data: ExternalAccountEntry[] };
+  const body = (await listResponse.json()) as ListResponseBody;
+  const accounts = Array.isArray(body) ? body : body.data;
   const googleAccount = accounts.find(
     (account) =>
       account.provider === GOOGLE_PROVIDER_ID &&

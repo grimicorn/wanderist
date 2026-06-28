@@ -142,13 +142,26 @@
             <div v-if="connectionsLoadError" style="margin-bottom: 12px">
               <AppAlert intent="error" :title="connectionsLoadError" />
             </div>
+            <div v-if="instagramConnectionSuccess" style="margin-bottom: 12px">
+              <AppAlert intent="success" title="Instagram connected" />
+            </div>
+            <div v-if="instagramConnectionError" style="margin-bottom: 12px">
+              <AppAlert
+                intent="error"
+                title="Instagram connection failed or was cancelled"
+              />
+            </div>
             <div v-if="connectionsActionError" style="margin-bottom: 12px">
               <AppAlert intent="error" :title="connectionsActionError" />
             </div>
             <div v-if="importResult" style="margin-bottom: 12px">
               <AppAlert
-                intent="success"
-                :title="`Imported ${importResult.imported} photo${importResult.imported === 1 ? '' : 's'}${importResult.skipped > 0 ? `, ${importResult.skipped} skipped` : ''}`"
+                :intent="importResult.errors.length > 0 ? 'error' : 'success'"
+                :title="
+                  importResult.errors.length > 0
+                    ? `Import finished with ${importResult.errors.length} error${importResult.errors.length === 1 ? '' : 's'}`
+                    : `Imported ${importResult.imported} photo${importResult.imported === 1 ? '' : 's'}`
+                "
               />
             </div>
 
@@ -438,7 +451,6 @@ const {
   disconnectInstagram,
   disconnectGoogle,
   importInstagramPhotos,
-  markInstagramConnected,
 } = useConnections();
 
 // Local editable copies — populated once preferences load.
@@ -515,23 +527,20 @@ watch(
   { immediate: true },
 );
 
+const instagramConnectionSuccess = computed(
+  () => useRoute().query.connection === "instagram_success",
+);
+
+const instagramConnectionError = computed(
+  () => useRoute().query.connection_error === "instagram",
+);
+
 onMounted(async () => {
   await fetchPreferences();
   // `fetchPreferences` updates `preferences.value`; the watcher above fires
   // before this continuation resumes (Vue flushes on the next microtask).
   // Mark the flag here so the watcher stops overwriting user edits after load.
   hasPopulatedFromServer.value = true;
-
-  // Check if the page was reached via the Instagram OAuth callback. The
-  // callback redirects to /settings#connections; detect the hash and mark the
-  // connection as successful without a separate status endpoint.
-  const hash = window.location.hash;
-  if (
-    hash === "#connections" &&
-    useRoute().query.connection_error === undefined
-  ) {
-    markInstagramConnected();
-  }
 
   await fetchConnections();
 });
