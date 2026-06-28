@@ -51,9 +51,13 @@ export async function assertOwnership(
 }
 
 /**
- * Validates that `value` is a non-empty string. Throws 400 with the given
- * field name in the message if the check fails. Use this for required string
- * fields from request bodies before hitting the database.
+ * Validates that `value` is a non-empty, non-whitespace-only string. Throws
+ * 400 with the given field name in the message if the check fails. Use this
+ * for required string fields from request bodies before hitting the database.
+ *
+ * Note: this guard does not trim the value — whitespace-only strings are
+ * rejected, but strings like "  foo  " pass. Callers that need a clean value
+ * should trim after validation.
  */
 export function requireString(
   value: unknown,

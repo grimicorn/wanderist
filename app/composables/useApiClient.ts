@@ -19,19 +19,28 @@ export function useApiClient() {
     return getToken.value();
   }
 
+  function buildHeaders(
+    existingHeaders: HeadersInit | undefined,
+    token: string | null,
+  ): Headers {
+    // Normalize via the Headers constructor, which handles record, Headers
+    // instance, and string[][] shapes without losing any caller-supplied headers.
+    const headers = new Headers(existingHeaders);
+    if (token) {
+      headers.set("Authorization", `Bearer ${token}`);
+    }
+    return headers;
+  }
+
   async function apiFetch<T>(
     url: string,
     options: Parameters<typeof $fetch>[1] = {},
   ): Promise<T> {
     const token = await resolveToken();
-
-    const existingHeaders = (options.headers ?? {}) as Record<string, string>;
-    const headers: Record<string, string> = { ...existingHeaders };
-
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
-
+    const headers = buildHeaders(
+      options.headers as HeadersInit | undefined,
+      token,
+    );
     return $fetch<T>(url, { ...options, headers });
   }
 
