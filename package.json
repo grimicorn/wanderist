@@ -12,6 +12,7 @@
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:ci": "vitest run",
+    "test:types": "vitest --typecheck",
     "lint": "prettier --check . && eslint . && fallow audit",
     "lint:ci": "prettier --check . && eslint . && fallow audit --base origin/${BASE_BRANCH:-main}",
     "lint:fix": "prettier --write . && eslint . --fix && fallow fix --yes",
