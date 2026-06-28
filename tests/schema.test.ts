@@ -175,6 +175,16 @@ describe("column presence", () => {
     expect(users.updatedAt).toBeDefined();
   });
 
+  it("media has id, userId, url, width, height, contentType, createdAt", () => {
+    expect(media.id).toBeDefined();
+    expect(media.userId).toBeDefined();
+    expect(media.url).toBeDefined();
+    expect(media.width).toBeDefined();
+    expect(media.height).toBeDefined();
+    expect(media.contentType).toBeDefined();
+    expect(media.createdAt).toBeDefined();
+  });
+
   it("trips has userId, status, visibility, coverImageId", () => {
     expect(trips.userId).toBeDefined();
     expect(trips.status).toBeDefined();
