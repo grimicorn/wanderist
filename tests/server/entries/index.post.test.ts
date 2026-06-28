@@ -15,6 +15,10 @@ vi.mock("../../../server/db/index", () => ({
   getDb: vi.fn(),
 }));
 
+vi.mock("../../../server/utils/entry-helpers", () => ({
+  loadEntryRelations: vi.fn().mockResolvedValue({ photos: [], tags: [] }),
+}));
+
 import { ensureUser } from "../../../server/utils/auth";
 import { getDb } from "../../../server/db/index";
 
@@ -111,6 +115,6 @@ describe("POST /api/entries", () => {
     const defaultHandler = "default" in handler ? handler.default : handler;
     const result = await (defaultHandler as (event: unknown) => unknown)({});
 
-    expect(result).toEqual(createdEntry);
+    expect(result).toMatchObject(createdEntry);
   });
 });

@@ -8,6 +8,7 @@ import {
   VISIBILITY,
 } from "../../db/schema";
 import { requireString, optionalString } from "../../utils/db-helpers";
+import { loadEntryRelations } from "../../utils/entry-helpers";
 
 type Visibility = (typeof VISIBILITY)[keyof typeof VISIBILITY];
 
@@ -54,13 +55,12 @@ function parseStringArray(value: unknown, fieldName: string): string[] {
       statusMessage: `${fieldName} must be an array when provided`,
     });
   }
-  for (const item of value) {
-    if (typeof item !== "string") {
-      throw createError({
-        statusCode: 400,
-        statusMessage: `${fieldName} must be an array of strings`,
-      });
-    }
+  const allStrings = value.every((item) => typeof item === "string");
+  if (!allStrings) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: `${fieldName} must be an array of strings`,
+    });
   }
   return value as string[];
 }
@@ -155,5 +155,7 @@ export default defineEventHandler(async (event) => {
     insertEntryTags(database, entryId, tagIds),
   ]);
 
-  return inserted[0];
+  const relations = await loadEntryRelations(database, entryId);
+
+  return { ...inserted[0], ...relations };
 });

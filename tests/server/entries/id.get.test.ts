@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { stubNitroGlobals } from "../test-utils";
 import {
-  makeDbForEntryGet,
   assertThrows404WhenNotOwned,
   assertThrows401WhenUnauthenticated,
 } from "./_helpers";
@@ -17,23 +16,24 @@ vi.mock("../../../server/utils/db-helpers", () => ({
   loadOwnedOrThrow: vi.fn(),
 }));
 
+vi.mock("../../../server/utils/entry-helpers", () => ({
+  loadEntryRelations: vi.fn().mockResolvedValue({ photos: [], tags: [] }),
+}));
+
 vi.mock("../../../server/db/index", () => ({
   getDb: vi.fn(),
 }));
-
-vi.mock("drizzle-orm", async (importOriginal) => {
-  const original = await importOriginal<typeof import("drizzle-orm")>();
-  return { ...original, eq: vi.fn(original.eq) };
-});
 
 import {
   requireRouterParam,
   loadOwnedOrThrow,
 } from "../../../server/utils/db-helpers";
+import { loadEntryRelations } from "../../../server/utils/entry-helpers";
 import { getDb } from "../../../server/db/index";
 
 const mockRequireRouterParam = vi.mocked(requireRouterParam);
 const mockLoadOwnedOrThrow = vi.mocked(loadOwnedOrThrow);
+const mockLoadEntryRelations = vi.mocked(loadEntryRelations);
 const mockGetDb = vi.mocked(getDb);
 
 const handler = await import("../../../server/api/entries/[id].get");
@@ -41,6 +41,7 @@ const handler = await import("../../../server/api/entries/[id].get");
 describe("GET /api/entries/:id", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockLoadEntryRelations.mockResolvedValue({ photos: [], tags: [] });
   });
 
   it("returns the entry with photos and tags when found and owned", async () => {
@@ -49,14 +50,17 @@ describe("GET /api/entries/:id", () => {
     mockLoadOwnedOrThrow.mockResolvedValue(
       baseEntry as unknown as Awaited<ReturnType<typeof loadOwnedOrThrow>>,
     );
-    const mockDb = makeDbForEntryGet();
-    mockGetDb.mockReturnValue(mockDb as unknown as ReturnType<typeof getDb>);
+    mockGetDb.mockReturnValue({} as unknown as ReturnType<typeof getDb>);
 
     const defaultHandler = "default" in handler ? handler.default : handler;
     const result = await (defaultHandler as (event: unknown) => unknown)({});
 
     expect(result).toMatchObject({ ...baseEntry, photos: [], tags: [] });
     expect(mockLoadOwnedOrThrow).toHaveBeenCalledTimes(1);
+    expect(mockLoadEntryRelations).toHaveBeenCalledWith(
+      expect.anything(),
+      "e-1",
+    );
   });
 
   it("throws 400 when id param is missing", async () => {

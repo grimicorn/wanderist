@@ -1,4 +1,4 @@
-import { eq, inArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import {
   assertOwnership,
   optionalString,
@@ -12,6 +12,7 @@ import {
   tags,
   VISIBILITY,
 } from "../../db/schema";
+import { loadEntryRelations } from "../../utils/entry-helpers";
 
 type EntryUpdates = Partial<typeof entries.$inferInsert>;
 type Visibility = (typeof VISIBILITY)[keyof typeof VISIBILITY];
@@ -55,13 +56,12 @@ function parseStringArray(
       statusMessage: `${fieldName} must be an array when provided`,
     });
   }
-  for (const item of value) {
-    if (typeof item !== "string") {
-      throw createError({
-        statusCode: 400,
-        statusMessage: `${fieldName} must be an array of strings`,
-      });
-    }
+  const allStrings = value.every((item) => typeof item === "string");
+  if (!allStrings) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: `${fieldName} must be an array of strings`,
+    });
   }
   return value as string[];
 }
@@ -244,5 +244,7 @@ export default defineEventHandler(async (event) => {
     updated = rows[0];
   }
 
-  return updated;
+  const relations = await loadEntryRelations(database, id);
+
+  return { ...updated, ...relations };
 });

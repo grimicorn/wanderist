@@ -1,4 +1,4 @@
-import { eq, and, desc, inArray } from "drizzle-orm";
+import { eq, and, desc, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { requireUser } from "../../utils/auth";
 import { getDb } from "../../db/index";
@@ -103,7 +103,10 @@ async function fetchEntriesPage(
     .select()
     .from(entries)
     .where(and(...filters))
-    .orderBy(desc(entries.occurredAt), desc(entries.createdAt))
+    .orderBy(
+      sql`${entries.occurredAt} desc nulls last`,
+      desc(entries.createdAt),
+    )
     .limit(PAGE_SIZE)
     .offset((page - 1) * PAGE_SIZE);
 }
