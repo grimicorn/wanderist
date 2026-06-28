@@ -33,7 +33,9 @@ describe("Home / Dashboard page (/home)", () => {
   it("renders the import alert", () => {
     const wrapper = mount(HomePage, globalConfig);
     expect(wrapper.find(".alert--info").exists()).toBe(true);
-    expect(wrapper.find(".alert__title").text()).toContain("geotagged photos");
+    expect(wrapper.find(".alert__title").text()).toContain(
+      "Geotagged photos from Instagram",
+    );
   });
 
   it("renders the mini map card with 6 pins", () => {
