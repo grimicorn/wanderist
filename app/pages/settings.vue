@@ -138,6 +138,21 @@
               </h3>
               <p>Pull in geotagged photos and sign in faster.</p>
             </div>
+
+            <div v-if="connectionsLoadError" style="margin-bottom: 12px">
+              <AppAlert intent="error" :title="connectionsLoadError" />
+            </div>
+            <div v-if="connectionsActionError" style="margin-bottom: 12px">
+              <AppAlert intent="error" :title="connectionsActionError" />
+            </div>
+            <div v-if="importResult" style="margin-bottom: 12px">
+              <AppAlert
+                intent="success"
+                :title="`Imported ${importResult.imported} photo${importResult.imported === 1 ? '' : 's'}${importResult.skipped > 0 ? `, ${importResult.skipped} skipped` : ''}`"
+              />
+            </div>
+
+            <!-- Instagram -->
             <div class="conn">
               <div class="conn__logo">
                 <AppIcon name="instagram" :size="20" />
@@ -147,21 +162,62 @@
                 <p>Auto-import geotagged photos into your entries.</p>
               </div>
               <div class="right">
-                <button class="btn btn--primary btn--sm">
-                  <AppIcon name="plus" :size="14" />
-                  connect
-                </button>
+                <template v-if="connections.instagram.connected">
+                  <button
+                    class="btn btn--outline btn--sm"
+                    :disabled="connectionsLoading"
+                    @click="handleImportInstagram"
+                  >
+                    <AppIcon name="download" :size="14" />
+                    import photos
+                  </button>
+                  <button
+                    class="btn btn--ghost btn--sm"
+                    :disabled="connectionsLoading"
+                    @click="handleDisconnectInstagram"
+                  >
+                    disconnect
+                  </button>
+                </template>
+                <template v-else>
+                  <button
+                    class="btn btn--primary btn--sm"
+                    :disabled="connectionsLoading"
+                    @click="handleConnectInstagram"
+                  >
+                    <AppIcon name="plus" :size="14" />
+                    connect
+                  </button>
+                </template>
               </div>
             </div>
+
+            <!-- Google -->
             <div class="conn">
               <div class="conn__logo"><AppIcon name="google" :size="20" /></div>
               <div class="conn__meta">
                 <b>Google</b>
-                <p>Signed in as you@domain.com</p>
+                <p v-if="connections.google.emailAddress">
+                  Signed in as {{ connections.google.emailAddress }}
+                </p>
+                <p v-else>Sign in faster with your Google account.</p>
               </div>
               <div class="right">
-                <span class="status-dot">connected</span>
-                <button class="btn btn--ghost btn--sm">disconnect</button>
+                <template v-if="connections.google.connected">
+                  <span class="status-dot">connected</span>
+                  <button
+                    class="btn btn--ghost btn--sm"
+                    :disabled="connectionsLoading"
+                    @click="handleDisconnectGoogle"
+                  >
+                    disconnect
+                  </button>
+                </template>
+                <template v-else>
+                  <span class="muted" style="font-size: 12px"
+                    >not connected</span
+                  >
+                </template>
               </div>
             </div>
           </section>
@@ -353,6 +409,7 @@
 <script setup lang="ts">
 import type { Ref } from "vue";
 import { usePreferences } from "~/composables/usePreferences";
+import { useConnections } from "~/composables/useConnections";
 
 definePageMeta({ layout: "app", middleware: "auth" });
 useHead({ title: "Wanderist — Settings" });
@@ -369,6 +426,20 @@ const sections = [
 const { user } = useClerkUser();
 const { preferences, loadError, saveError, fetchPreferences, savePreferences } =
   usePreferences();
+
+const {
+  connections,
+  isLoading: connectionsLoading,
+  loadError: connectionsLoadError,
+  actionError: connectionsActionError,
+  importResult,
+  fetchConnections,
+  startInstagramConnect,
+  disconnectInstagram,
+  disconnectGoogle,
+  importInstagramPhotos,
+  markInstagramConnected,
+} = useConnections();
 
 // Local editable copies — populated once preferences load.
 const profile = reactive({
@@ -450,7 +521,36 @@ onMounted(async () => {
   // before this continuation resumes (Vue flushes on the next microtask).
   // Mark the flag here so the watcher stops overwriting user edits after load.
   hasPopulatedFromServer.value = true;
+
+  // Check if the page was reached via the Instagram OAuth callback. The
+  // callback redirects to /settings#connections; detect the hash and mark the
+  // connection as successful without a separate status endpoint.
+  const hash = window.location.hash;
+  if (
+    hash === "#connections" &&
+    useRoute().query.connection_error === undefined
+  ) {
+    markInstagramConnected();
+  }
+
+  await fetchConnections();
 });
+
+function handleConnectInstagram(): void {
+  startInstagramConnect();
+}
+
+async function handleDisconnectInstagram(): Promise<void> {
+  await disconnectInstagram();
+}
+
+async function handleDisconnectGoogle(): Promise<void> {
+  await disconnectGoogle();
+}
+
+async function handleImportInstagram(): Promise<void> {
+  await importInstagramPhotos();
+}
 
 const TOAST_DURATION_MS = 2200;
 

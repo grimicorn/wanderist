@@ -95,6 +95,39 @@ To configure the webhook in the Clerk Dashboard:
 3. Subscribe to the `user.created`, `user.updated`, and `user.deleted` events.
 4. Copy the **Signing Secret** (starts with `whsec_`) and set it as `NUXT_CLERK_WEBHOOK_SECRET` in your environment.
 
+## Connected accounts
+
+### Instagram (photo import)
+
+Wanderist connects to Instagram via the **Instagram Graph API** (not the deprecated Basic Display API). This requires a Facebook App linked to a Business or Creator Instagram account.
+
+**Setup:**
+
+1. Go to [Meta for Developers](https://developers.facebook.com) → Create App → Business type.
+2. Add the **Instagram** product to the app.
+3. Under Instagram → Settings, add `https://<your-domain>/api/connections/instagram/callback` as a valid OAuth redirect URI.
+4. Copy the **App ID** and **App Secret** and set them as `INSTAGRAM_CLIENT_ID` and `INSTAGRAM_CLIENT_SECRET` in your environment.
+
+**How it works:**
+
+- `GET /api/connections/instagram/start` — sets a CSRF state cookie and redirects the user to Instagram's OAuth authorization page.
+- `GET /api/connections/instagram/callback` — exchanges the authorization code for a long-lived token (60-day expiry), stores the encrypted token in `connected_accounts`, then redirects to `/settings#connections`.
+- `DELETE /api/connections/instagram` — removes the row from `connected_accounts`, revoking access.
+- `POST /api/connections/instagram/import` — pulls recent geotagged media, stores images in Netlify Blobs, and creates journal entries with linked places.
+
+Access tokens are encrypted at rest using AES-256-GCM. Generate a key with `openssl rand -hex 32` and set it as `TOKEN_ENCRYPTION_KEY`.
+
+### Google (via Clerk)
+
+Google sign-in is managed by Clerk's hosted OAuth flow — users connect Google through Clerk's sign-in UI. The Settings → Connections section reads the real connection state from Clerk's API rather than maintaining a separate database row.
+
+- `GET /api/connections/google` — returns `{ connected, emailAddress, identificationId }` from Clerk.
+- `DELETE /api/connections/google` — removes the Google external account from the user's Clerk record via the Clerk Backend API.
+
+No additional app registration is required for Google; Clerk handles it. Configure Google OAuth in the [Clerk Dashboard](https://dashboard.clerk.com) → Social Connections → Google.
+
+---
+
 ## Development
 
 Start the dev server at `http://localhost:3000`:

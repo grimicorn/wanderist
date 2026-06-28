@@ -31,6 +31,22 @@ Object.assign(globalThis, {
   defineStore: vi.fn(),
   // App composables — stubs for environments that don't import them explicitly
   useApiClient: vi.fn(() => ({ apiFetch: vi.fn() })),
+  useConnections: vi.fn(() => ({
+    connections: vue.ref({
+      instagram: { connected: false },
+      google: { connected: false, emailAddress: null, identificationId: null },
+    }),
+    isLoading: vue.ref(false),
+    loadError: vue.ref(null),
+    actionError: vue.ref(null),
+    importResult: vue.ref(null),
+    fetchConnections: vi.fn().mockResolvedValue(undefined),
+    startInstagramConnect: vi.fn(),
+    disconnectInstagram: vi.fn().mockResolvedValue(true),
+    disconnectGoogle: vi.fn().mockResolvedValue(true),
+    importInstagramPhotos: vi.fn().mockResolvedValue(true),
+    markInstagramConnected: vi.fn(),
+  })),
   usePreferences: vi.fn(() => ({
     preferences: vue.ref({
       distanceUnit: "mi",
