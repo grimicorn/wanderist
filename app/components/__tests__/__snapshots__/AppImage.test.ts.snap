@@ -1,0 +1,9 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`AppImage > matches snapshot when src is absent (placeholder) 1`] = `
+"<div class="ph app-image--placeholder" aria-label="No photo yet" role="img">
+  <div class="topo" style="opacity: 0.4;"></div>
+</div>"
+`;
+
+exports[`AppImage > matches snapshot when src is provided 1`] = `"<img src="https://example.com/photo.jpg" alt="Trip cover" class="app-image" loading="lazy" decoding="async">"`;

@@ -53,6 +53,33 @@ Open Drizzle Studio (visual database browser):
 npm run db:studio
 ```
 
+## Media storage
+
+File uploads (photos, cover images) are stored in [Netlify Blobs](https://docs.netlify.com/blobs/overview/) under the `media` store. Blobs are keyed as `<userId>/<mediaId>` and served back through the proxy route `GET /api/media/[id]`, which sets long-lived `Cache-Control` headers.
+
+### Local development
+
+The recommended approach is to run the app via the [Netlify CLI](https://docs.netlify.com/cli/overview/):
+
+```bash
+netlify dev
+```
+
+`netlify dev` injects `NETLIFY_SITE_ID` and an auth token automatically, so Blobs works with no extra configuration. The local store is sandboxed and does not read from production.
+
+If you run `npm run dev` directly (without `netlify dev`), set the following variables in your `.env`:
+
+```
+NETLIFY_SITE_ID=<your-project-id>   # Project settings → General
+NETLIFY_AUTH_TOKEN=<token>          # User settings → OAuth → Personal access tokens
+```
+
+### Production
+
+On Netlify, no extra configuration is needed. The runtime injects credentials automatically.
+
+---
+
 ## Authentication
 
 Authentication is handled by [Clerk](https://clerk.com) via the `@clerk/nuxt` module. Server middleware at `server/middleware/auth.ts` verifies the session on every request and makes the user available at `event.context.userId` in API route handlers.
