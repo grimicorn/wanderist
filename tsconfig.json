@@ -1,18 +1,28 @@
 {
   // https://nuxt.com/docs/guide/concepts/typescript
-  "files": [],
-  "references": [
-    {
-      "path": "./.nuxt/tsconfig.app.json"
-    },
-    {
-      "path": "./.nuxt/tsconfig.server.json"
-    },
-    {
-      "path": "./.nuxt/tsconfig.shared.json"
-    },
-    {
-      "path": "./.nuxt/tsconfig.node.json"
+  //
+  // This is a standalone compilerOptions config for Vite's oxc transformer and
+  // editors to use when .nuxt/ does not exist (i.e. before `nuxt prepare`).
+  //
+  // Note: the original Nuxt-generated tsconfig only contained `files: []` and
+  // references to `.nuxt/tsconfig.*.json`.  Those references caused Vite 8's
+  // oxc transformer to fail with "Tsconfig not found" when `.nuxt/` is absent.
+  // We replaced the file with standalone compilerOptions so that `npm test`
+  // works out of the box without requiring `nuxt prepare` first.
+  //
+  // After running `nuxt prepare`, Nuxt regenerates this file with the
+  // original references format. Re-run `npm test` at that point to confirm
+  // tests still pass; if oxc fails again, delete the .nuxt/ directory and
+  // run `nuxt prepare` again to pick up the latest Nuxt tsconfig format.
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "lib": ["ESNext", "DOM"],
+    "paths": {
+      "~/*": ["./app/*"],
+      "@/*": ["./app/*"]
     }
-  ]
+  }
 }

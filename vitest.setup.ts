@@ -1,5 +1,6 @@
 import * as vue from "vue";
 import { vi } from "vitest";
+import { defineStore } from "pinia";
 
 // Expose Vue composition API as globals to match Nuxt's auto-import behavior
 Object.assign(globalThis, vue);
@@ -23,10 +24,13 @@ Object.assign(globalThis, {
   useClerkAuth: vi.fn(() => ({
     isSignedIn: vue.ref(false),
     isLoaded: vue.ref(true),
+    getToken: vi.fn().mockResolvedValue(null),
   })),
   useClerkUser: vi.fn(() => ({ user: vue.ref(null) })),
   // Nuxt page macros
   definePageMeta: vi.fn(),
-  // Pinia
-  defineStore: vi.fn(),
+  // Pinia — use the real defineStore so stores work in component tests
+  defineStore,
+  // Nuxt auto-import for useApiClient composable (used by trips store)
+  useApiClient: vi.fn(() => ({ apiFetch: vi.fn().mockResolvedValue([]) })),
 });

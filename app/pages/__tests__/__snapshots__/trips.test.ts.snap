@@ -42,12 +42,21 @@ exports[`Trips page (/trips) > renders without crashing and matches snapshot 1`]
   </div><!-- Grid -->
   <div data-v-f103826c="" class="trip-grid"><a data-v-f103826c="" class="tcard">
       <div data-v-f103826c="" class="tcard__cover ph">
-        <div data-v-f103826c="" class="topo"></div><span data-v-f103826c="" class="tcard__status tag tag--upcoming">upcoming</span><button data-v-f103826c="" class="tcard__save" aria-label="Save"><svg data-v-f103826c="" data-icon="" name="bookmark" size="15"></svg></button>
+        <div data-v-f103826c="" class="topo"></div><span data-v-f103826c="" class="tcard__status tag tag--ongoing">2026</span><button data-v-f103826c="" class="tcard__save" aria-label="Save"><svg data-v-f103826c="" data-icon="" name="bookmark" size="15"></svg></button>
+      </div>
+      <div data-v-f103826c="" class="tcard__body">
+        <div data-v-f103826c="" class="tcard__name">Iceland, the ring road</div>
+        <div data-v-f103826c="" class="tcard__dates">Jun 20, 2026 – Jun 29, 2026 · 9 days</div>
+        <div data-v-f103826c="" class="tcard__foot"><span data-v-f103826c="" class="m"><svg data-v-f103826c="" data-icon="" name="pin" size="13"></svg> 892 km</span></div>
+      </div>
+    </a><a data-v-f103826c="" class="tcard">
+      <div data-v-f103826c="" class="tcard__cover ph">
+        <div data-v-f103826c="" class="topo"></div><span data-v-f103826c="" class="tcard__status tag tag--upcoming">2026</span><button data-v-f103826c="" class="tcard__save" aria-label="Save"><svg data-v-f103826c="" data-icon="" name="bookmark" size="15"></svg></button>
       </div>
       <div data-v-f103826c="" class="tcard__body">
         <div data-v-f103826c="" class="tcard__name">Portugal, coast to coast</div>
-        <div data-v-f103826c="" class="tcard__dates">Jun 24 – Jul 3, 2026 · 9 days</div>
-        <div data-v-f103826c="" class="tcard__foot"><span data-v-f103826c="" class="m"><svg data-v-f103826c="" data-icon="" name="pin" size="13"></svg> 5 stops</span><span data-v-f103826c="" class="m"><svg data-v-f103826c="" data-icon="" name="journal" size="13"></svg> 0</span>
+        <div data-v-f103826c="" class="tcard__dates">Jul 1, 2026 – Jul 10, 2026 · 9 days</div>
+        <div data-v-f103826c="" class="tcard__foot">
           <!--v-if-->
         </div>
       </div>
@@ -57,8 +66,8 @@ exports[`Trips page (/trips) > renders without crashing and matches snapshot 1`]
       </div>
       <div data-v-f103826c="" class="tcard__body">
         <div data-v-f103826c="" class="tcard__name">Norway in winter</div>
-        <div data-v-f103826c="" class="tcard__dates">Feb 2027 · planning</div>
-        <div data-v-f103826c="" class="tcard__foot"><span data-v-f103826c="" class="m"><svg data-v-f103826c="" data-icon="" name="pin" size="13"></svg> 3 stops</span><span data-v-f103826c="" class="m"><svg data-v-f103826c="" data-icon="" name="journal" size="13"></svg> draft</span>
+        <div data-v-f103826c="" class="tcard__dates">dates TBD</div>
+        <div data-v-f103826c="" class="tcard__foot">
           <!--v-if-->
         </div>
       </div>
@@ -68,8 +77,10 @@ exports[`Trips page (/trips) > renders without crashing and matches snapshot 1`]
       </div>
       <div data-v-f103826c="" class="tcard__body">
         <div data-v-f103826c="" class="tcard__name">Japan, north to south</div>
-        <div data-v-f103826c="" class="tcard__dates">Oct 4 – Oct 22, 2025 · 18 days</div>
-        <div data-v-f103826c="" class="tcard__foot"><span data-v-f103826c="" class="m"><svg data-v-f103826c="" data-icon="" name="pin" size="13"></svg> 9 stops</span><span data-v-f103826c="" class="m"><svg data-v-f103826c="" data-icon="" name="journal" size="13"></svg> 9</span><span data-v-f103826c="" class="m"><svg data-v-f103826c="" data-icon="" name="image" size="13"></svg> 240</span></div>
+        <div data-v-f103826c="" class="tcard__dates">Oct 4, 2025 – Oct 22, 2025 · 18 days</div>
+        <div data-v-f103826c="" class="tcard__foot">
+          <!--v-if-->
+        </div>
       </div>
     </a><a data-v-f103826c="" class="tcard">
       <div data-v-f103826c="" class="tcard__cover ph">
@@ -77,8 +88,10 @@ exports[`Trips page (/trips) > renders without crashing and matches snapshot 1`]
       </div>
       <div data-v-f103826c="" class="tcard__body">
         <div data-v-f103826c="" class="tcard__name">Marrakech &amp; the Atlas</div>
-        <div data-v-f103826c="" class="tcard__dates">Mar 12 – Mar 19, 2025 · 7 days</div>
-        <div data-v-f103826c="" class="tcard__foot"><span data-v-f103826c="" class="m"><svg data-v-f103826c="" data-icon="" name="pin" size="13"></svg> 4 stops</span><span data-v-f103826c="" class="m"><svg data-v-f103826c="" data-icon="" name="journal" size="13"></svg> 2</span><span data-v-f103826c="" class="m"><svg data-v-f103826c="" data-icon="" name="image" size="13"></svg> 88</span></div>
+        <div data-v-f103826c="" class="tcard__dates">Mar 12, 2025 – Mar 19, 2025 · 7 days</div>
+        <div data-v-f103826c="" class="tcard__foot">
+          <!--v-if-->
+        </div>
       </div>
     </a><a data-v-f103826c="" class="tcard">
       <div data-v-f103826c="" class="tcard__cover ph">
@@ -86,17 +99,10 @@ exports[`Trips page (/trips) > renders without crashing and matches snapshot 1`]
       </div>
       <div data-v-f103826c="" class="tcard__body">
         <div data-v-f103826c="" class="tcard__name">Sydney &amp; the east coast</div>
-        <div data-v-f103826c="" class="tcard__dates">Nov 2 – Nov 16, 2024 · 14 days</div>
-        <div data-v-f103826c="" class="tcard__foot"><span data-v-f103826c="" class="m"><svg data-v-f103826c="" data-icon="" name="pin" size="13"></svg> 8 stops</span><span data-v-f103826c="" class="m"><svg data-v-f103826c="" data-icon="" name="journal" size="13"></svg> 4</span><span data-v-f103826c="" class="m"><svg data-v-f103826c="" data-icon="" name="image" size="13"></svg> 156</span></div>
-      </div>
-    </a><a data-v-f103826c="" class="tcard">
-      <div data-v-f103826c="" class="tcard__cover ph">
-        <div data-v-f103826c="" class="topo"></div><span data-v-f103826c="" class="tcard__status tag tag--past">2024</span><button data-v-f103826c="" class="tcard__save" aria-label="Save"><svg data-v-f103826c="" data-icon="" name="bookmark" size="15"></svg></button>
-      </div>
-      <div data-v-f103826c="" class="tcard__body">
-        <div data-v-f103826c="" class="tcard__name">A weekend in London</div>
-        <div data-v-f103826c="" class="tcard__dates">Jun 7 – Jun 9, 2024 · 3 days</div>
-        <div data-v-f103826c="" class="tcard__foot"><span data-v-f103826c="" class="m"><svg data-v-f103826c="" data-icon="" name="pin" size="13"></svg> 2 stops</span><span data-v-f103826c="" class="m"><svg data-v-f103826c="" data-icon="" name="journal" size="13"></svg> 3</span><span data-v-f103826c="" class="m"><svg data-v-f103826c="" data-icon="" name="image" size="13"></svg> 31</span></div>
+        <div data-v-f103826c="" class="tcard__dates">Nov 2, 2024 – Nov 16, 2024 · 14 days</div>
+        <div data-v-f103826c="" class="tcard__foot">
+          <!--v-if-->
+        </div>
       </div>
     </a></div>
 </div>"

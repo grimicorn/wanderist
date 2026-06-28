@@ -6,7 +6,18 @@
     "sentry.server.config.ts",
     "app/stores/**"
   ],
-  "ignoreDependencies": ["@clerk/testing", "@sentry/nuxt", "@vue/test-utils"],
+  "ignoreDependencies": [
+    "@clerk/testing",
+    "@sentry/nuxt",
+    "@vue/test-utils",
+    "@trips-id.get",
+    "@trips-id.patch",
+    "@trips-id.delete",
+    "@trips-id-stops-handler/index.post",
+    "@trips-id-stops-handler/reorder.put",
+    "@trips-id-stopid.patch",
+    "@trips-id-stopid.delete"
+  ],
   "duplicates": {
     "minOccurrences": 3
   }
