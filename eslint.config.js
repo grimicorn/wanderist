@@ -88,6 +88,12 @@ const projectGlobals = {
   useMapboxStyles: "readonly",
   resolveMapboxStyleLabel: "readonly",
   resolveMapboxStyleUrl: "readonly",
+  useAccountActions: "readonly",
+  usePreferences: "readonly",
+  useMediaUpload: "readonly",
+  useEntriesStore: "readonly",
+  useTripsStore: "readonly",
+  usePlacesStore: "readonly",
 };
 
 export default [

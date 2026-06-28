@@ -1,6 +1,6 @@
 <template>
   <div v-if="open" class="drawer is-open" role="dialog" aria-label="New entry">
-    <div class="drawer__scrim" @click="$emit('close')" />
+    <div class="drawer__scrim" @click="emit('close')" />
     <aside class="drawer__panel">
       <header class="drawer__head">
         <div>
@@ -9,7 +9,7 @@
             Capture a moment
           </h3>
         </div>
-        <button class="icon-btn" aria-label="Close" @click="$emit('close')">
+        <button class="icon-btn" aria-label="Close" @click="emit('close')">
           <AppIcon name="x" :size="18" />
         </button>
       </header>
@@ -18,22 +18,46 @@
         <!-- Photo upload -->
         <div class="dropzone">
           <div class="dropzone__grid">
-            <div class="ph dz-thumb">
+            <div
+              v-for="photo in uploadedPhotos"
+              :key="photo.id"
+              class="ph dz-thumb"
+            >
+              <img
+                :src="photo.url"
+                alt=""
+                style="width: 100%; height: 100%; object-fit: cover"
+              />
+            </div>
+            <div v-if="uploadedPhotos.length < 2" class="ph dz-thumb">
               <div class="topo" />
             </div>
-            <div class="ph dz-thumb">
+            <div v-if="uploadedPhotos.length < 1" class="ph dz-thumb">
               <div class="topo" />
             </div>
-            <button class="dz-add">
+            <button
+              class="dz-add"
+              :disabled="isUploading"
+              @click="triggerFileInput"
+            >
               <AppIcon name="camera" :size="17" />
-              <span>add photos</span>
+              <span>{{ isUploading ? "uploading…" : "add photos" }}</span>
             </button>
+            <input
+              ref="fileInputRef"
+              type="file"
+              accept="image/*"
+              multiple
+              style="display: none"
+              @change="handleFileChange"
+            />
           </div>
           <p class="dropzone__hint">
             Drag photos here, or import geotagged shots from
             <AppIcon name="instagram" :size="13" style="vertical-align: -2px" />
             Instagram.
           </p>
+          <p v-if="uploadError" class="error-hint">{{ uploadError }}</p>
         </div>
 
         <!-- Title -->
@@ -66,7 +90,7 @@
             <input v-model="form.location" class="field__input" />
             <span class="field__icon"><AppIcon name="pin" :size="16" /></span>
           </div>
-          <div class="chip-suggest">
+          <div v-if="locationSuggestions.length" class="chip-suggest">
             <span
               v-for="suggestion in locationSuggestions"
               :key="suggestion"
@@ -82,13 +106,13 @@
           <label class="field__label">Trip</label>
           <div class="pill-pick">
             <button
-              v-for="trip in trips"
-              :key="trip"
+              v-for="trip in tripOptions"
+              :key="trip.value"
               class="pick"
-              :class="{ 'is-active': form.trip === trip }"
-              @click="form.trip = trip"
+              :class="{ 'is-active': form.tripId === trip.value }"
+              @click="form.tripId = trip.value"
             >
-              {{ trip }}
+              {{ trip.label }}
             </button>
           </div>
         </div>
@@ -98,7 +122,7 @@
           <div class="field" style="margin: 0">
             <label class="field__label">Date</label>
             <div class="field__wrap">
-              <input v-model="form.date" class="field__input" />
+              <input v-model="form.date" class="field__input" type="date" />
               <span class="field__icon"
                 ><AppIcon name="calendar" :size="16"
               /></span>
@@ -161,7 +185,7 @@
           </label>
           <div class="pill-pick">
             <button
-              v-for="weather in weatherOptions"
+              v-for="weather in WEATHER_OPTIONS"
               :key="weather.value"
               class="pick"
               :class="{ 'is-active': form.weather === weather.value }"
@@ -172,19 +196,33 @@
             </button>
           </div>
         </div>
+
+        <p v-if="publishError" class="error-hint">{{ publishError }}</p>
       </div>
 
       <footer class="drawer__foot">
-        <button class="btn btn--ghost btn--sm" @click="saveDraft">
+        <button
+          class="btn btn--ghost btn--sm"
+          :disabled="isPublishing"
+          @click="saveDraft"
+        >
           save draft
         </button>
         <span style="flex: 1" />
-        <button class="btn btn--outline btn--sm" @click="$emit('close')">
+        <button
+          class="btn btn--outline btn--sm"
+          :disabled="isPublishing"
+          @click="emit('close')"
+        >
           cancel
         </button>
-        <button class="btn btn--primary btn--sm" @click="publish">
+        <button
+          class="btn btn--primary btn--sm"
+          :disabled="isPublishing"
+          @click="publish"
+        >
           <AppIcon name="check" :size="14" />
-          publish
+          {{ isPublishing ? "publishing…" : "publish" }}
         </button>
       </footer>
     </aside>
@@ -192,34 +230,118 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, computed, watch } from "vue";
+import type { Trip } from "~/stores/trips";
 
-defineProps<{ open: boolean }>();
-defineEmits<{ close: [] }>();
+const DRAFT_STORAGE_KEY = "wanderist:new-entry-draft";
 
-const locationSuggestions = ["Old Harbour", "Hallgrímskirkja", "Sun Voyager"];
-const trips = ["Iceland, ring road", "Portugal 2026", "None"];
-
-const weatherOptions = [
+const WEATHER_OPTIONS = [
   { value: "clear", label: "Clear", icon: "sun" },
   { value: "overcast", label: "Overcast", icon: "cloud" },
   { value: "windy", label: "Windy", icon: "wind" },
-];
+] as const;
 
-const form = ref({
-  title: "",
-  body: "",
-  location: "Reykjavík, Iceland",
-  trip: "Iceland, ring road",
-  date: "Jun 14, 2026",
-  visibility: "private" as "private" | "public",
-  tags: ["iceland", "ring road"] as string[],
-  weather: "overcast",
+const NO_TRIP_VALUE = "";
+
+interface TripOption {
+  value: string;
+  label: string;
+}
+
+interface FormState {
+  title: string;
+  body: string;
+  location: string;
+  tripId: string;
+  date: string;
+  visibility: "private" | "public";
+  tags: string[];
+  weather: string;
+}
+
+const props = defineProps<{ open: boolean }>();
+const emit = defineEmits<{ close: [] }>();
+
+const entriesStore = useEntriesStore();
+const tripsStore = useTripsStore();
+const placesStore = usePlacesStore();
+const { upload, isUploading, error: uploadError } = useMediaUpload();
+
+const fileInputRef = ref<HTMLInputElement | null>(null);
+const uploadedPhotos = ref<Array<{ id: string; url: string }>>([]);
+const tagInput = ref("");
+const isPublishing = ref(false);
+const publishError = ref<string | null>(null);
+
+function todayIsoDate(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function defaultTripId(trips: Trip[]): string {
+  const ongoing = trips.find((trip) => trip.status === "ongoing");
+  return ongoing?.id ?? NO_TRIP_VALUE;
+}
+
+function buildInitialForm(trips: Trip[]): FormState {
+  return {
+    title: "",
+    body: "",
+    location: "",
+    tripId: defaultTripId(trips),
+    date: todayIsoDate(),
+    visibility: "private",
+    tags: [],
+    weather: "",
+  };
+}
+
+const form = ref<FormState>(buildInitialForm(tripsStore.tripList));
+
+const tripOptions = computed<TripOption[]>(() => {
+  const options = tripsStore.tripList.map((trip) => ({
+    value: trip.id,
+    label: trip.name,
+  }));
+  return [...options, { value: NO_TRIP_VALUE, label: "None" }];
 });
 
-const tagInput = ref("");
+const locationSuggestions = computed<string[]>(() =>
+  placesStore.places.map((place) => place.name).slice(0, 5),
+);
 
-function addTag() {
+watch(
+  () => props.open,
+  (isOpen) => {
+    if (!isOpen) {
+      return;
+    }
+
+    form.value = buildInitialForm(tripsStore.tripList);
+    uploadedPhotos.value = [];
+    tagInput.value = "";
+    publishError.value = null;
+
+    if (!tripsStore.tripList.length) {
+      tripsStore.fetchTrips();
+    }
+
+    if (!placesStore.places.length) {
+      placesStore.fetchPlaces();
+    }
+  },
+);
+
+// Keep the default tripId in sync if trips load after the drawer opens
+watch(
+  () => tripsStore.tripList,
+  (trips) => {
+    if (form.value.tripId === NO_TRIP_VALUE && trips.length) {
+      form.value.tripId = defaultTripId(trips);
+    }
+  },
+);
+
+function addTag(): void {
   const value = tagInput.value.trim();
   if (value && !form.value.tags.includes(value)) {
     form.value.tags = [...form.value.tags, value];
@@ -227,15 +349,70 @@ function addTag() {
   tagInput.value = "";
 }
 
-function removeTag(tag: string) {
-  form.value.tags = form.value.tags.filter((t) => t !== tag);
+function removeTag(tag: string): void {
+  form.value.tags = form.value.tags.filter(
+    (existingTag) => existingTag !== tag,
+  );
 }
 
-function saveDraft() {
-  // draft saved — handled by parent or future persistence layer
+function triggerFileInput(): void {
+  fileInputRef.value?.click();
 }
 
-function publish() {
-  // entry published — handled by parent or future API layer
+async function handleFileChange(event: Event): Promise<void> {
+  const input = event.target as HTMLInputElement;
+  const files = Array.from(input.files ?? []);
+
+  for (const file of files) {
+    try {
+      const result = await upload(file);
+      uploadedPhotos.value = [...uploadedPhotos.value, result];
+    } catch {
+      // uploadError ref is set by the composable; no additional handling needed here
+    }
+  }
+
+  // Reset input value so the same file can be re-selected after removal
+  input.value = "";
+}
+
+function saveDraft(): void {
+  const draft = { ...form.value, uploadedPhotos: uploadedPhotos.value };
+  localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
+}
+
+async function publish(): Promise<void> {
+  isPublishing.value = true;
+  publishError.value = null;
+
+  try {
+    await entriesStore.createEntry({
+      title: form.value.title,
+      body: form.value.body || undefined,
+      occurredAt: form.value.date
+        ? new Date(form.value.date).toISOString()
+        : undefined,
+      tripId: form.value.tripId || undefined,
+      tags: form.value.tags.length ? form.value.tags : undefined,
+      photoMediaIds: uploadedPhotos.value.map((photo) => photo.id),
+      visibility: form.value.visibility,
+      weather: form.value.weather || undefined,
+    });
+
+    // Clear any saved draft now that it has been published
+    localStorage.removeItem(DRAFT_STORAGE_KEY);
+
+    // Refresh the entries list so the journal page shows the new entry
+    await entriesStore.fetchEntries();
+
+    emit("close");
+  } catch (caught) {
+    publishError.value =
+      caught instanceof Error
+        ? caught.message
+        : "Failed to publish. Please try again.";
+  } finally {
+    isPublishing.value = false;
+  }
 }
 </script>
