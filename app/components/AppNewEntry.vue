@@ -1,6 +1,6 @@
 <template>
   <div v-if="open" class="drawer is-open" role="dialog" aria-label="New entry">
-    <div class="drawer__scrim" @click="emit('close')" />
+    <div class="drawer__scrim" @click="!isPublishing && emit('close')" />
     <aside class="drawer__panel">
       <header class="drawer__head">
         <div>
@@ -428,11 +428,11 @@ async function handleFileChange(event: Event): Promise<void> {
 
   for (const file of files) {
     const result = await uploadOne(file);
-    if (result) {
-      uploadedPhotos.value = [...uploadedPhotos.value, result];
-    } else {
+    if (!result) {
       failedNames.push(file.name);
+      continue;
     }
+    uploadedPhotos.value = [...uploadedPhotos.value, result];
   }
 
   if (failedNames.length) {
@@ -451,6 +451,9 @@ function localDateToIso(dateString: string): string | undefined {
   if (!dateString) {
     return undefined;
   }
+  // new Date(year, month-1, day) builds local midnight; .toISOString() converts
+  // to UTC, preserving the semantic "this event happened on this calendar date
+  // in the user's timezone."
   const [year, month, day] = dateString.split("-").map(Number);
   return new Date(year, month - 1, day).toISOString();
 }

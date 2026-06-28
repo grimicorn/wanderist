@@ -358,7 +358,7 @@ describe("AppNewEntry", () => {
     expect(wrapper.find(".error-hint").exists()).toBe(false);
   });
 
-  it("passes the correct occurredAt based on the local date value", async () => {
+  it("passes occurredAt derived from the local date string the user chose", async () => {
     mockCreateEntry.mockResolvedValue({ id: "new-entry-1" });
     mockFetchEntries.mockResolvedValue({
       entries: [],
@@ -368,7 +368,6 @@ describe("AppNewEntry", () => {
 
     const wrapper = mountOpen();
 
-    // Set date to a specific local date
     const dateInput = wrapper.find('input[type="date"]');
     await dateInput.setValue("2026-06-14");
 
@@ -377,8 +376,14 @@ describe("AppNewEntry", () => {
     await wrapper.vm.$nextTick();
 
     const callArg = mockCreateEntry.mock.calls[0][0] as Record<string, unknown>;
-    // The occurredAt should include "2026-06-14" in local time
-    expect(callArg.occurredAt).toContain("2026-06-14");
+    const occurredAt = callArg.occurredAt as string;
+
+    // The ISO string should represent local midnight for June 14. Parsing it
+    // back and reading local date components is timezone-stable on any host.
+    const parsed = new Date(occurredAt);
+    expect(parsed.getFullYear()).toBe(2026);
+    expect(parsed.getMonth()).toBe(5); // 0-indexed: 5 = June
+    expect(parsed.getDate()).toBe(14); // local calendar date, not UTC
   });
 
   it("clears uploadError before starting a new upload batch", async () => {
