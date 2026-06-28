@@ -305,6 +305,14 @@ function buildInitialForm(trips: Trip[]): FormState {
 
 const form = ref<FormState>(buildInitialForm(tripsStore.tripList));
 
+function applyFreshForm(): void {
+  form.value = buildInitialForm(tripsStore.tripList);
+  uploadedPhotos.value = [];
+  if (form.value.tripId !== NO_TRIP_VALUE) {
+    tripDefaulted.value = true;
+  }
+}
+
 const tripOptions = computed<TripOption[]>(() => {
   const options = tripsStore.tripList.map((trip) => ({
     value: trip.id,
@@ -351,11 +359,7 @@ watch(
       // Treat a restored draft's tripId as already-defaulted so it is preserved
       tripDefaulted.value = true;
     } else {
-      form.value = buildInitialForm(tripsStore.tripList);
-      uploadedPhotos.value = [];
-      if (form.value.tripId !== NO_TRIP_VALUE) {
-        tripDefaulted.value = true;
-      }
+      applyFreshForm();
     }
 
     tagInput.value = "";
@@ -420,6 +424,7 @@ async function handleFileChange(event: Event): Promise<void> {
   const input = event.target as HTMLInputElement;
   const files = Array.from(input.files ?? []);
   const failedNames: string[] = [];
+  uploadError.value = null;
 
   for (const file of files) {
     const result = await uploadOne(file);
@@ -434,7 +439,7 @@ async function handleFileChange(event: Event): Promise<void> {
     uploadError.value = `Failed to upload: ${failedNames.join(", ")}`;
   }
 
-  // Reset input value so the same file can be re-selected after removal
+  // Reset so the same file can be selected again if needed
   input.value = "";
 }
 
@@ -442,31 +447,48 @@ function handleSaveDraft(): void {
   saveDraft({ ...form.value, uploadedPhotos: uploadedPhotos.value });
 }
 
+function localDateToIso(dateString: string): string | undefined {
+  if (!dateString) {
+    return undefined;
+  }
+  const [year, month, day] = dateString.split("-").map(Number);
+  return new Date(year, month - 1, day).toISOString();
+}
+
+function buildEntryPayload() {
+  return {
+    title: form.value.title,
+    body: form.value.body || undefined,
+    occurredAt: localDateToIso(form.value.date),
+    tripId: form.value.tripId || undefined,
+    tags: form.value.tags.length ? form.value.tags : undefined,
+    photoMediaIds: uploadedPhotos.value.map((photo) => photo.id),
+    visibility: form.value.visibility,
+    weather: form.value.weather || undefined,
+  };
+}
+
+async function refreshEntriesNonFatal(): Promise<void> {
+  try {
+    await entriesStore.fetchEntries();
+  } catch {
+    // non-fatal: entry was created; list refreshes on next page load
+  }
+}
+
 async function publish(): Promise<void> {
   isPublishing.value = true;
   publishError.value = null;
 
   try {
-    await entriesStore.createEntry({
-      title: form.value.title,
-      body: form.value.body || undefined,
-      occurredAt: form.value.date
-        ? new Date(form.value.date).toISOString()
-        : undefined,
-      tripId: form.value.tripId || undefined,
-      tags: form.value.tags.length ? form.value.tags : undefined,
-      photoMediaIds: uploadedPhotos.value.map((photo) => photo.id),
-      visibility: form.value.visibility,
-      weather: form.value.weather || undefined,
-    });
+    await entriesStore.createEntry(buildEntryPayload());
 
-    // Clear any saved draft now that it has been published
+    // Close first: once the entry is created, the drawer should close
+    // regardless of whether the list refresh below succeeds.
     clearDraft();
-
-    // Refresh the entries list so the journal page shows the new entry
-    await entriesStore.fetchEntries();
-
     emit("close");
+
+    await refreshEntriesNonFatal();
   } catch (caught) {
     publishError.value =
       caught instanceof Error

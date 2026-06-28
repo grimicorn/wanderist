@@ -342,4 +342,77 @@ describe("AppNewEntry", () => {
       "Restored title",
     );
   });
+
+  it("emits close before fetchEntries so a refresh failure cannot create duplicate entries", async () => {
+    mockCreateEntry.mockResolvedValue({ id: "new-entry-1" });
+    mockFetchEntries.mockRejectedValue(new Error("network error"));
+
+    const wrapper = mountOpen();
+    await wrapper.find(".btn--primary").trigger("click");
+    await wrapper.vm.$nextTick();
+    await wrapper.vm.$nextTick();
+
+    // close should fire even though fetchEntries rejected
+    expect(wrapper.emitted("close")).toBeTruthy();
+    // and the error should NOT be shown (it is a non-fatal refresh failure)
+    expect(wrapper.find(".error-hint").exists()).toBe(false);
+  });
+
+  it("passes the correct occurredAt based on the local date value", async () => {
+    mockCreateEntry.mockResolvedValue({ id: "new-entry-1" });
+    mockFetchEntries.mockResolvedValue({
+      entries: [],
+      tab: "timeline",
+      page: 1,
+    });
+
+    const wrapper = mountOpen();
+
+    // Set date to a specific local date
+    const dateInput = wrapper.find('input[type="date"]');
+    await dateInput.setValue("2026-06-14");
+
+    await wrapper.find(".btn--primary").trigger("click");
+    await wrapper.vm.$nextTick();
+    await wrapper.vm.$nextTick();
+
+    const callArg = mockCreateEntry.mock.calls[0][0] as Record<string, unknown>;
+    // The occurredAt should include "2026-06-14" in local time
+    expect(callArg.occurredAt).toContain("2026-06-14");
+  });
+
+  it("clears uploadError before starting a new upload batch", async () => {
+    // First upload fails
+    mockUpload.mockRejectedValueOnce(new Error("Network error"));
+    // Second upload succeeds
+    mockUpload.mockResolvedValueOnce({
+      id: "media-2",
+      url: "https://example.com/photo2.jpg",
+    });
+
+    const wrapper = mountOpen();
+    const fileInput = wrapper.find('input[type="file"]');
+
+    const failFile = new File(["fail"], "fail.jpg", { type: "image/jpeg" });
+    Object.defineProperty(fileInput.element, "files", {
+      value: [failFile],
+      configurable: true,
+    });
+    await fileInput.trigger("change");
+    await wrapper.vm.$nextTick();
+
+    // Error should be visible
+    expect(wrapper.find(".error-hint").exists()).toBe(true);
+
+    // Second upload succeeds — error should clear
+    const successFile = new File(["ok"], "ok.jpg", { type: "image/jpeg" });
+    Object.defineProperty(fileInput.element, "files", {
+      value: [successFile],
+      configurable: true,
+    });
+    await fileInput.trigger("change");
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.find(".error-hint").exists()).toBe(false);
+  });
 });
