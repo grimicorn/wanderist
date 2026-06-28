@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import * as vue from "vue";
 
 const mockApiFetch = vi.fn();
@@ -157,5 +157,91 @@ describe("useFollows", () => {
 
     // Both users should have had their toggle request reach the API
     expect(mockApiFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("fetchFollowing skips the state overwrite when a toggle is in flight", async () => {
+    let resolveToggle!: () => void;
+    const togglePromise = new Promise<void>((resolve) => {
+      resolveToggle = resolve;
+    });
+    // First apiFetch call is the toggle POST (in-flight); second is the fetch GET.
+    mockApiFetch
+      .mockReturnValueOnce(togglePromise.then(() => ({ ok: true })))
+      .mockResolvedValue({ followingIds: [] });
+
+    const { toggleFollow, fetchFollowing, followingIds } = useFollows();
+
+    // Start the toggle without awaiting so it stays in-flight
+    const toggleInFlight = toggleFollow("user-2");
+
+    // fetchFollowing fires while the toggle is pending
+    await fetchFollowing();
+
+    // The fetch returned an empty list, but the overwrite should have been
+    // skipped because pendingUserIds is non-empty — followingIds should still
+    // reflect the optimistic add from the ongoing toggle.
+    // (The toggle already ran the optimistic add synchronously before the await.)
+    resolveToggle();
+    await toggleInFlight;
+
+    // After the toggle resolves the user should be in the set
+    expect(followingIds.value.has("user-2")).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Cross-instance shared-state tests
+//
+// These tests use a key-caching useState stub to verify that pendingUserIds
+// is actually shared across two useFollows() instances (matching the contract
+// documented in the source comment). The fresh-ref stub used above cannot
+// demonstrate this because it gives every call its own independent ref.
+// ---------------------------------------------------------------------------
+
+describe("useFollows — cross-instance shared pendingUserIds", () => {
+  let stateStore: Map<string, ReturnType<typeof vue.ref>>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    stateStore = new Map();
+    vi.stubGlobal("useState", <T>(key: string, init?: () => T): vue.Ref<T> => {
+      if (!stateStore.has(key)) {
+        stateStore.set(key, vue.ref(init?.()));
+      }
+      return stateStore.get(key) as vue.Ref<T>;
+    });
+  });
+
+  afterEach(() => {
+    // Restore the per-call stub used by the main describe block
+    vi.stubGlobal("useState", <T>(_key: string, init?: () => T) =>
+      vue.ref(init?.()),
+    );
+  });
+
+  it("a toggle in-flight on instance A is seen as pending on instance B", async () => {
+    let resolveFirst!: () => void;
+    const firstCallPromise = new Promise<void>((resolve) => {
+      resolveFirst = resolve;
+    });
+    mockApiFetch.mockReturnValueOnce(
+      firstCallPromise.then(() => ({ ok: true })),
+    );
+
+    const instanceA = useFollows();
+    const instanceB = useFollows();
+
+    // Start a toggle on instance A without awaiting
+    const inFlight = instanceA.toggleFollow("user-2");
+
+    // Instance B should see the same userId as pending
+    expect(instanceB.isPending("user-2")).toBe(true);
+
+    resolveFirst();
+    await inFlight;
+
+    // Once the toggle settles the pending flag should be cleared on both
+    expect(instanceA.isPending("user-2")).toBe(false);
+    expect(instanceB.isPending("user-2")).toBe(false);
   });
 });

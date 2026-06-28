@@ -33,6 +33,12 @@ export function useFollows() {
       const response = await apiFetch<{ followingIds: string[] }>(
         "/api/follows",
       );
+      // Skip the overwrite if a toggle is mid-flight. The toggle's optimistic
+      // update is the source of truth; a server snapshot that raced ahead of
+      // the toggle commit would otherwise clobber the just-changed local state.
+      if (pendingUserIds.value.size > 0) {
+        return;
+      }
       followingIds.value = new Set(response.followingIds);
     } catch (fetchError) {
       console.error("useFollows: failed to load following list", fetchError);
