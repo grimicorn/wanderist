@@ -141,7 +141,7 @@
               </div>
               <button
                 class="btn btn--outline btn--sm"
-                @click="showPasswordFields = !showPasswordFields"
+                @click="togglePasswordFields"
               >
                 <AppIcon name="lock" :size="14" />
                 change password
@@ -180,7 +180,7 @@
               >
                 <button
                   class="btn btn--ghost btn--sm"
-                  @click="showPasswordFields = false"
+                  @click="cancelPasswordChange"
                 >
                   cancel
                 </button>
@@ -616,6 +616,25 @@ async function saveChanges(): Promise<void> {
   showToast(showSaved, savedTimer);
 }
 
+function clearPasswordFields(): void {
+  passwordNew.value = "";
+  passwordConfirm.value = "";
+  passwordMatchError.value = null;
+  passwordChangedSuccess.value = false;
+}
+
+function togglePasswordFields(): void {
+  if (showPasswordFields.value) {
+    clearPasswordFields();
+  }
+  showPasswordFields.value = !showPasswordFields.value;
+}
+
+function cancelPasswordChange(): void {
+  clearPasswordFields();
+  showPasswordFields.value = false;
+}
+
 async function submitPasswordChange(): Promise<void> {
   passwordMatchError.value = null;
   passwordChangedSuccess.value = false;
@@ -672,6 +691,9 @@ async function onAvatarFileSelected(event: Event): Promise<void> {
 
   const imageUrl = await uploadAvatar(file);
 
+  // uploadAvatar returns null on error (avatarError is set) or if the server
+  // returned no URL. A successful upload always yields a URL; null here means
+  // something went wrong even if the error ref wasn't set.
   if (imageUrl !== null) {
     avatarUrl.value = imageUrl;
   }

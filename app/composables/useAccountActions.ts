@@ -10,10 +10,10 @@ import { useApiClient } from "~/composables/useApiClient";
 const UNEXPECTED_ERROR_MESSAGE = "An unexpected error occurred";
 
 function readStringField(
-  obj: Record<string, unknown>,
+  record: Record<string, unknown>,
   field: string,
 ): string | null {
-  const value = obj[field];
+  const value = record[field];
   return typeof value === "string" ? value : null;
 }
 

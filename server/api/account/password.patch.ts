@@ -30,15 +30,30 @@ export default defineEventHandler(async (event) => {
   try {
     await clerkUpdatePassword(userId, body.password);
   } catch (error: unknown) {
-    const clerkMessage = extractClerkErrorMessage(error);
+    const statusCode = clerkErrorStatusCode(error);
+    const message = extractClerkErrorMessage(error);
     throw createError({
-      statusCode: 422,
-      statusMessage: clerkMessage ?? "Failed to update password",
+      statusCode,
+      statusMessage: message ?? "Failed to update password",
     });
   }
 
   return { ok: true };
 });
+
+function clerkErrorStatusCode(error: unknown): number {
+  if (!error || typeof error !== "object") {
+    return 502;
+  }
+  const errorObj = error as Record<string, unknown>;
+  // Clerk SDK errors expose `.status`; some wrappers surface `.statusCode`.
+  // 422 signals a user-fixable validation error; anything else is a server issue.
+  const httpStatus = errorObj.status ?? errorObj.statusCode;
+  if (typeof httpStatus === "number" && httpStatus === 422) {
+    return 422;
+  }
+  return 502;
+}
 
 function extractClerkErrorMessage(error: unknown): string | null {
   if (!error || typeof error !== "object") {

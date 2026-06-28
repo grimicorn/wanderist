@@ -93,6 +93,21 @@ describe("DELETE /api/account", () => {
     );
   });
 
+  it("calls clerkDeleteUser before the DB update", async () => {
+    const callOrder: string[] = [];
+    mockClerkDeleteUser.mockImplementation(async () => {
+      callOrder.push("clerk");
+    });
+    mockDbUpdateSet.mockImplementation(() => {
+      callOrder.push("db");
+      return { where: mockDbUpdateWhere };
+    });
+
+    await callHandler(handler, buildAccountEvent());
+
+    expect(callOrder).toEqual(["clerk", "db"]);
+  });
+
   it("calls clerkDeleteUser with the authenticated userId", async () => {
     await callHandler(handler, buildAccountEvent());
     expect(mockClerkDeleteUser).toHaveBeenCalledWith("user-1");
@@ -103,22 +118,27 @@ describe("DELETE /api/account", () => {
     expect(mockDbUpdateSet).not.toHaveBeenCalled();
   });
 
-  it("throws 404 when the users row is not found (update returns empty)", async () => {
-    mockDbUpdateReturning.mockResolvedValue([]);
-
-    await expect(
-      callHandler(handler, buildAccountEvent()),
-    ).rejects.toMatchObject({ statusCode: 404 });
-    expect(mockClerkDeleteUser).not.toHaveBeenCalled();
-  });
-
-  it("throws 502 when Clerk deleteUser fails after the soft-delete stamp", async () => {
+  it("throws 502 and does not touch the DB when Clerk deleteUser fails", async () => {
     const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     mockClerkDeleteUser.mockRejectedValue(new Error("Clerk unavailable"));
 
     await expect(
       callHandler(handler, buildAccountEvent()),
     ).rejects.toMatchObject({ statusCode: 502 });
+    expect(mockDbUpdateSet).not.toHaveBeenCalled();
+    expect(consoleSpy).toHaveBeenCalled();
+    consoleSpy.mockRestore();
+  });
+
+  it("logs a warning but returns ok when DB row is not found after Clerk deletion", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    mockDbUpdateReturning.mockResolvedValue([]);
+
+    const result = (await callHandler(handler, buildAccountEvent())) as {
+      ok: boolean;
+    };
+
+    expect(result.ok).toBe(true);
     expect(consoleSpy).toHaveBeenCalled();
     consoleSpy.mockRestore();
   });

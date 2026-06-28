@@ -20,23 +20,10 @@ export default defineEventHandler(async (event) => {
   const now = new Date();
   const purgeAfter = gracePeriodEndsAt(now);
 
-  // Soft-delete: stamp deletedAt with the current time so a scheduled job can
-  // find rows where `deletedAt + DELETE_GRACE_PERIOD_DAYS < now` and purge them.
-  // FK CASCADE (ON DELETE CASCADE) handles child rows at purge time.
-  const updated = await database
-    .update(users)
-    .set({ deletedAt: now })
-    .where(eq(users.id, userId))
-    .returning({ id: users.id });
-
-  if (!updated[0]) {
-    throw createError({ statusCode: 404, statusMessage: "User not found" });
-  }
-
-  // Delete from Clerk so the user cannot sign in during the grace period.
-  // If this fails, deletedAt is already stamped; the row will still be purged
-  // by the scheduled job after the grace period ends. The user should contact
-  // support to retry the Clerk removal.
+  // Delete from Clerk first so the operation is easier to make all-or-nothing:
+  // if Clerk fails, nothing is mutated in our DB. If Clerk succeeds but the DB
+  // update fails, the Clerk user is gone and cannot sign in — the row will be
+  // cleaned up by the purge job (which tolerates rows with no matching Clerk user).
   try {
     await clerkDeleteUser(userId);
   } catch (error: unknown) {
@@ -47,8 +34,25 @@ export default defineEventHandler(async (event) => {
     throw createError({
       statusCode: 502,
       statusMessage:
-        "Account marked for deletion but sign-out from Clerk failed. Contact support.",
+        "Failed to delete account from auth provider. Please try again or contact support.",
     });
+  }
+
+  // Soft-delete: stamp deletedAt with the current time so a scheduled job can
+  // find rows where `deletedAt + DELETE_GRACE_PERIOD_DAYS < now` and purge them.
+  // FK CASCADE (ON DELETE CASCADE) handles child rows at purge time.
+  const updated = await database
+    .update(users)
+    .set({ deletedAt: now })
+    .where(eq(users.id, userId))
+    .returning({ id: users.id });
+
+  if (!updated[0]) {
+    // Clerk user was deleted but the DB row was not found. Log it for ops triage
+    // but return success — the user cannot sign in and the account is effectively gone.
+    console.error(
+      `account delete: DB user not found after Clerk deletion for ${userId}`,
+    );
   }
 
   return { ok: true, gracePeriodEndsAt: purgeAfter.toISOString() };
