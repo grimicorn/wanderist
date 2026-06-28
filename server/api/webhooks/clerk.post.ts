@@ -19,15 +19,21 @@ interface ClerkEmailAddress {
   email_address: string;
 }
 
-interface ClerkUserPayload {
+// user.created and user.updated payloads include full user data.
+interface ClerkUserUpsertPayload {
   id: string;
   email_addresses: ClerkEmailAddress[];
   primary_email_address_id: string;
 }
 
+// user.deleted payloads only carry the id; email fields are absent.
+interface ClerkUserDeletedPayload {
+  id: string;
+}
+
 interface ClerkWebhookEvent {
   type: string;
-  data: ClerkUserPayload;
+  data: ClerkUserUpsertPayload | ClerkUserDeletedPayload;
 }
 
 function getWebhookSecret(): string {
@@ -51,20 +57,24 @@ function extractSvixHeaders(
   };
 }
 
-function extractPrimaryEmail(payload: ClerkUserPayload): string | undefined {
+function extractPrimaryEmail(
+  payload: ClerkUserUpsertPayload,
+): string | undefined {
   const primaryAddress = payload.email_addresses.find(
     (address) => address.id === payload.primary_email_address_id,
   );
   return primaryAddress?.email_address;
 }
 
-async function handleUserUpsert(payload: ClerkUserPayload): Promise<void> {
+async function handleUserUpsert(
+  payload: ClerkUserUpsertPayload,
+): Promise<void> {
   const email = extractPrimaryEmail(payload);
+
+  // Clerk users created via phone or SSO may have no primary email.
+  // Acknowledge and skip rather than returning a non-2xx that causes Svix retries.
   if (!email) {
-    throw createError({
-      statusCode: 422,
-      statusMessage: "Clerk user has no primary email address",
-    });
+    return;
   }
 
   const db = getDb();
@@ -74,7 +84,9 @@ async function handleUserUpsert(payload: ClerkUserPayload): Promise<void> {
   });
 }
 
-async function handleUserDelete(payload: ClerkUserPayload): Promise<void> {
+async function handleUserDelete(
+  payload: ClerkUserDeletedPayload,
+): Promise<void> {
   const db = getDb();
   await db.delete(users).where(eq(users.id, payload.id));
 }
@@ -95,7 +107,8 @@ export default defineEventHandler(async (event) => {
       svixHeaders,
       secret,
     );
-  } catch {
+  } catch (error) {
+    console.error("Clerk webhook: Svix signature verification failed", error);
     throw createError({
       statusCode: 400,
       statusMessage: "Invalid webhook signature",
@@ -106,12 +119,12 @@ export default defineEventHandler(async (event) => {
     webhookEvent.type === EVENT_USER_CREATED ||
     webhookEvent.type === EVENT_USER_UPDATED
   ) {
-    await handleUserUpsert(webhookEvent.data);
+    await handleUserUpsert(webhookEvent.data as ClerkUserUpsertPayload);
     return { ok: true };
   }
 
   if (webhookEvent.type === EVENT_USER_DELETED) {
-    await handleUserDelete(webhookEvent.data);
+    await handleUserDelete(webhookEvent.data as ClerkUserDeletedPayload);
     return { ok: true };
   }
 

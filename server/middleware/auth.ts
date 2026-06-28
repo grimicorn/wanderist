@@ -1,42 +1,50 @@
-import { createClerkClient } from "@clerk/backend";
+import { getClerkClient } from "../utils/clerk";
 
-let cachedClerkClient: ReturnType<typeof createClerkClient> | null = null;
-
-function getClerkClient() {
-  if (cachedClerkClient) return cachedClerkClient;
-  const secretKey = process.env.NUXT_CLERK_SECRET_KEY;
-  if (!secretKey) {
-    throw new Error("NUXT_CLERK_SECRET_KEY is not set");
-  }
-  cachedClerkClient = createClerkClient({ secretKey });
-  return cachedClerkClient;
-}
-
+const API_PATH_PREFIX = "/api/";
 const WEBHOOK_PATH_PREFIX = "/api/webhooks/";
 
+function isApiPath(path: string): boolean {
+  return path.startsWith(API_PATH_PREFIX);
+}
+
+function isWebhookPath(path: string): boolean {
+  return path.startsWith(WEBHOOK_PATH_PREFIX);
+}
+
+function extractBearerToken(
+  event: Parameters<typeof getHeader>[0],
+): string | null {
+  const token = getHeader(event, "authorization")
+    ?.replace(/^Bearer\s+/i, "")
+    .trim();
+  return token ?? null;
+}
+
+async function verifyBearerToken(
+  event: Parameters<typeof getHeader>[0],
+): Promise<string> {
+  const token = extractBearerToken(event);
+  if (!token) {
+    throw createError({ statusCode: 401, statusMessage: "Unauthorized" });
+  }
+  const clerkClient = getClerkClient();
+  try {
+    const { sub } = await clerkClient.verifyToken(token);
+    return sub;
+  } catch {
+    throw createError({ statusCode: 401, statusMessage: "Unauthorized" });
+  }
+}
+
 export default defineEventHandler(async (event) => {
-  if (!event.path.startsWith("/api/")) {
+  if (!isApiPath(event.path)) {
     return;
   }
 
   // Webhook routes authenticate via Svix signature, not a bearer token.
-  if (event.path.startsWith(WEBHOOK_PATH_PREFIX)) {
+  if (isWebhookPath(event.path)) {
     return;
   }
 
-  const clerkClient = getClerkClient();
-
-  const token = getHeader(event, "authorization")
-    ?.replace(/^Bearer\s+/i, "")
-    .trim();
-  if (!token) {
-    throw createError({ statusCode: 401, statusMessage: "Unauthorized" });
-  }
-
-  try {
-    const { sub } = await clerkClient.verifyToken(token);
-    event.context.userId = sub;
-  } catch {
-    throw createError({ statusCode: 401, statusMessage: "Unauthorized" });
-  }
+  event.context.userId = await verifyBearerToken(event);
 });

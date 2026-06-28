@@ -84,6 +84,11 @@ vi.mock("@clerk/backend", () => ({
   createClerkClient: mockCreateClerkClient,
 }));
 
+// auth.ts now imports getClerkClient from the shared clerk util, so mock that too.
+vi.mock("../server/utils/clerk", () => ({
+  getClerkClient: () => ({ users: { getUser: mockGetUser } }),
+}));
+
 // ---------------------------------------------------------------------------
 // Stub Nuxt/h3 auto-imports used by the handler and auth utils.
 // These are injected at build time by Nitro; in tests we add them to globalThis.
@@ -263,6 +268,47 @@ describe("clerk webhook handler", () => {
         buildMockEvent(),
       ),
     ).rejects.toMatchObject({ statusCode: 500 });
+  });
+
+  it("calls verifySvixSignature with raw body, extracted headers, and the secret", async () => {
+    process.env.NUXT_CLERK_WEBHOOK_SECRET = TEST_SECRET;
+    const rawBody = JSON.stringify(SAMPLE_PAYLOAD);
+    mockReadRawBody.mockResolvedValue(rawBody);
+    mockGetHeader.mockImplementation(
+      (_event: unknown, name: string) => `${name}-value`,
+    );
+    mockVerifySvixSignature.mockReturnValue({
+      type: "session.created",
+      data: {},
+    });
+
+    await (clerkWebhookHandler as (event: object) => Promise<unknown>)(
+      buildMockEvent(),
+    );
+
+    expect(mockVerifySvixSignature).toHaveBeenCalledWith(
+      rawBody,
+      expect.objectContaining({ "svix-id": expect.any(String) }),
+      TEST_SECRET,
+    );
+  });
+
+  it("returns ok and skips insert when a user.created payload has no primary email", async () => {
+    mockVerifySvixSignature.mockReturnValue({
+      type: "user.created",
+      data: {
+        id: "user_phone_only",
+        email_addresses: [],
+        primary_email_address_id: "",
+      },
+    });
+
+    const result = await (
+      clerkWebhookHandler as (event: object) => Promise<unknown>
+    )(buildMockEvent());
+
+    expect(mockInsert).not.toHaveBeenCalled();
+    expect(result).toEqual({ ok: true });
   });
 });
 
