@@ -2,11 +2,11 @@ import { eq } from "drizzle-orm";
 import { ensureUser } from "../utils/auth";
 import { getDb } from "../db/index";
 import { userPreferences, DISTANCE_UNIT } from "../db/schema";
-import type { PreferencesDto } from "./preferences.patch";
+import { type PreferencesDto, rowToDto } from "./preferences.patch";
 
 const PREFERENCES_DTO_DEFAULTS: PreferencesDto = {
   distanceUnit: DISTANCE_UNIT.MI,
-  defaultMapStyle: "outdoors",
+  defaultMapStyle: null,
   publicProfile: false,
   preciseLocation: false,
   showOnExplore: true,
@@ -40,5 +40,5 @@ export default defineEventHandler(async (event) => {
     return PREFERENCES_DTO_DEFAULTS;
   }
 
-  return rows[0];
+  return rowToDto(rows[0] as unknown as Record<string, unknown>);
 });

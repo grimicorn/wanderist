@@ -160,7 +160,7 @@ function validatePatch(body: Record<string, unknown>): PatchResult {
   return patch;
 }
 
-function rowToDto(row: Record<string, unknown>): PreferencesDto {
+export function rowToDto(row: Record<string, unknown>): PreferencesDto {
   return {
     distanceUnit: row.distanceUnit as string,
     defaultMapStyle: (row.defaultMapStyle as string | null) ?? null,
@@ -179,11 +179,7 @@ function isPostgresUniqueError(error: unknown): boolean {
     return false;
   }
   const errorObj = error as Record<string, unknown>;
-  if (errorObj.code === "23505") {
-    return true;
-  }
-  const message = typeof errorObj.message === "string" ? errorObj.message : "";
-  return message.includes("unique") || message.includes("duplicate");
+  return errorObj.code === "23505";
 }
 
 export default defineEventHandler(async (event) => {

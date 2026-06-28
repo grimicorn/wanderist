@@ -3,7 +3,7 @@ import type { DISTANCE_UNIT } from "../../server/db/schema";
 
 export interface UserPreferences {
   distanceUnit: (typeof DISTANCE_UNIT)[keyof typeof DISTANCE_UNIT];
-  defaultMapStyle: string;
+  defaultMapStyle: string | null;
   publicProfile: boolean;
   preciseLocation: boolean;
   showOnExplore: boolean;
@@ -15,7 +15,7 @@ export interface UserPreferences {
 
 export const PREFERENCES_DEFAULTS: UserPreferences = {
   distanceUnit: "mi",
-  defaultMapStyle: "outdoors",
+  defaultMapStyle: null,
   publicProfile: false,
   preciseLocation: false,
   showOnExplore: true,
@@ -79,9 +79,11 @@ export function usePreferences() {
   };
 }
 
+const UNEXPECTED_ERROR_MESSAGE = "An unexpected error occurred";
+
 function extractErrorMessage(error: unknown): string {
   if (!error || typeof error !== "object") {
-    return "An unexpected error occurred";
+    return UNEXPECTED_ERROR_MESSAGE;
   }
   const errorObj = error as Record<string, unknown>;
   if (typeof errorObj.statusMessage === "string") {
@@ -90,5 +92,5 @@ function extractErrorMessage(error: unknown): string {
   if (typeof errorObj.message === "string") {
     return errorObj.message;
   }
-  return "An unexpected error occurred";
+  return UNEXPECTED_ERROR_MESSAGE;
 }

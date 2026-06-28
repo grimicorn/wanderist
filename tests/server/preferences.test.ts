@@ -98,9 +98,22 @@ describe("GET /api/preferences", () => {
     vi.clearAllMocks();
   });
 
-  it("returns existing preferences row when one exists", async () => {
-    const preferenceRow = {
+  it("returns existing preferences as a DTO without userId", async () => {
+    // The DB row includes userId but rowToDto strips it; the response shape
+    // should only have the 9 preference fields.
+    const dbRow = {
       userId: "user-1",
+      distanceUnit: "km",
+      defaultMapStyle: "dark",
+      publicProfile: true,
+      preciseLocation: false,
+      showOnExplore: true,
+      displayName: "Dan",
+      handle: "danh",
+      homeBase: "St. Louis",
+      bio: "Traveler",
+    };
+    const expectedDto = {
       distanceUnit: "km",
       defaultMapStyle: "dark",
       publicProfile: true,
@@ -113,12 +126,12 @@ describe("GET /api/preferences", () => {
     };
     mockEnsureUser.mockResolvedValue("user-1");
     mockGetDb.mockReturnValue(
-      makeFullDb([preferenceRow]) as unknown as ReturnType<typeof getDb>,
+      makeFullDb([dbRow]) as unknown as ReturnType<typeof getDb>,
     );
 
     const result = await (getPreferences as (e: unknown) => unknown)({});
 
-    expect(result).toEqual(preferenceRow);
+    expect(result).toEqual(expectedDto);
   });
 
   it("returns defaults when no preferences row exists", async () => {
@@ -131,7 +144,7 @@ describe("GET /api/preferences", () => {
 
     expect(result).toMatchObject({
       distanceUnit: "mi",
-      defaultMapStyle: "outdoors",
+      defaultMapStyle: null,
       publicProfile: false,
       preciseLocation: false,
       showOnExplore: true,
@@ -337,7 +350,9 @@ describe("PATCH /api/preferences", () => {
     mockEnsureUser.mockResolvedValue("user-1");
     mockReadBody.mockResolvedValue({ handle: "taken-handle" });
 
-    const uniqueError = new Error("unique constraint violation");
+    const uniqueError = Object.assign(new Error("duplicate key value"), {
+      code: "23505",
+    });
     const onConflictMock = vi.fn().mockRejectedValue(uniqueError);
     const valuesMock = vi
       .fn()

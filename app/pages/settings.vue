@@ -422,10 +422,10 @@ watch(
   { immediate: true },
 );
 
-// Track whether we have populated from the server's response. Until the fetch
-// resolves, the form shows defaults; once it resolves the watch fires and
-// populates from real data. After that we stop watching so user edits are not
-// overwritten by incidental state updates.
+// Populate from defaults immediately (before the API call) so the form is not
+// blank on first render. After fetch resolves, repopulate with server data.
+// `hasPopulatedFromServer` then blocks the watch so user edits are not
+// overwritten by incidental state updates after the initial load.
 const hasPopulatedFromServer = ref(false);
 
 watch(
@@ -441,12 +441,19 @@ watch(
 
 onMounted(async () => {
   await fetchPreferences();
+  // `fetchPreferences` updates `preferences.value`; the watcher above fires
+  // before this continuation resumes (Vue flushes on the next microtask).
+  // Mark the flag here so the watcher stops overwriting user edits after load.
   hasPopulatedFromServer.value = true;
 });
+
+const TOAST_DURATION_MS = 2200;
 
 const showPasswordFields = ref(false);
 const showSaved = ref(false);
 const showErrorBar = ref(false);
+let savedTimer: ReturnType<typeof setTimeout> | null = null;
+let errorTimer: ReturnType<typeof setTimeout> | null = null;
 const deleteModal = ref(false);
 const deleteConfirm = ref("");
 const activeSection = ref("profile");
@@ -471,17 +478,23 @@ async function saveChanges(): Promise<void> {
   });
 
   if (!succeeded) {
-    setTimeout(() => {
-      showErrorBar.value = false;
-    }, 2200);
+    if (errorTimer !== null) {
+      clearTimeout(errorTimer);
+    }
     showErrorBar.value = true;
+    errorTimer = setTimeout(() => {
+      showErrorBar.value = false;
+    }, TOAST_DURATION_MS);
     return;
   }
 
+  if (savedTimer !== null) {
+    clearTimeout(savedTimer);
+  }
   showSaved.value = true;
-  setTimeout(() => {
+  savedTimer = setTimeout(() => {
     showSaved.value = false;
-  }, 2200);
+  }, TOAST_DURATION_MS);
 }
 
 function scrollTo(id: string) {
