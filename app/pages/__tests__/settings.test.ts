@@ -1,6 +1,82 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { ref, readonly } from "vue";
 import { mount } from "@vue/test-utils";
 import SettingsPage from "../settings.vue";
+
+const defaultPreferencesData = {
+  distanceUnit: "mi" as const,
+  defaultMapStyle: "outdoors",
+  publicProfile: true,
+  preciseLocation: false,
+  showOnExplore: true,
+  displayName: "Dan H.",
+  handle: "danh",
+  homeBase: "St. Louis, USA",
+  bio: "Chasing cold coffee and warm light.",
+};
+
+function makePreferencesMock(
+  overrides: {
+    savePreferences?: ReturnType<typeof vi.fn>;
+    saveError?: string | null;
+    loadError?: string | null;
+    preferences?: typeof defaultPreferencesData;
+  } = {},
+) {
+  return {
+    preferences: ref(overrides.preferences ?? defaultPreferencesData),
+    isLoading: readonly(ref(false)),
+    loadError: readonly(ref(overrides.loadError ?? null)),
+    saveError: readonly(ref(overrides.saveError ?? null)),
+    fetchPreferences: vi.fn().mockResolvedValue(undefined),
+    savePreferences:
+      overrides.savePreferences ?? vi.fn().mockResolvedValue(true),
+  };
+}
+
+vi.mock("~/composables/usePreferences", () => {
+  const { ref: vueRef, readonly: vueReadonly } = require("vue");
+
+  const defaultData = {
+    distanceUnit: "mi",
+    defaultMapStyle: "outdoors",
+    publicProfile: true,
+    preciseLocation: false,
+    showOnExplore: true,
+    displayName: "Dan H.",
+    handle: "danh",
+    homeBase: "St. Louis, USA",
+    bio: "Chasing cold coffee and warm light.",
+  };
+
+  return {
+    usePreferences: vi.fn(() => ({
+      preferences: vueRef(defaultData),
+      isLoading: vueReadonly(vueRef(false)),
+      loadError: vueReadonly(vueRef(null)),
+      saveError: vueReadonly(vueRef(null)),
+      fetchPreferences: vi.fn().mockResolvedValue(undefined),
+      savePreferences: vi.fn().mockResolvedValue(true),
+    })),
+    PREFERENCES_DEFAULTS: {
+      distanceUnit: "mi",
+      defaultMapStyle: "outdoors",
+      publicProfile: false,
+      preciseLocation: false,
+      showOnExplore: true,
+      displayName: null,
+      handle: null,
+      homeBase: null,
+      bio: null,
+    },
+  };
+});
+
+vi.mock("~/composables/useApiClient", () => ({
+  useApiClient: vi.fn(() => ({
+    apiFetch: vi.fn(),
+  })),
+}));
 
 const iconStub = { template: "<svg data-icon />" };
 const inputStub = {
@@ -42,6 +118,10 @@ const globalConfig = {
 };
 
 describe("Settings page (/settings)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("renders without crashing and matches snapshot", () => {
     const wrapper = mount(SettingsPage, globalConfig);
     expect(wrapper.find(".set-layout").exists()).toBe(true);
@@ -93,10 +173,29 @@ describe("Settings page (/settings)", () => {
     expect(wrapper.find(".modal-scrim").classes()).not.toContain("is-open");
   });
 
-  it("shows saved toast when save button is clicked", async () => {
+  it("shows saved toast after a successful save", async () => {
     const wrapper = mount(SettingsPage, globalConfig);
     expect(wrapper.find(".saved-bar").classes()).not.toContain("show");
     await wrapper.find(".btn--primary").trigger("click");
+    await wrapper.vm.$nextTick();
+    await wrapper.vm.$nextTick();
     expect(wrapper.find(".saved-bar").classes()).toContain("show");
+  });
+
+  it("does not show saved toast when save fails", async () => {
+    const { usePreferences } = await import("~/composables/usePreferences");
+    const savePreferencesMock = vi.fn().mockResolvedValue(false);
+    vi.mocked(usePreferences).mockReturnValueOnce(
+      makePreferencesMock({
+        savePreferences: savePreferencesMock,
+        saveError: null,
+      }),
+    );
+
+    const wrapper = mount(SettingsPage, globalConfig);
+    await wrapper.find(".btn--primary").trigger("click");
+    await wrapper.vm.$nextTick();
+    await wrapper.vm.$nextTick();
+    expect(wrapper.find(".saved-bar").classes()).not.toContain("show");
   });
 });

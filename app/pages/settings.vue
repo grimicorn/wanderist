@@ -9,6 +9,9 @@
     </AppTopbar>
 
     <div class="content content--wide">
+      <div v-if="loadError" class="load-error">
+        <AppAlert intent="error" :title="loadError" />
+      </div>
       <div class="set-layout">
         <!-- Side nav -->
         <nav class="set-nav">
@@ -297,8 +300,13 @@
       </div>
     </div>
 
+    <!-- Error toast -->
+    <div v-if="saveError" class="saved-bar show">
+      <AppAlert intent="error" :title="saveError" />
+    </div>
+
     <!-- Saved toast -->
-    <div class="saved-bar" :class="{ show: showSaved }">
+    <div v-else class="saved-bar" :class="{ show: showSaved }">
       <AppAlert intent="success" title="Settings saved" />
     </div>
 
@@ -339,6 +347,8 @@
 </template>
 
 <script setup lang="ts">
+import { usePreferences } from "~/composables/usePreferences";
+
 definePageMeta({ layout: "app", middleware: "auth" });
 useHead({ title: "Wanderist — Settings" });
 
@@ -351,22 +361,28 @@ const sections = [
   { id: "danger", label: "Danger zone" },
 ];
 
+const { user } = useClerkUser();
+const { preferences, loadError, saveError, fetchPreferences, savePreferences } =
+  usePreferences();
+
+// Local editable copies — populated once preferences load.
 const profile = reactive({
-  name: "Dan H.",
-  handle: "danh",
-  homeBase: "St. Louis, USA",
-  bio: "Chasing cold coffee and warm light. 117 places and counting.",
-  email: "you@domain.com",
+  name: "",
+  handle: "",
+  homeBase: "",
+  bio: "",
+  email: "",
 });
 
 const privacy = reactive({
-  publicProfile: true,
+  publicProfile: false,
   preciseLocation: false,
   showOnExplore: true,
 });
 
 const units = ref<"mi" | "km">("mi");
 const mapStyle = ref("outdoors");
+
 const mapStyles = [
   { value: "outdoors", label: "Outdoors" },
   { value: "streets", label: "Streets" },
@@ -376,6 +392,48 @@ const mapStyles = [
   { value: "custom", label: "Wanderist violet" },
 ];
 
+function populateFromPreferences(): void {
+  profile.name = preferences.value.displayName ?? "";
+  profile.handle = preferences.value.handle ?? "";
+  profile.homeBase = preferences.value.homeBase ?? "";
+  profile.bio = preferences.value.bio ?? "";
+  privacy.publicProfile = preferences.value.publicProfile;
+  privacy.preciseLocation = preferences.value.preciseLocation;
+  privacy.showOnExplore = preferences.value.showOnExplore;
+  units.value = preferences.value.distanceUnit as "mi" | "km";
+  mapStyle.value = preferences.value.defaultMapStyle ?? "outdoors";
+}
+
+function populateEmailFromClerk(): void {
+  if (!user.value) {
+    return;
+  }
+  const primaryEmail = user.value.emailAddresses.find(
+    (address) => address.id === user.value!.primaryEmailAddressId,
+  );
+  profile.email = primaryEmail?.emailAddress ?? "";
+}
+
+watch(
+  preferences,
+  () => {
+    populateFromPreferences();
+  },
+  { immediate: true },
+);
+
+watch(
+  user,
+  () => {
+    populateEmailFromClerk();
+  },
+  { immediate: true },
+);
+
+onMounted(async () => {
+  await fetchPreferences();
+});
+
 const showPasswordFields = ref(false);
 const showSaved = ref(false);
 const deleteModal = ref(false);
@@ -383,7 +441,23 @@ const deleteConfirm = ref("");
 const activeSection = ref("profile");
 const sectionsRef = ref<HTMLElement | null>(null);
 
-function saveChanges() {
+async function saveChanges(): Promise<void> {
+  const succeeded = await savePreferences({
+    displayName: profile.name || undefined,
+    handle: profile.handle || undefined,
+    homeBase: profile.homeBase || undefined,
+    bio: profile.bio || undefined,
+    publicProfile: privacy.publicProfile,
+    preciseLocation: privacy.preciseLocation,
+    showOnExplore: privacy.showOnExplore,
+    distanceUnit: units.value,
+    defaultMapStyle: mapStyle.value,
+  });
+
+  if (!succeeded) {
+    return;
+  }
+
   showSaved.value = true;
   setTimeout(() => {
     showSaved.value = false;
@@ -416,6 +490,9 @@ if (import.meta.client) {
 </script>
 
 <style scoped>
+.load-error {
+  margin-bottom: 16px;
+}
 .set-layout {
   display: grid;
   grid-template-columns: 184px 1fr;
