@@ -7,24 +7,25 @@ import { clerkDeleteUser } from "../../utils/clerkAccount";
 // Grace period before the row and all FK children are permanently purged.
 const DELETE_GRACE_PERIOD_DAYS = 14;
 
-function addDays(date: Date, days: number): Date {
-  const result = new Date(date);
-  result.setDate(result.getDate() + days);
-  return result;
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+function gracePeriodEndsAt(now: Date): Date {
+  return new Date(now.getTime() + DELETE_GRACE_PERIOD_DAYS * MS_PER_DAY);
 }
 
 export default defineEventHandler(async (event) => {
   const userId = requireUser(event);
   const database = getDb();
 
-  // Soft-delete: stamp deletedAt so a scheduled job can purge after the grace
-  // period. FK cascade (ON DELETE CASCADE) will clean up child rows automatically
-  // when the users row is deleted at purge time.
-  const gracePeriodEndsAt = addDays(new Date(), DELETE_GRACE_PERIOD_DAYS);
+  const now = new Date();
+  const purgeAfter = gracePeriodEndsAt(now);
 
+  // Soft-delete: stamp deletedAt with the current time so a scheduled job can
+  // find rows where `deletedAt + DELETE_GRACE_PERIOD_DAYS < now` and purge them.
+  // FK CASCADE (ON DELETE CASCADE) handles child rows at purge time.
   const updated = await database
     .update(users)
-    .set({ deletedAt: gracePeriodEndsAt })
+    .set({ deletedAt: now })
     .where(eq(users.id, userId))
     .returning({ id: users.id });
 
@@ -32,10 +33,10 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: "User not found" });
   }
 
-  // Delete from Clerk so the user cannot sign in again immediately.
-  // If this fails the soft-delete is already stamped; a retry will hit the 404
-  // branch above (Clerk user gone) but the DB row can still be purged by the
-  // scheduled job.
+  // Delete from Clerk so the user cannot sign in during the grace period.
+  // If this fails, deletedAt is already stamped; the row will still be purged
+  // by the scheduled job after the grace period ends. The user should contact
+  // support to retry the Clerk removal.
   try {
     await clerkDeleteUser(userId);
   } catch (error: unknown) {
@@ -50,5 +51,5 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  return { ok: true, gracePeriodEndsAt: gracePeriodEndsAt.toISOString() };
+  return { ok: true, gracePeriodEndsAt: purgeAfter.toISOString() };
 });

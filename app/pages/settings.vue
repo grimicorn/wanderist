@@ -86,11 +86,14 @@
                 <span class="muted" style="font-size: 11px"
                   >JPG or PNG · up to 4MB · square works best</span
                 >
+                <span v-if="avatarValidationError" class="account-field-error">
+                  {{ avatarValidationError }}
+                </span>
                 <span
-                  v-if="accountError && isAccountLoading === false"
+                  v-else-if="avatarError && !isAccountLoading"
                   class="account-field-error"
                 >
-                  {{ accountError }}
+                  {{ avatarError }}
                 </span>
               </div>
             </div>
@@ -144,6 +147,9 @@
                 change password
               </button>
             </div>
+            <div v-if="passwordChangedSuccess" class="account-field-success">
+              Password updated.
+            </div>
             <div v-if="showPasswordFields" style="margin-top: 14px">
               <div class="row">
                 <InputText
@@ -159,11 +165,14 @@
                   placeholder="••••••••"
                 />
               </div>
-              <div v-if="passwordError" class="account-field-error">
-                {{ passwordError }}
+              <div v-if="passwordMatchError" class="account-field-error">
+                {{ passwordMatchError }}
               </div>
-              <div v-if="passwordSuccess" class="account-field-success">
-                Password updated.
+              <div
+                v-if="passwordError && !isAccountLoading"
+                class="account-field-error"
+              >
+                {{ passwordError }}
               </div>
               <div
                 class="hstack gap-8"
@@ -388,6 +397,12 @@
         </p>
         <InputText v-model="deleteConfirm" placeholder="DELETE" />
         <div
+          v-if="deleteError && !isAccountLoading"
+          class="account-field-error"
+        >
+          {{ deleteError }}
+        </div>
+        <div
           class="hstack gap-12"
           style="justify-content: flex-end; margin-top: 8px"
         >
@@ -527,17 +542,22 @@ const sectionsRef = ref<HTMLElement | null>(null);
 // Password change state
 const passwordNew = ref("");
 const passwordConfirm = ref("");
-const passwordError = ref<string | null>(null);
-const passwordSuccess = ref(false);
+// Client-side validation error (e.g. passwords don't match); separate from the
+// server-side passwordError that comes from the composable.
+const passwordMatchError = ref<string | null>(null);
+const passwordChangedSuccess = ref(false);
 
 // Avatar state
 const avatarUrl = ref<string | null>(null);
 const avatarInputRef = ref<HTMLInputElement | null>(null);
 
-// Account actions composable
+// Account actions composable — split error refs so each section only shows
+// its own error (no cross-contamination between password/avatar/delete).
 const {
   isLoading: isAccountLoading,
-  error: accountError,
+  passwordError,
+  avatarError,
+  deleteError,
   changePassword,
   uploadAvatar,
   removeAvatar,
@@ -597,35 +617,40 @@ async function saveChanges(): Promise<void> {
 }
 
 async function submitPasswordChange(): Promise<void> {
-  passwordError.value = null;
-  passwordSuccess.value = false;
+  passwordMatchError.value = null;
+  passwordChangedSuccess.value = false;
 
   if (!passwordNew.value) {
-    passwordError.value = "New password is required";
+    passwordMatchError.value = "New password is required";
     return;
   }
 
   if (passwordNew.value !== passwordConfirm.value) {
-    passwordError.value = "Passwords do not match";
+    passwordMatchError.value = "Passwords do not match";
     return;
   }
 
   const succeeded = await changePassword(passwordNew.value);
 
   if (!succeeded) {
-    passwordError.value = accountError.value ?? "Failed to update password";
     return;
   }
 
   passwordNew.value = "";
   passwordConfirm.value = "";
   showPasswordFields.value = false;
-  passwordSuccess.value = true;
+  passwordChangedSuccess.value = true;
 }
 
 function triggerAvatarUpload(): void {
   avatarInputRef.value?.click();
 }
+
+// 4 MB — matches the "up to 4MB" copy and the server-side limit.
+const MAX_AVATAR_SIZE_BYTES = 4 * 1024 * 1024;
+
+// Local validation error shown before a network request is made.
+const avatarValidationError = ref<string | null>(null);
 
 async function onAvatarFileSelected(event: Event): Promise<void> {
   const input = event.target as HTMLInputElement;
@@ -637,6 +662,13 @@ async function onAvatarFileSelected(event: Event): Promise<void> {
 
   // Reset the input so the same file can be re-selected after removal.
   input.value = "";
+
+  avatarValidationError.value = null;
+
+  if (file.size > MAX_AVATAR_SIZE_BYTES) {
+    avatarValidationError.value = "File exceeds the 4 MB limit";
+    return;
+  }
 
   const imageUrl = await uploadAvatar(file);
 
@@ -657,7 +689,7 @@ async function handleDeleteAccount(): Promise<void> {
   const succeeded = await deleteAccount();
 
   if (!succeeded) {
-    deleteModal.value = false;
+    // Keep the modal open so deleteError is visible to the user.
     return;
   }
 

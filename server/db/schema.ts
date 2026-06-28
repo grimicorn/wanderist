@@ -91,8 +91,8 @@ export const users = pgTable("users", {
     .defaultNow()
     .notNull()
     .$onUpdate(() => new Date()),
-  // Soft-delete: set when the user requests deletion; the row and all FK children
-  // are permanently removed after DELETE_GRACE_PERIOD_DAYS days by a scheduled job.
+  // Soft-delete: stamped with the deletion-request time. A scheduled job purges
+  // the row (and all FK CASCADE children) once `deletedAt + grace_period < now`.
   deletedAt: timestamp("deleted_at"),
 });
 

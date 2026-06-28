@@ -9,101 +9,129 @@ import { useApiClient } from "~/composables/useApiClient";
 
 const UNEXPECTED_ERROR_MESSAGE = "An unexpected error occurred";
 
+function readStringField(
+  obj: Record<string, unknown>,
+  field: string,
+): string | null {
+  const value = obj[field];
+  return typeof value === "string" ? value : null;
+}
+
 function extractErrorMessage(error: unknown): string {
   if (!error || typeof error !== "object") {
     return UNEXPECTED_ERROR_MESSAGE;
   }
   const errorObj = error as Record<string, unknown>;
+
   const data = errorObj.data;
   if (data && typeof data === "object") {
-    const dataObj = data as Record<string, unknown>;
-    if (typeof dataObj.statusMessage === "string") {
-      return dataObj.statusMessage;
+    const fromData = readStringField(
+      data as Record<string, unknown>,
+      "statusMessage",
+    );
+    if (fromData) {
+      return fromData;
     }
   }
-  if (typeof errorObj.statusMessage === "string") {
-    return errorObj.statusMessage;
+
+  const fromStatus = readStringField(errorObj, "statusMessage");
+  if (fromStatus) {
+    return fromStatus;
   }
-  if (typeof errorObj.message === "string") {
-    return errorObj.message;
+
+  const fromMessage = readStringField(errorObj, "message");
+  if (fromMessage) {
+    return fromMessage;
   }
+
   return UNEXPECTED_ERROR_MESSAGE;
 }
 
 export function useAccountActions() {
   const { apiFetch } = useApiClient();
   const isLoading = ref(false);
-  const error = ref<string | null>(null);
+  const passwordError = ref<string | null>(null);
+  const avatarError = ref<string | null>(null);
+  const deleteError = ref<string | null>(null);
 
-  async function changePassword(password: string): Promise<boolean> {
+  async function runAction<T>(
+    action: () => Promise<T>,
+    errorRef: ReturnType<typeof ref<string | null>>,
+    fallback: T,
+  ): Promise<T> {
     isLoading.value = true;
-    error.value = null;
+    errorRef.value = null;
     try {
-      await apiFetch("/api/account/password", {
-        method: "PATCH",
-        body: { password },
-      });
-      return true;
+      return await action();
     } catch (fetchError: unknown) {
-      error.value = extractErrorMessage(fetchError);
-      return false;
+      errorRef.value = extractErrorMessage(fetchError);
+      return fallback;
     } finally {
       isLoading.value = false;
     }
+  }
+
+  async function changePassword(password: string): Promise<boolean> {
+    return runAction(
+      async () => {
+        await apiFetch("/api/account/password", {
+          method: "PATCH",
+          body: { password },
+        });
+        return true;
+      },
+      passwordError,
+      false,
+    );
   }
 
   async function uploadAvatar(file: File): Promise<string | null> {
-    isLoading.value = true;
-    error.value = null;
-    try {
-      const result = await apiFetch<{ imageUrl: string | null }>(
-        "/api/account/avatar",
-        {
-          method: "PATCH",
-          headers: { "Content-Type": file.type },
-          body: await file.arrayBuffer(),
-        },
-      );
-      return result.imageUrl;
-    } catch (fetchError: unknown) {
-      error.value = extractErrorMessage(fetchError);
-      return null;
-    } finally {
-      isLoading.value = false;
-    }
+    return runAction(
+      async () => {
+        const result = await apiFetch<{ imageUrl: string | null }>(
+          "/api/account/avatar",
+          {
+            method: "PATCH",
+            headers: { "Content-Type": file.type },
+            body: await file.arrayBuffer(),
+          },
+        );
+        return result.imageUrl;
+      },
+      avatarError,
+      null,
+    );
   }
 
   async function removeAvatar(): Promise<boolean> {
-    isLoading.value = true;
-    error.value = null;
-    try {
-      await apiFetch("/api/account/avatar?action=remove", { method: "PATCH" });
-      return true;
-    } catch (fetchError: unknown) {
-      error.value = extractErrorMessage(fetchError);
-      return false;
-    } finally {
-      isLoading.value = false;
-    }
+    return runAction(
+      async () => {
+        await apiFetch("/api/account/avatar?action=remove", {
+          method: "PATCH",
+        });
+        return true;
+      },
+      avatarError,
+      false,
+    );
   }
 
   async function deleteAccount(): Promise<boolean> {
-    isLoading.value = true;
-    error.value = null;
-    try {
-      await apiFetch("/api/account", { method: "DELETE" });
-      return true;
-    } catch (fetchError: unknown) {
-      error.value = extractErrorMessage(fetchError);
-      return false;
-    } finally {
-      isLoading.value = false;
-    }
+    return runAction(
+      async () => {
+        await apiFetch("/api/account", { method: "DELETE" });
+        return true;
+      },
+      deleteError,
+      false,
+    );
   }
 
   return {
     isLoading: readonly(isLoading),
-    error: readonly(error),
+    passwordError: readonly(passwordError),
+    avatarError: readonly(avatarError),
+    deleteError: readonly(deleteError),
     changePassword,
     uploadAvatar,
     removeAvatar,

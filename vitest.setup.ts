@@ -33,7 +33,9 @@ Object.assign(globalThis, {
   useApiClient: vi.fn(() => ({ apiFetch: vi.fn() })),
   useAccountActions: vi.fn(() => ({
     isLoading: vue.readonly(vue.ref(false)),
-    error: vue.readonly(vue.ref(null)),
+    passwordError: vue.readonly(vue.ref(null)),
+    avatarError: vue.readonly(vue.ref(null)),
+    deleteError: vue.readonly(vue.ref(null)),
     changePassword: vi.fn().mockResolvedValue(true),
     uploadAvatar: vi.fn().mockResolvedValue(null),
     removeAvatar: vi.fn().mockResolvedValue(true),

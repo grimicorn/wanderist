@@ -31,18 +31,18 @@ describe("useAccountActions", () => {
       });
     });
 
-    it("returns false and sets error on failure", async () => {
+    it("returns false and sets passwordError on failure", async () => {
       mockApiFetch.mockRejectedValue(
         Object.assign(new Error("Nope"), {
           data: { statusMessage: "Password too weak" },
         }),
       );
-      const { changePassword, error } = useAccountActions();
+      const { changePassword, passwordError } = useAccountActions();
 
       const result = await changePassword("weak");
 
       expect(result).toBe(false);
-      expect(error.value).toBe("Password too weak");
+      expect(passwordError.value).toBe("Password too weak");
     });
   });
 
@@ -63,15 +63,15 @@ describe("useAccountActions", () => {
       );
     });
 
-    it("returns null and sets error on failure", async () => {
+    it("returns null and sets avatarError on failure", async () => {
       mockApiFetch.mockRejectedValue(new Error("Upload failed"));
-      const { uploadAvatar, error } = useAccountActions();
+      const { uploadAvatar, avatarError } = useAccountActions();
       const file = new File(["data"], "avatar.jpg", { type: "image/jpeg" });
 
       const imageUrl = await uploadAvatar(file);
 
       expect(imageUrl).toBeNull();
-      expect(error.value).toBe("Upload failed");
+      expect(avatarError.value).toBe("Upload failed");
     });
   });
 
@@ -89,14 +89,14 @@ describe("useAccountActions", () => {
       );
     });
 
-    it("returns false and sets error on failure", async () => {
+    it("returns false and sets avatarError on failure", async () => {
       mockApiFetch.mockRejectedValue(new Error("Remove failed"));
-      const { removeAvatar, error } = useAccountActions();
+      const { removeAvatar, avatarError } = useAccountActions();
 
       const result = await removeAvatar();
 
       expect(result).toBe(false);
-      expect(error.value).toBe("Remove failed");
+      expect(avatarError.value).toBe("Remove failed");
     });
   });
 
@@ -113,18 +113,18 @@ describe("useAccountActions", () => {
       });
     });
 
-    it("returns false and sets error on failure", async () => {
+    it("returns false and sets deleteError on failure", async () => {
       mockApiFetch.mockRejectedValue(
         Object.assign(new Error("Failed"), {
           data: { statusMessage: "Account not found" },
         }),
       );
-      const { deleteAccount, error } = useAccountActions();
+      const { deleteAccount, deleteError } = useAccountActions();
 
       const result = await deleteAccount();
 
       expect(result).toBe(false);
-      expect(error.value).toBe("Account not found");
+      expect(deleteError.value).toBe("Account not found");
     });
   });
 

@@ -8,12 +8,16 @@ const mockUploadAvatar = vi.fn().mockResolvedValue(null);
 const mockRemoveAvatar = vi.fn().mockResolvedValue(true);
 const mockDeleteAccount = vi.fn().mockResolvedValue(true);
 const mockAccountIsLoading = ref(false);
-const mockAccountError = ref<string | null>(null);
+const mockPasswordError = ref<string | null>(null);
+const mockAvatarError = ref<string | null>(null);
+const mockDeleteError = ref<string | null>(null);
 
 vi.mock("~/composables/useAccountActions", () => ({
   useAccountActions: vi.fn(() => ({
     isLoading: readonly(mockAccountIsLoading),
-    error: readonly(mockAccountError),
+    passwordError: readonly(mockPasswordError),
+    avatarError: readonly(mockAvatarError),
+    deleteError: readonly(mockDeleteError),
     changePassword: mockChangePassword,
     uploadAvatar: mockUploadAvatar,
     removeAvatar: mockRemoveAvatar,

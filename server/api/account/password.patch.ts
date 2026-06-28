@@ -45,8 +45,23 @@ function extractClerkErrorMessage(error: unknown): string | null {
     return null;
   }
   const errorObj = error as Record<string, unknown>;
+
+  // Clerk SDK errors expose an `errors` array with structured messages.
+  // `longMessage` is user-actionable; fall back to `message` if absent.
+  const errors = errorObj.errors;
+  if (Array.isArray(errors) && errors.length > 0) {
+    const first = errors[0] as Record<string, unknown>;
+    if (typeof first.longMessage === "string") {
+      return first.longMessage;
+    }
+    if (typeof first.message === "string") {
+      return first.message;
+    }
+  }
+
   if (typeof errorObj.message === "string") {
     return errorObj.message;
   }
+
   return null;
 }
