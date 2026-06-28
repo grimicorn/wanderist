@@ -39,6 +39,7 @@ describe("Login page (/login)", () => {
   it("renders stats in the brand panel", () => {
     const wrapper = mount(LoginPage, globalConfig);
     expect(wrapper.find(".stamp").exists()).toBe(true);
-    expect(wrapper.html()).toContain("Reykjavík");
+    expect(wrapper.html()).toContain("Streak");
+    expect(wrapper.html()).toContain("Miles logged");
   });
 });

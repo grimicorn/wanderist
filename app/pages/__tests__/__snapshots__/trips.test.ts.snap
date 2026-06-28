@@ -4,7 +4,7 @@ exports[`Trips page (/trips) > renders without crashing and matches snapshot 1`]
 "<div data-v-f103826c="" class="content content--wide">
   <div data-v-f103826c="" class="trips-head">
     <div data-v-f103826c="">
-      <div data-v-f103826c="" class="label">// 9 trips · 117 places · 48.2k miles</div>
+      <div data-v-f103826c="" class="label"> // 6 trips · 117 places · 48.2k miles</div>
       <h1 data-v-f103826c="">Your trips</h1>
       <p data-v-f103826c="">One ongoing, two on the calendar, six in the books.</p>
     </div><button data-v-f103826c="" class="btn btn--outline"><svg data-v-f103826c="" data-icon="" name="route" size="15"></svg> plan a new route </button>

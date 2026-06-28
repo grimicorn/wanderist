@@ -21,7 +21,9 @@
       </div>
 
       <div class="brand-mid">
-        <div class="label">// 117 places · 9 countries</div>
+        <div class="label">
+          // {{ loginPlacesLabel }} places · {{ loginCountriesLabel }} countries
+        </div>
         <h1 style="margin-top: 14px">Your map is<br /><b>waiting.</b></h1>
         <p>
           Pick up where you left off — every pin, journal entry and photo,
@@ -29,16 +31,12 @@
         </p>
         <div class="stamp">
           <div>
-            <div class="k">Last entry</div>
-            <div class="v">Reykjavík</div>
-          </div>
-          <div>
             <div class="k">Streak</div>
-            <div class="v">14 days</div>
+            <div class="v">{{ loginStreakLabel }}</div>
           </div>
           <div>
-            <div class="k">Miles logged</div>
-            <div class="v">48,210</div>
+            <div class="k">{{ loginDistanceLabel }}</div>
+            <div class="v">{{ loginDistanceValue }}</div>
           </div>
         </div>
       </div>
@@ -69,9 +67,35 @@
 </template>
 
 <script setup lang="ts">
-useHead({ title: "Wanderist — Sign in" });
+import { formatCompact } from "~/utils/formatNumber";
+import { useStats } from "~/composables/useStats";
 
+useHead({ title: "Wanderist — Sign in" });
 definePageMeta({ layout: false });
+
+const { stats, fetchStats } = useStats();
+
+onMounted(() => {
+  fetchStats().catch(() => {
+    // Login page is pre-auth; stats will remain at defaults if not signed in.
+  });
+});
+
+const loginPlacesLabel = computed(() => formatCompact(stats.value.placesCount));
+const loginCountriesLabel = computed(() =>
+  formatCompact(stats.value.countriesCount),
+);
+const loginStreakLabel = computed(() => `${stats.value.currentStreak} days`);
+const loginDistanceLabel = computed(() =>
+  stats.value.distanceUnit === "km" ? "Km logged" : "Miles logged",
+);
+const loginDistanceValue = computed(() => {
+  const distance =
+    stats.value.distanceUnit === "km"
+      ? stats.value.totalDistanceKm
+      : stats.value.totalDistanceMi;
+  return formatCompact(distance);
+});
 </script>
 
 <style scoped>

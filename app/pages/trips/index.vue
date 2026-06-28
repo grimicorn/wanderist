@@ -2,7 +2,9 @@
   <div class="content content--wide">
     <div class="trips-head">
       <div>
-        <div class="label">// 9 trips · 117 places · 48.2k miles</div>
+        <div class="label">
+          // {{ filteredTrips.length }} trips · {{ tripsHeaderStats }}
+        </div>
         <h1>Your trips</h1>
         <p>One ongoing, two on the calendar, six in the books.</p>
       </div>
@@ -94,6 +96,8 @@
 <script setup lang="ts">
 import { useTripsStore } from "~/stores/trips";
 import type { Trip } from "~/stores/trips";
+import { formatCompact } from "~/utils/formatNumber";
+import { useStats } from "~/composables/useStats";
 
 definePageMeta({ layout: "app", middleware: "auth" });
 useHead({ title: "Wanderist — Trips" });
@@ -110,8 +114,21 @@ const tabs = ["All", "Ongoing", "Upcoming", "Past"] as const;
 const activeTab = ref<(typeof tabs)[number]>("All");
 
 const tripsStore = useTripsStore();
+const { stats, fetchStats } = useStats();
+
+const tripsHeaderStats = computed(() => {
+  const distanceValue =
+    stats.value.distanceUnit === "km"
+      ? stats.value.totalDistanceKm
+      : stats.value.totalDistanceMi;
+  const distanceLabel = stats.value.distanceUnit === "km" ? "km" : "miles";
+  return `${formatCompact(stats.value.placesCount)} places · ${formatCompact(distanceValue)} ${distanceLabel}`;
+});
 
 onMounted(() => {
+  fetchStats().catch((error) => {
+    console.error("[trips] failed to load stats on mount", error);
+  });
   // listError is set in the store on failure; TODO surface it in the UI
   // once an error/empty-state design is available (tracked in issue #17 or
   // wherever the trips-page visual design lands).

@@ -2,7 +2,8 @@
   <div class="map-stage" :data-mapstyle="mapStyle">
     <AppTopbar title="Map" crumb="Home">
       <span class="tag tag--accent"
-        >{{ placesStore.places.length }} places</span
+        >{{ placesStore.places.length }} places ·
+        {{ mapStats.countriesCount }} countries</span
       >
       <button class="btn btn--primary btn--sm" @click="onDropPin">
         <AppIcon name="plus" :size="14" />
@@ -224,12 +225,14 @@ import type { Place } from "~/stores/places";
 import { useMapbox } from "~/composables/useMapbox";
 import { resolveMapboxStyleLabel } from "~/composables/useMapboxStyles";
 import type { DropPinResult, MapInstance } from "~/composables/useMapbox";
+import { useStats } from "~/composables/useStats";
 
 definePageMeta({ layout: "app", middleware: "auth" });
 useHead({ title: "Wanderist — Map" });
 
 const placesStore = usePlacesStore();
 const mapbox = useMapbox();
+const { stats: mapStats, fetchStats: fetchMapStats } = useStats();
 
 const mapPanelRef = ref<HTMLElement | null>(null);
 const activeMapInstance = ref<MapInstance | null>(null);
@@ -444,6 +447,9 @@ watch(
 onMounted(async () => {
   await placesStore.fetchPlaces().catch(() => undefined);
   await initializeMap();
+  fetchMapStats().catch((error) => {
+    console.error("[map] failed to load stats on mount", error);
+  });
 });
 
 onBeforeUnmount(() => {
