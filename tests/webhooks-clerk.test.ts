@@ -140,6 +140,9 @@ function resetDbMocks() {
 
 describe("clerk webhook handler", () => {
   beforeEach(() => {
+    // mockReset clears both call history and implementations, preventing a
+    // mockImplementation set in one test from leaking into the next.
+    mockVerifySvixSignature.mockReset();
     vi.clearAllMocks();
     process.env.NUXT_CLERK_WEBHOOK_SECRET = TEST_SECRET;
     mockReadRawBody.mockResolvedValue(JSON.stringify(SAMPLE_PAYLOAD));
@@ -371,5 +374,14 @@ describe("ensureUser", () => {
     await expect(ensureUser({ context: {} } as never)).rejects.toMatchObject({
       statusCode: 401,
     });
+  });
+
+  it("throws 503 when the Clerk API call fails", async () => {
+    mockLimit.mockResolvedValue([]);
+    mockGetUser.mockRejectedValue(new Error("Clerk API unavailable"));
+
+    await expect(
+      ensureUser(buildAuthEvent("user_clerk_error") as never),
+    ).rejects.toMatchObject({ statusCode: 503 });
   });
 });

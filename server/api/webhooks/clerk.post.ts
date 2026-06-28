@@ -71,17 +71,33 @@ async function handleUserUpsert(
 
   // Clerk users created via phone or SSO may have no primary email.
   // Acknowledge and skip rather than returning a non-2xx that causes Svix retries.
-  // On user.updated, if the email was removed, we keep the existing DB value since
-  // the users.email column is NOT NULL.
+  // On user.updated with email removed we keep the existing DB value since
+  // users.email is NOT NULL.
   if (!email) {
     return;
   }
 
+  // Note: Svix does not guarantee delivery order. A delayed user.updated could
+  // arrive after a newer event. We accept this risk and do not guard against it
+  // here since Clerk's webhook payloads carry no stable sequence number.
   const db = getDb();
-  await db.insert(users).values({ id: payload.id, email }).onConflictDoUpdate({
-    target: users.id,
-    set: { email },
-  });
+  try {
+    await db
+      .insert(users)
+      .values({ id: payload.id, email })
+      .onConflictDoUpdate({
+        target: users.id,
+        set: { email },
+      });
+  } catch (error) {
+    // The email column has a UNIQUE constraint. A unique-violation here means
+    // the email is already owned by a different users row (e.g. a delete/re-signup
+    // race). Log and acknowledge so Clerk does not retry indefinitely.
+    console.error(
+      `Clerk webhook: could not upsert user ${payload.id} — email conflict or other DB error`,
+      error,
+    );
+  }
 }
 
 async function handleUserDelete(

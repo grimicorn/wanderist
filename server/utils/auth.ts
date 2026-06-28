@@ -32,7 +32,18 @@ export async function ensureUser(event: H3Event): Promise<string> {
   }
 
   const clerkClient = getClerkClient();
-  const clerkUser = await clerkClient.users.getUser(userId);
+
+  let clerkUser: Awaited<ReturnType<typeof clerkClient.users.getUser>>;
+  try {
+    clerkUser = await clerkClient.users.getUser(userId);
+  } catch (error) {
+    console.error(`ensureUser: failed to fetch Clerk user ${userId}`, error);
+    throw createError({
+      statusCode: 503,
+      statusMessage: "Could not verify user identity; please try again",
+    });
+  }
+
   const primaryEmail = clerkUser.emailAddresses.find(
     (address) => address.id === clerkUser.primaryEmailAddressId,
   );
