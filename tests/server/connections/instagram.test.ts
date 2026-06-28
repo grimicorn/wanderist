@@ -449,12 +449,17 @@ describe("DELETE /api/connections/instagram", () => {
 
 describe("POST /api/connections/instagram/import", () => {
   function makeTransactionDb(): object {
+    const txSelectLimit = vi.fn().mockResolvedValue([]);
+    const txSelectWhere = vi.fn(() => ({ limit: txSelectLimit }));
+    const txSelectFrom = vi.fn(() => ({ where: txSelectWhere }));
+    const txSelect = vi.fn(() => ({ from: txSelectFrom }));
     return {
       insert: vi.fn(() => ({
         values: vi.fn(() => ({
           returning: vi.fn().mockResolvedValue([{ id: "new-id" }]),
         })),
       })),
+      select: txSelect,
     };
   }
 

@@ -8,6 +8,9 @@
  * Idempotent: items whose Instagram media ID already exists in `media.source_id`
  * for this user are skipped rather than duplicated.
  *
+ * Place deduplication: photos taken at the same location (name + coordinates)
+ * reuse the existing `places` row rather than inserting duplicates.
+ *
  * Returns a summary: { imported: number, skipped: number, errors: string[] }
  */
 
@@ -33,6 +36,8 @@ import {
 } from "../../../utils/instagramClient";
 import { decryptToken } from "../../../utils/tokenCrypto";
 
+type DbClient = ReturnType<typeof getDb>;
+
 function buildEntryTitle(item: InstagramMediaItem): string {
   if (item.caption) {
     return item.caption.slice(0, 100);
@@ -41,11 +46,11 @@ function buildEntryTitle(item: InstagramMediaItem): string {
 }
 
 function detectContentType(mediaUrl: string): string {
-  const lower = mediaUrl.toLowerCase();
-  if (lower.includes(".png")) {
+  const pathname = new URL(mediaUrl).pathname.toLowerCase();
+  if (pathname.endsWith(".png")) {
     return "image/png";
   }
-  if (lower.includes(".webp")) {
+  if (pathname.endsWith(".webp")) {
     return "image/webp";
   }
   return "image/jpeg";
@@ -72,6 +77,51 @@ async function fetchAlreadyImportedIds(
   return new Set(rows.map((row) => row.sourceId).filter(Boolean) as string[]);
 }
 
+async function resolveOrCreatePlace(
+  db: DbClient,
+  userId: string,
+  item: InstagramMediaItem,
+): Promise<string> {
+  const locationName = item.location!.name;
+  const latitude = item.location!.latitude;
+  const longitude = item.location!.longitude;
+
+  const existingRows = await db
+    .select({ id: places.id })
+    .from(places)
+    .where(
+      and(
+        eq(places.userId, userId),
+        eq(places.name, locationName),
+        eq(places.latitude, latitude),
+        eq(places.longitude, longitude),
+      ),
+    )
+    .limit(1);
+
+  if (existingRows[0]) {
+    return existingRows[0].id;
+  }
+
+  const [placeRow] = await db
+    .insert(places)
+    .values({
+      id: crypto.randomUUID(),
+      userId,
+      name: locationName,
+      latitude,
+      longitude,
+    })
+    .returning({ id: places.id });
+
+  if (!placeRow) {
+    throw new Error(
+      `Failed to insert place record for Instagram item ${item.id}`,
+    );
+  }
+  return placeRow.id;
+}
+
 async function importSinglePhoto(
   userId: string,
   item: InstagramMediaItem,
@@ -82,10 +132,36 @@ async function importSinglePhoto(
   const mediaId = crypto.randomUUID();
   const storageKey = `${userId}/${mediaId}`;
 
-  await putMediaBlob(storageKey, imageBuffer, contentType);
-
+  // Commit DB rows first; then write the blob. This ordering ensures a failed
+  // transaction (e.g. a race on the unique index) never leaves an orphaned blob
+  // in object storage. The tradeoff is that a failed blob write leaves a media
+  // row with a broken URL, but that state is recoverable (re-import will retry
+  // since the source_id unique row exists, skipping the entry and not making
+  // things worse).
   await database.transaction(async (transaction) => {
-    const [mediaRow] = await transaction
+    const db = transaction as unknown as DbClient;
+
+    const placeId = await resolveOrCreatePlace(db, userId, item);
+
+    const entryId = crypto.randomUUID();
+    const [entryRow] = await db
+      .insert(entries)
+      .values({
+        id: entryId,
+        userId,
+        placeId,
+        title: buildEntryTitle(item),
+        body: item.caption ?? null,
+        occurredAt: new Date(item.timestamp),
+        visibility: VISIBILITY.PRIVATE,
+      })
+      .returning({ id: entries.id });
+
+    if (!entryRow) {
+      throw new Error(`Failed to insert entry for Instagram item ${item.id}`);
+    }
+
+    const [mediaRow] = await db
       .insert(media)
       .values({
         id: mediaId,
@@ -103,49 +179,15 @@ async function importSinglePhoto(
       );
     }
 
-    const placeId = crypto.randomUUID();
-    const [placeRow] = await transaction
-      .insert(places)
-      .values({
-        id: placeId,
-        userId,
-        name: item.location!.name,
-        latitude: item.location!.latitude,
-        longitude: item.location!.longitude,
-      })
-      .returning({ id: places.id });
-
-    if (!placeRow) {
-      throw new Error(
-        `Failed to insert place record for Instagram item ${item.id}`,
-      );
-    }
-
-    const entryId = crypto.randomUUID();
-    const [entryRow] = await transaction
-      .insert(entries)
-      .values({
-        id: entryId,
-        userId,
-        placeId: placeRow.id,
-        title: buildEntryTitle(item),
-        body: item.caption ?? null,
-        occurredAt: new Date(item.timestamp),
-        visibility: VISIBILITY.PRIVATE,
-      })
-      .returning({ id: entries.id });
-
-    if (!entryRow) {
-      throw new Error(`Failed to insert entry for Instagram item ${item.id}`);
-    }
-
-    await transaction.insert(entryPhotos).values({
+    await db.insert(entryPhotos).values({
       id: crypto.randomUUID(),
       entryId: entryRow.id,
       mediaId: mediaRow.id,
       sortOrder: 0,
     });
   });
+
+  await putMediaBlob(storageKey, imageBuffer, contentType);
 }
 
 export default defineEventHandler(async (event) => {

@@ -253,4 +253,32 @@ describe("filterGeotaggedMedia", () => {
     ];
     expect(filterGeotaggedMedia(items)).toHaveLength(1);
   });
+
+  it("excludes items whose location has coordinates but an empty name", () => {
+    const items: InstagramMediaItem[] = [
+      {
+        id: "1",
+        media_type: "IMAGE",
+        media_url: "https://cdn.ig.com/1.jpg",
+        timestamp: "2024-01-01T00:00:00Z",
+        permalink: "https://ig.com/1",
+        location: { name: "", latitude: 48.8566, longitude: 2.3522 },
+      },
+    ];
+    expect(filterGeotaggedMedia(items)).toHaveLength(0);
+  });
+
+  it("excludes items whose location name is not a string", () => {
+    const items = [
+      {
+        id: "1",
+        media_type: "IMAGE",
+        media_url: "https://cdn.ig.com/1.jpg",
+        timestamp: "2024-01-01T00:00:00Z",
+        permalink: "https://ig.com/1",
+        location: { name: null, latitude: 48.8566, longitude: 2.3522 },
+      },
+    ] as unknown as InstagramMediaItem[];
+    expect(filterGeotaggedMedia(items)).toHaveLength(0);
+  });
 });

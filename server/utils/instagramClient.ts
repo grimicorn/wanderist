@@ -225,8 +225,8 @@ export async function fetchInstagramImage(mediaUrl: string): Promise<Buffer> {
 }
 
 /**
- * Filters a list of media items to only those with complete geotag data
- * (both latitude and longitude present, not just a location name).
+ * Filters a list of media items to only those with complete geotag data:
+ * a non-empty location name, both latitude and longitude present as numbers.
  */
 export function filterGeotaggedMedia(
   items: InstagramMediaItem[],
@@ -235,6 +235,8 @@ export function filterGeotaggedMedia(
     (item) =>
       INSTAGRAM_GEOTAGGED_MEDIA_TYPES.has(item.media_type) &&
       item.location !== undefined &&
+      typeof item.location.name === "string" &&
+      item.location.name.length > 0 &&
       typeof item.location.latitude === "number" &&
       typeof item.location.longitude === "number",
   );
