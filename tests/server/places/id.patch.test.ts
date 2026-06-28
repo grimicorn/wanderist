@@ -139,6 +139,20 @@ describe("PATCH /api/places/:id", () => {
     ).rejects.toMatchObject({ statusCode: 400 });
   });
 
+  it("throws 400 when body is undefined (no body sent)", async () => {
+    mockRequireRouterParam.mockReturnValue("place-1");
+    mockReadBody.mockResolvedValue(undefined);
+    mockAssertOwnership.mockResolvedValue(undefined);
+    const mockDb = makeDbWithUpdate({});
+    mockGetDb.mockReturnValue(mockDb as unknown as ReturnType<typeof getDb>);
+
+    const defaultHandler = "default" in handler ? handler.default : handler;
+
+    await expect(
+      (defaultHandler as (event: unknown) => unknown)({}),
+    ).rejects.toMatchObject({ statusCode: 400 });
+  });
+
   it("throws 400 when name is an empty string", async () => {
     mockRequireRouterParam.mockReturnValue("place-1");
     mockReadBody.mockResolvedValue({ name: "   " });

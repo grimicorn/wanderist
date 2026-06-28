@@ -72,7 +72,7 @@ export default defineEventHandler(async (event) => {
   await assertOwnership(event, places, places.id, places.userId, id);
 
   const database = getDb();
-  const body = (await readBody(event)) as Record<string, unknown>;
+  const body = ((await readBody(event)) ?? {}) as Record<string, unknown>;
   const updates: PlaceUpdates = {};
 
   applyOptionalName(updates, body);
