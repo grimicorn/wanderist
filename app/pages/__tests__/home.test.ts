@@ -288,8 +288,11 @@ describe("Home / Dashboard page (/home)", () => {
     vi.useRealTimers();
   });
 
-  it("renders without crashing and matches snapshot", () => {
+  it("renders without crashing and matches snapshot", async () => {
     const wrapper = mount(HomePage, globalConfig);
+    // onMounted fires asynchronously in happy-dom; flush the lifecycle before
+    // capturing the snapshot so time-of-day labels are populated.
+    await wrapper.vm.$nextTick();
     expect(wrapper.find(".hello").exists()).toBe(true);
     expect(wrapper.html()).toMatchSnapshot();
   });
@@ -300,8 +303,10 @@ describe("Home / Dashboard page (/home)", () => {
     expect(wrapper.find(".hello h1 b").text()).toBe("Dan.");
   });
 
-  it("renders a dynamic time-of-day label in the greeting", () => {
+  it("renders a dynamic time-of-day label in the greeting", async () => {
     const wrapper = mount(HomePage, globalConfig);
+    // onMounted populates the time labels; flush the lifecycle first.
+    await wrapper.vm.$nextTick();
     const label = wrapper.find(".hello .label").text();
     // Format: "// <time-of-day> · <day>, <month> <date>"
     expect(label).toMatch(/^\/\/ (morning|afternoon|evening|night) · /);
@@ -333,6 +338,38 @@ describe("Home / Dashboard page (/home)", () => {
   it("hides the import alert when Instagram is not connected", () => {
     mockInstagramConnected.value = false;
     const wrapper = mount(HomePage, globalConfig);
+    expect(wrapper.find(".alert--info").exists()).toBe(false);
+  });
+
+  it("dismiss button hides the import alert", async () => {
+    mockInstagramConnected.value = true;
+    const wrapper = mount(HomePage, globalConfig);
+    expect(wrapper.find(".alert--info").exists()).toBe(true);
+    await wrapper.find('[aria-label="Dismiss import alert"]').trigger("click");
+    expect(wrapper.find(".alert--info").exists()).toBe(false);
+  });
+
+  it("import alert reappears after a fresh import result even if previously dismissed", async () => {
+    mockInstagramConnected.value = true;
+    const wrapper = mount(HomePage, globalConfig);
+    // Dismiss the alert
+    await wrapper.find('[aria-label="Dismiss import alert"]').trigger("click");
+    expect(wrapper.find(".alert--info").exists()).toBe(false);
+    // A fresh import result should un-dismiss
+    mockImportResult.value = { imported: 3, skipped: 0, errors: [] };
+    await wrapper.vm.$nextTick();
+    expect(wrapper.find(".alert--info").exists()).toBe(true);
+    // Clean up
+    mockImportResult.value = null;
+  });
+
+  it("clears the import alert when Instagram is disconnected", async () => {
+    mockInstagramConnected.value = true;
+    const wrapper = mount(HomePage, globalConfig);
+    expect(wrapper.find(".alert--info").exists()).toBe(true);
+    // Simulate disconnect
+    mockInstagramConnected.value = false;
+    await wrapper.vm.$nextTick();
     expect(wrapper.find(".alert--info").exists()).toBe(false);
   });
 

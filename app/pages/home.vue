@@ -73,6 +73,13 @@
         >
           {{ isImporting ? "importing…" : "import all" }}
         </button>
+        <button
+          class="icon-btn"
+          aria-label="Dismiss import alert"
+          @click="dismissImportAlert"
+        >
+          <AppIcon name="x" :size="14" />
+        </button>
       </div>
     </div>
 
@@ -298,17 +305,25 @@ function resolveTimeOfDay(hour: number): string {
   return "night";
 }
 
-const now = new Date();
+function buildLocalDateLabel(date: Date): string {
+  return date
+    .toLocaleDateString("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      timeZone: "UTC",
+    })
+    .toLowerCase();
+}
 
-const timeOfDayLabel = resolveTimeOfDay(now.getHours());
+function resolveUTCTimeOfDay(date: Date): string {
+  return resolveTimeOfDay(date.getUTCHours());
+}
 
-const localDateLabel = now
-  .toLocaleDateString("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  })
-  .toLowerCase();
+// Initialize to empty so server render and first client render match (no
+// hydration mismatch). Populated in onMounted (client-side only).
+const timeOfDayLabel = ref("");
+const localDateLabel = ref("");
 
 // ── New entry drawer ──────────────────────────────────────────────────────────
 
@@ -329,11 +344,41 @@ const {
 
 const isImporting = ref(false);
 
+// Tracks whether the user has dismissed the import alert (via close button or
+// by disconnecting Instagram). Resets automatically when a fresh import result
+// arrives so the result is always acknowledged.
+const importAlertDismissed = ref(false);
+
 // Show the alert when Instagram is connected (photos ready to import) OR when
-// a prior import result is pending acknowledgement (e.g. re-render after import).
+// a prior import result is pending acknowledgement (e.g. re-render after import),
+// unless the user has dismissed it.
 const showImportAlert = computed(
-  () => connections.value.instagram.connected || importResult.value !== null,
+  () =>
+    !importAlertDismissed.value &&
+    (connections.value.instagram.connected || importResult.value !== null),
 );
+
+// Clear the alert when Instagram is disconnected.
+watch(
+  () => connections.value.instagram.connected,
+  (isConnected) => {
+    if (!isConnected) {
+      importAlertDismissed.value = true;
+    }
+  },
+);
+
+// Reset dismiss state whenever a fresh import result arrives so the result
+// is surfaced to the user rather than silently hidden.
+watch(importResult, (result) => {
+  if (result !== null) {
+    importAlertDismissed.value = false;
+  }
+});
+
+function dismissImportAlert(): void {
+  importAlertDismissed.value = true;
+}
 
 async function handleImportAll(): Promise<void> {
   isImporting.value = true;
@@ -565,8 +610,16 @@ const recentEntries = computed(() => {
 // ── Mount: fetch all dashboard data ──────────────────────────────────────────
 
 onMounted(() => {
-  fetchStats();
-  fetchConnections();
+  const now = new Date();
+  timeOfDayLabel.value = resolveUTCTimeOfDay(now);
+  localDateLabel.value = buildLocalDateLabel(now);
+
+  fetchStats().catch((error: unknown) => {
+    console.error("[home] failed to load stats", error);
+  });
+  fetchConnections().catch((error: unknown) => {
+    console.error("[home] failed to load connections", error);
+  });
 
   placesStore.fetchPlaces().catch((error: unknown) => {
     console.error("[home] failed to load places", error);
