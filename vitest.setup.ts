@@ -2,6 +2,11 @@ import * as vue from "vue";
 import { vi } from "vitest";
 import { defineStore } from "pinia";
 
+// Pin the process timezone to UTC so that any test using Date.getHours(),
+// toLocaleDateString(), or similar local-time APIs produces the same output
+// regardless of the CI runner's system timezone.
+process.env.TZ = "UTC";
+
 // Expose Vue composition API as globals to match Nuxt's auto-import behavior
 Object.assign(globalThis, vue);
 

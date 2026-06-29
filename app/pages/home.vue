@@ -1,9 +1,11 @@
 <template>
   <div class="content content--wide">
     <AppTopbar title="Dashboard" crumb="Home">
+      <!-- Search: deferred to #23 (command palette) -->
       <button class="icon-btn" aria-label="Search">
         <AppIcon name="search" :size="18" />
       </button>
+      <!-- Bell: deferred to #24 (notifications) -->
       <button class="icon-btn" aria-label="Alerts">
         <AppIcon name="bell" :size="18" />
       </button>
@@ -16,11 +18,15 @@
     <!-- Greeting -->
     <div class="hello">
       <div>
-        <div class="label">// evening · fri, jun 14</div>
-        <h1 style="margin-top: 10px">Welcome back, <b>Dan.</b></h1>
+        <div class="label">// {{ timeOfDayLabel }} · {{ localDateLabel }}</div>
+        <h1 style="margin-top: 10px">
+          Welcome back, <b>{{ displayName }}.</b>
+        </h1>
         <p>
-          You've been to 9 countries. Iceland is your most-journaled trip this
-          year.
+          You've been to {{ rawStats.countriesCount }} countries.
+          <template v-if="ongoingTrip">
+            {{ ongoingTrip.name }} is your current trip.
+          </template>
         </p>
       </div>
       <NuxtLink class="btn btn--outline" to="/map">
@@ -29,8 +35,12 @@
       </NuxtLink>
     </div>
 
-    <!-- Import alert -->
-    <div class="alert alert--info" style="margin-bottom: 22px">
+    <!-- Import alert: only show when Instagram is connected -->
+    <div
+      v-if="showImportAlert"
+      class="alert alert--info"
+      style="margin-bottom: 22px"
+    >
       <AppIcon name="instagram" :size="18" class="alert__ico" />
       <div class="alert__body">
         <p class="alert__title">
@@ -62,6 +72,13 @@
           @click="handleImportAll"
         >
           {{ isImporting ? "importing…" : "import all" }}
+        </button>
+        <button
+          class="icon-btn"
+          aria-label="Dismiss import alert"
+          @click="dismissImportAlert"
+        >
+          <AppIcon name="x" :size="14" />
         </button>
       </div>
     </div>
@@ -122,41 +139,65 @@
         </div>
       </div>
 
+      <!-- Current trip card -->
       <div class="trip-card">
         <div class="label">// current trip</div>
-        <div class="trip-hero ph" style="margin-top: 12px">
-          <div class="topo" style="opacity: 0.5" />
-          <span class="ph__tag" style="position: relative; z-index: 2"
-            >cover · iceland</span
+        <template v-if="ongoingTrip">
+          <div class="trip-hero ph" style="margin-top: 12px">
+            <div class="topo" style="opacity: 0.5" />
+            <span class="ph__tag" style="position: relative; z-index: 2"
+              >cover · {{ ongoingTrip.name.toLowerCase() }}</span
+            >
+          </div>
+          <h3 style="font-size: 18px">{{ ongoingTrip.name }}</h3>
+          <p class="muted" style="font-size: 12px; margin: 4px 0 0">
+            {{ tripDayLabel }} · {{ tripStopsLabel }}
+          </p>
+          <div class="progress">
+            <span :style="{ width: tripProgressPercent + '%' }" />
+          </div>
+          <div
+            class="hstack"
+            style="
+              justify-content: space-between;
+              font-size: 11px;
+              color: var(--muted);
+            "
           >
-        </div>
-        <h3 style="font-size: 18px">Iceland, the ring road</h3>
-        <p class="muted" style="font-size: 12px; margin: 4px 0 0">
-          Day 6 of 9 · 4 of 7 stops logged
-        </p>
-        <div class="progress"><span style="width: 64%" /></div>
-        <div
-          class="hstack"
-          style="
-            justify-content: space-between;
-            font-size: 11px;
-            color: var(--muted);
-          "
-        >
-          <span>64% logged</span>
-          <span>3 days left</span>
-        </div>
-        <div class="nextstop">
-          <AppIcon name="pin" :size="18" style="color: var(--accent)" />
-          <div>
-            <div style="font-size: 12.5px; font-weight: 600">
-              Next: Jökulsárlón
-            </div>
-            <div style="font-size: 11px; color: var(--muted)">
-              glacier lagoon · 1h 40m drive
+            <span>{{ tripProgressPercent }}% logged</span>
+            <span>{{ tripDaysRemainingLabel }}</span>
+          </div>
+          <div v-if="tripNextStop" class="nextstop">
+            <AppIcon name="pin" :size="18" style="color: var(--accent)" />
+            <div>
+              <div style="font-size: 12.5px; font-weight: 600">
+                Next: {{ tripNextStop.name }}
+              </div>
+              <div
+                v-if="tripNextStop.note"
+                style="font-size: 11px; color: var(--muted)"
+              >
+                {{ tripNextStop.note }}
+              </div>
             </div>
           </div>
-        </div>
+        </template>
+        <template v-else>
+          <div class="trip-hero ph" style="margin-top: 12px">
+            <div class="topo" style="opacity: 0.5" />
+          </div>
+          <p class="muted" style="font-size: 12px; margin: 4px 0 0">
+            No active trip right now.
+          </p>
+          <NuxtLink
+            class="btn btn--outline btn--sm"
+            to="/trips"
+            style="margin-top: 12px"
+          >
+            <AppIcon name="route" :size="14" />
+            browse trips
+          </NuxtLink>
+        </template>
       </div>
     </div>
 
@@ -177,7 +218,7 @@
     <div class="entries">
       <NuxtLink
         v-for="entry in recentEntries"
-        :key="entry.title"
+        :key="entry.id"
         class="entry"
         to="/journal"
       >
@@ -219,28 +260,136 @@
 import { formatCompact } from "~/utils/formatNumber";
 import { useStats } from "~/composables/useStats";
 import { useConnections } from "~/composables/useConnections";
+import type { Place } from "~/stores/places";
+import type { Entry } from "~/stores/entries";
+import type { TripStop } from "~/stores/trips";
 
 definePageMeta({ layout: "app", middleware: "auth" });
 useHead({ title: "Wanderist — Home" });
 
-const {
-  importResult,
-  actionError: importError,
-  importInstagramPhotos,
-} = useConnections();
+// ── Auth ──────────────────────────────────────────────────────────────────────
 
-const isImporting = ref(false);
+const { user } = useClerkUser();
 
-async function handleImportAll(): Promise<void> {
-  isImporting.value = true;
-  await importInstagramPhotos();
-  isImporting.value = false;
+function resolveDisplayName(): string {
+  const currentUser = user.value;
+  if (!currentUser) {
+    return "Traveler";
+  }
+  return (
+    currentUser.firstName ||
+    currentUser.fullName ||
+    currentUser.username ||
+    "Traveler"
+  );
 }
+
+const displayName = computed(resolveDisplayName);
+
+// ── Time-of-day greeting ──────────────────────────────────────────────────────
+
+const HOURS_MORNING_START = 5;
+const HOURS_AFTERNOON_START = 12;
+const HOURS_EVENING_START = 17;
+
+function resolveTimeOfDay(hour: number): string {
+  if (hour >= HOURS_EVENING_START) {
+    return "evening";
+  }
+  if (hour >= HOURS_AFTERNOON_START) {
+    return "afternoon";
+  }
+  if (hour >= HOURS_MORNING_START) {
+    return "morning";
+  }
+  return "night";
+}
+
+function buildLocalDateLabel(date: Date): string {
+  return date
+    .toLocaleDateString("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      timeZone: "UTC",
+    })
+    .toLowerCase();
+}
+
+function resolveUTCTimeOfDay(date: Date): string {
+  return resolveTimeOfDay(date.getUTCHours());
+}
+
+// Initialize to empty so server render and first client render match (no
+// hydration mismatch). Populated in onMounted (client-side only).
+const timeOfDayLabel = ref("");
+const localDateLabel = ref("");
+
+// ── New entry drawer ──────────────────────────────────────────────────────────
 
 const openNewEntry = inject<(() => void) | undefined>(
   "openNewEntry",
   undefined,
 );
+
+// ── Connections / import alert ────────────────────────────────────────────────
+
+const {
+  connections,
+  importResult,
+  actionError: importError,
+  importInstagramPhotos,
+  fetchConnections,
+} = useConnections();
+
+const isImporting = ref(false);
+
+// Tracks whether the user has dismissed the import alert (via close button or
+// by disconnecting Instagram). Resets automatically when a fresh import result
+// arrives so the result is always acknowledged.
+const importAlertDismissed = ref(false);
+
+// Show the alert when Instagram is connected (photos ready to import) OR when
+// a prior import result is pending acknowledgement (e.g. re-render after import),
+// unless the user has dismissed it.
+const showImportAlert = computed(
+  () =>
+    !importAlertDismissed.value &&
+    (connections.value.instagram.connected || importResult.value !== null),
+);
+
+// Clear the alert when Instagram is disconnected.
+watch(
+  () => connections.value.instagram.connected,
+  (isConnected) => {
+    if (!isConnected) {
+      importAlertDismissed.value = true;
+    }
+  },
+);
+
+// Reset dismiss state whenever a fresh import result arrives so the result
+// is surfaced to the user rather than silently hidden.
+watch(importResult, (result) => {
+  if (result !== null) {
+    importAlertDismissed.value = false;
+  }
+});
+
+function dismissImportAlert(): void {
+  importAlertDismissed.value = true;
+}
+
+async function handleImportAll(): Promise<void> {
+  isImporting.value = true;
+  try {
+    await importInstagramPhotos();
+  } finally {
+    isImporting.value = false;
+  }
+}
+
+// ── Stats ─────────────────────────────────────────────────────────────────────
 
 const {
   stats: rawStats,
@@ -250,10 +399,6 @@ const {
   loadError: statsError,
   fetchStats,
 } = useStats();
-
-onMounted(() => {
-  fetchStats();
-});
 
 const stats = computed(() => [
   {
@@ -288,35 +433,219 @@ const stats = computed(() => [
   },
 ]);
 
-const mapPins = [
-  { tip: "Reykjavík · 4 entries", left: "24%", top: "40%", sm: false },
-  { tip: "London", left: "47%", top: "34%", sm: true },
-  { tip: "Lisbon · 12 photos", left: "45%", top: "52%", sm: true },
-  { tip: "Tokyo", left: "72%", top: "44%", sm: true },
-  { tip: "Sydney", left: "82%", top: "66%", sm: true },
-  { tip: "Marrakech", left: "30%", top: "62%", sm: true },
-];
+// ── Places / map pins ─────────────────────────────────────────────────────────
 
-const recentEntries = [
-  {
-    location: "Reykjavík, IS",
-    title: "Harbor at 4am",
-    excerpt:
-      "Cold morning, the whole harbor still asleep. Found coffee at a window and watched the boats.",
-    date: "Jun 12",
-    photos: 6,
-    likes: 24,
-  },
-  {
-    location: "Lisbon, PT",
-    title: "Tram 28, again",
-    excerpt:
-      "Took the long way through Alfama. Pastéis, then a viewpoint I keep coming back to.",
-    date: "Jun 8",
-    photos: 12,
-    likes: 41,
-  },
-];
+const placesStore = usePlacesStore();
+
+// Maximum number of map pins to render on the dashboard preview.
+const MAX_MAP_PINS = 8;
+
+// World bounds for equirectangular projection onto the panel.
+const MAP_LON_MIN = -180;
+const MAP_LON_MAX = 180;
+const MAP_LAT_MIN = -85;
+const MAP_LAT_MAX = 85;
+
+// Clamp pin positions so they remain visually inside the panel edges.
+const PIN_EDGE_PERCENT = 5;
+const PIN_MAX_PERCENT = 95;
+
+function longitudeToPercent(longitude: number): number {
+  const rawPercent =
+    ((longitude - MAP_LON_MIN) / (MAP_LON_MAX - MAP_LON_MIN)) * 100;
+  return Math.min(PIN_MAX_PERCENT, Math.max(PIN_EDGE_PERCENT, rawPercent));
+}
+
+function latitudeToPercent(latitude: number): number {
+  // Latitude: higher value = further north = closer to top (lower %)
+  const rawPercent =
+    ((MAP_LAT_MAX - latitude) / (MAP_LAT_MAX - MAP_LAT_MIN)) * 100;
+  return Math.min(PIN_MAX_PERCENT, Math.max(PIN_EDGE_PERCENT, rawPercent));
+}
+
+function buildMapPin(place: Place, index: number) {
+  // latitude/longitude are guaranteed non-null by the filter below
+  const left = longitudeToPercent(place.longitude as number);
+  const top = latitudeToPercent(place.latitude as number);
+  return {
+    tip: place.name,
+    left: `${left}%`,
+    top: `${top}%`,
+    // First pin is large; the rest are small
+    sm: index > 0,
+  };
+}
+
+const mapPins = computed(() =>
+  placesStore.places
+    // Use != null to exclude both null and undefined coordinates
+    .filter((place) => place.latitude != null && place.longitude != null)
+    .slice(0, MAX_MAP_PINS)
+    .map(buildMapPin),
+);
+
+// ── Trips / current trip card ─────────────────────────────────────────────────
+
+const tripsStore = useTripsStore();
+
+const ongoingTrip = computed(
+  () => tripsStore.tripList.find((trip) => trip.status === "ongoing") ?? null,
+);
+
+const ongoingTripDetail = computed(() => {
+  if (!ongoingTrip.value) {
+    return null;
+  }
+  if (tripsStore.currentTripDetail?.trip.id === ongoingTrip.value.id) {
+    return tripsStore.currentTripDetail;
+  }
+  return null;
+});
+
+const tripStops = computed<TripStop[]>(
+  () => ongoingTripDetail.value?.stops ?? [],
+);
+
+const doneStopCount = computed(
+  () => tripStops.value.filter((stop) => stop.status === "done").length,
+);
+
+const tripProgressPercent = computed<number>(() => {
+  const totalStops = tripStops.value.length;
+  if (totalStops === 0) {
+    return 0;
+  }
+  return Math.round((doneStopCount.value / totalStops) * 100);
+});
+
+const tripStopsLabel = computed<string>(() => {
+  const totalStops = tripStops.value.length;
+  if (totalStops === 0) {
+    return "no stops logged";
+  }
+  return `${doneStopCount.value} of ${totalStops} stops logged`;
+});
+
+const MS_PER_DAY = 1000 * 60 * 60 * 24;
+
+const tripDayLabel = computed<string>(() => {
+  const trip = ongoingTrip.value;
+  if (!trip?.startDate) {
+    return "ongoing";
+  }
+  const start = new Date(trip.startDate).getTime();
+  const rawDayNumber = Math.floor((Date.now() - start) / MS_PER_DAY) + 1;
+
+  if (!trip.endDate) {
+    return `day ${Math.max(1, rawDayNumber)}`;
+  }
+
+  const end = new Date(trip.endDate).getTime();
+  const totalDays = Math.ceil((end - start) / MS_PER_DAY);
+  if (totalDays <= 0) {
+    return "day 1";
+  }
+  const dayNumber = Math.min(Math.max(1, rawDayNumber), totalDays);
+  return `day ${dayNumber} of ${totalDays}`;
+});
+
+const tripDaysRemainingLabel = computed<string>(() => {
+  const trip = ongoingTrip.value;
+  if (!trip?.endDate) {
+    return "";
+  }
+  const end = new Date(trip.endDate).getTime();
+  const daysLeft = Math.ceil((end - Date.now()) / MS_PER_DAY);
+  if (daysLeft <= 0) {
+    return "trip ended";
+  }
+  return `${daysLeft} day${daysLeft === 1 ? "" : "s"} left`;
+});
+
+const tripNextStop = computed<TripStop | null>(
+  () => tripStops.value.find((stop) => stop.status === "next") ?? null,
+);
+
+// ── Journal entries ───────────────────────────────────────────────────────────
+
+const entriesStore = useEntriesStore();
+
+// Number of recent entries to show on the dashboard.
+const RECENT_ENTRIES_COUNT = 4;
+
+function buildPlaceNameMap(places: Place[]): Map<string, string> {
+  return new Map(places.map((place) => [place.id, place.name]));
+}
+
+function formatEntryDate(occurredAt: string | null): string {
+  if (!occurredAt) {
+    return "";
+  }
+  return new Date(occurredAt).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+function adaptEntry(entry: Entry, placeNameMap: Map<string, string>) {
+  return {
+    id: entry.id,
+    location: entry.placeId ? (placeNameMap.get(entry.placeId) ?? "") : "",
+    title: entry.title,
+    excerpt: entry.body ?? "",
+    date: formatEntryDate(entry.occurredAt),
+    photos: entry.photos.length,
+    likes: entry.likeCount,
+  };
+}
+
+const recentEntries = computed(() => {
+  const placeNameMap = buildPlaceNameMap(placesStore.places);
+  return entriesStore.entries
+    .slice(0, RECENT_ENTRIES_COUNT)
+    .map((entry) => adaptEntry(entry, placeNameMap));
+});
+
+// ── Mount: fetch all dashboard data ──────────────────────────────────────────
+
+onMounted(() => {
+  const now = new Date();
+  timeOfDayLabel.value = resolveUTCTimeOfDay(now);
+  localDateLabel.value = buildLocalDateLabel(now);
+
+  fetchStats().catch((error: unknown) => {
+    console.error("[home] failed to load stats", error);
+  });
+  fetchConnections().catch((error: unknown) => {
+    console.error("[home] failed to load connections", error);
+  });
+
+  placesStore.fetchPlaces().catch((error: unknown) => {
+    console.error("[home] failed to load places", error);
+  });
+
+  entriesStore.fetchEntries().catch((error: unknown) => {
+    console.error("[home] failed to load entries", error);
+  });
+
+  tripsStore
+    .fetchTrips()
+    .then(() => {
+      const ongoing = tripsStore.tripList.find(
+        (trip) => trip.status === "ongoing",
+      );
+      if (!ongoing) {
+        return;
+      }
+      tripsStore.fetchTripById(ongoing.id).catch((error: unknown) => {
+        console.error("[home] failed to load ongoing trip detail", error);
+      });
+    })
+    .catch((error: unknown) => {
+      console.error("[home] failed to load trips", error);
+    });
+});
 </script>
 
 <style scoped>
