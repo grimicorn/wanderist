@@ -16,6 +16,7 @@ import {
   notifications,
   connectedAccounts,
   userPreferences,
+  guides,
   TRIP_STATUS,
   VISIBILITY,
   TRIP_STOP_STATUS,
@@ -89,6 +90,10 @@ describe("schema table exports", () => {
     expect(userPreferences[Symbol.for("drizzle:Name")]).toBe(
       "user_preferences",
     );
+  });
+
+  it("guides table has correct SQL name", () => {
+    expect(guides[Symbol.for("drizzle:Name")]).toBe("guides");
   });
 });
 
@@ -219,6 +224,15 @@ describe("column presence", () => {
     expect(userPreferences.publicProfile).toBeDefined();
     expect(userPreferences.handle).toBeDefined();
     expect(userPreferences.bio).toBeDefined();
+  });
+
+  it("guides has id, userId, title, readTimeMinutes, likeCount, visibility", () => {
+    expect(guides.id).toBeDefined();
+    expect(guides.userId).toBeDefined();
+    expect(guides.title).toBeDefined();
+    expect(guides.readTimeMinutes).toBeDefined();
+    expect(guides.likeCount).toBeDefined();
+    expect(guides.visibility).toBeDefined();
   });
 });
 
@@ -398,6 +412,12 @@ const ON_DELETE_POLICY: ReadonlyArray<{
   {
     label: "userPreferences.userId",
     table: userPreferences,
+    column: "user_id",
+    expected: ON_DELETE.CASCADE,
+  },
+  {
+    label: "guides.userId",
+    table: guides,
     column: "user_id",
     expected: ON_DELETE.CASCADE,
   },
