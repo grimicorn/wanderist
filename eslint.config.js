@@ -96,6 +96,7 @@ const projectGlobals = {
   useEntriesStore: "readonly",
   useTripsStore: "readonly",
   usePlacesStore: "readonly",
+  useDiscover: "readonly",
 };
 
 export default [

@@ -387,6 +387,36 @@ export const connectedAccounts = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// guides — curated travel guides authored by Wanderist users.
+// A guide is a standalone editorial piece (not a trip) with a title, author,
+// and a read-time estimate. The `likeCount` is denormalised for fast ranking
+// on the explore page without a join to a likes table.
+// ---------------------------------------------------------------------------
+
+export const guides = pgTable(
+  "guides",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: ON_DELETE.CASCADE }),
+    title: text("title").notNull(),
+    body: text("body"),
+    readTimeMinutes: integer("read_time_minutes").notNull().default(5),
+    likeCount: integer("like_count").notNull().default(0),
+    visibility: visibilityEnum("visibility")
+      .notNull()
+      .default(VISIBILITY.PRIVATE),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .notNull()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [index("guides_user_id_idx").on(table.userId)],
+);
+
+// ---------------------------------------------------------------------------
 // user_preferences — 1:1 with users, userId is PK
 // ---------------------------------------------------------------------------
 

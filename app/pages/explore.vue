@@ -33,7 +33,7 @@
         </label>
         <div class="xchips">
           <span
-            v-for="chip in searchChips"
+            v-for="chip in SEARCH_CHIPS"
             :key="chip"
             class="xchip"
             @click="heroSearch = chip"
@@ -89,39 +89,58 @@
       </div>
     </div>
 
+    <!-- Discovery content error -->
+    <AppAlert
+      v-if="discoverError"
+      intent="error"
+      :message="discoverError"
+      :dismissible="true"
+    />
+
     <!-- Featured destinations -->
     <section class="xsec">
       <div class="sec-head">
         <div>
-          <div class="label">// featured this week</div>
+          <div class="label">// featured trips</div>
           <h2>Destinations to dream on</h2>
         </div>
-        <a class="btn btn--ghost btn--sm" href="#">
+        <NuxtLink class="btn btn--ghost btn--sm" to="/trips">
           see all
           <AppIcon name="arrow-right" :size="14" />
-        </a>
+        </NuxtLink>
       </div>
-      <div class="feat-row">
-        <a v-for="dest in featured" :key="dest.title" class="feat ph" href="#">
+      <div v-if="isLoading" class="feat-row feat-row--loading" aria-busy="true">
+        <div v-for="n in FEATURED_SKELETON_COUNT" :key="n" class="feat ph">
+          <div class="topo" />
+        </div>
+      </div>
+      <div v-else-if="featuredTrips.length" class="feat-row">
+        <NuxtLink
+          v-for="trip in featuredTrips"
+          :key="trip.id"
+          class="feat ph"
+          :to="`/trips/${trip.id}`"
+        >
           <div class="topo" />
           <div class="feat__veil" />
-          <button class="feat__save" aria-label="Save">
-            <AppIcon name="bookmark" :size="15" />
-          </button>
           <div class="feat__in">
-            <div class="feat__kicker">{{ dest.kicker }}</div>
-            <div class="feat__title">{{ dest.title }}</div>
+            <div class="feat__kicker">{{ tripKicker(trip) }}</div>
+            <div class="feat__title">{{ trip.name }}</div>
             <div class="feat__meta">
               <span
-                ><AppIcon name="route" :size="12" /> {{ dest.days }} days</span
+                ><AppIcon name="pin" :size="12" />
+                {{ trip.stopCount }} stops</span
               >
-              <span
-                ><AppIcon name="pin" :size="12" /> {{ dest.stops }} stops</span
-              >
-              <span><AppIcon name="heart" :size="12" /> {{ dest.likes }}</span>
+              <span v-if="trip.ownerHandle || trip.ownerDisplayName">
+                <AppIcon name="user" :size="12" />
+                {{ tripAuthorLabel(trip) }}
+              </span>
             </div>
           </div>
-        </a>
+        </NuxtLink>
+      </div>
+      <div v-else class="feat-row feat-row--empty">
+        <p class="empty-note">No featured trips yet.</p>
       </div>
     </section>
 
@@ -135,48 +154,53 @@
       </div>
       <div class="filter-row">
         <button
-          v-for="filter in placeFilters"
-          :key="filter"
+          v-for="filter in PLACE_FILTERS"
+          :key="filter.label"
           class="fbtn"
-          :class="{ 'is-active': activeFilter === filter }"
-          @click="activeFilter = filter"
+          :class="{ 'is-active': activeFilter === filter.label }"
+          @click="selectFilter(filter)"
         >
-          {{ filter }}
+          {{ filter.label }}
         </button>
       </div>
-      <div class="place-grid">
-        <a
+      <div v-if="trendingPlaces.length" class="place-grid">
+        <NuxtLink
           v-for="place in trendingPlaces"
-          :key="place.name"
+          :key="`${place.name}-${place.country}-${place.category}`"
           class="pcard"
-          href="#"
+          to="/map"
         >
           <div class="pcard__cover ph">
             <div class="topo" />
-            <span class="pcard__tag tag tag--accent">{{ place.tag }}</span>
+            <span v-if="place.category" class="pcard__tag tag tag--accent">{{
+              place.category
+            }}</span>
           </div>
           <div class="pcard__body">
             <div class="pcard__name">{{ place.name }}</div>
-            <div class="pcard__loc">
+            <div v-if="place.country" class="pcard__loc">
               <AppIcon name="pin" :size="11" />
-              {{ place.location }}
+              {{ place.country }}
             </div>
             <div class="pcard__foot">
               <span class="saves">
                 <AppIcon name="bookmark" :size="12" />
-                {{ place.saves }} saves
+                {{ formatSaveCount(place.saveCount) }} saves
               </span>
-              <span>
+              <span v-if="place.recentSaveCount > 0">
                 <AppIcon
                   name="trending"
                   :size="12"
                   style="vertical-align: -2px"
                 />
-                {{ place.trend }}
+                +{{ place.recentSaveCount }} this month
               </span>
             </div>
           </div>
-        </a>
+        </NuxtLink>
+      </div>
+      <div v-else-if="!isLoading" class="place-grid place-grid--empty">
+        <p class="empty-note">No trending places for this filter yet.</p>
       </div>
     </section>
 
@@ -191,25 +215,35 @@
               <h2>Reads for your next trip</h2>
             </div>
           </div>
-          <a v-for="guide in guides" :key="guide.title" class="guide" href="#">
-            <div class="guide__thumb ph">
-              <div class="topo" style="opacity: 0.4" />
-            </div>
-            <div>
-              <div class="guide__name">{{ guide.title }}</div>
-              <div class="guide__by">{{ guide.by }}</div>
-              <div class="guide__meta">
-                <span class="m">
-                  <AppIcon name="clock" :size="12" />
-                  {{ guide.readTime }} min read
-                </span>
-                <span class="m">
-                  <AppIcon name="heart" :size="12" />
-                  {{ guide.likes }}
-                </span>
+          <div v-if="guides.length">
+            <NuxtLink
+              v-for="guide in guides"
+              :key="guide.id"
+              class="guide"
+              to="/journal"
+            >
+              <div class="guide__thumb ph">
+                <div class="topo" style="opacity: 0.4" />
               </div>
-            </div>
-          </a>
+              <div>
+                <div class="guide__name">{{ guide.title }}</div>
+                <div class="guide__by">{{ guideAuthorLabel(guide) }}</div>
+                <div class="guide__meta">
+                  <span class="m">
+                    <AppIcon name="clock" :size="12" />
+                    {{ guide.readTimeMinutes }} min read
+                  </span>
+                  <span class="m">
+                    <AppIcon name="heart" :size="12" />
+                    {{ guide.likeCount }}
+                  </span>
+                </div>
+              </div>
+            </NuxtLink>
+          </div>
+          <div v-else-if="!isLoading" class="empty-note">
+            No guides available yet.
+          </div>
         </div>
 
         <!-- People -->
@@ -227,16 +261,13 @@
             :dismissible="true"
           />
           <div class="card card--pad" style="padding: 16px 18px">
-            <div v-for="person in people" :key="person.handle" class="person">
+            <div v-for="person in people" :key="person.userId" class="person">
               <span class="person__av">
                 <AppIcon name="user" :size="19" />
               </span>
               <div class="person__name">
-                <b>{{ person.name }}</b>
-                <span
-                  >{{ person.handle }} · {{ person.location }} ·
-                  {{ person.places }} places</span
-                >
+                <b>{{ personDisplayName(person) }}</b>
+                <span>{{ personSubline(person) }}</span>
               </div>
               <button
                 class="btn btn--sm"
@@ -251,6 +282,9 @@
                 <template v-else>follow</template>
               </button>
             </div>
+            <div v-if="!isLoading && people.length === 0" class="empty-note">
+              No suggested people right now.
+            </div>
           </div>
         </div>
       </div>
@@ -260,6 +294,11 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from "vue";
+import type {
+  FeaturedTrip,
+  DiscoverGuide,
+  SuggestedPerson,
+} from "~/composables/useDiscover";
 
 const openNewEntry = inject<(() => void) | undefined>(
   "openNewEntry",
@@ -269,7 +308,32 @@ const openNewEntry = inject<(() => void) | undefined>(
 definePageMeta({ layout: "app", middleware: "auth" });
 useHead({ title: "Wanderist — Explore" });
 
-const activeFilter = ref("All");
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const SEARCH_CHIPS = [
+  "Cold-water swims",
+  "Northern lights",
+  "Slow coastlines",
+  "Food cities",
+  "Off-season Europe",
+] as const;
+
+const PLACE_FILTERS = [
+  { label: "All", category: null },
+  { label: "Nature", category: "nature" },
+  { label: "Cities", category: "city" },
+  { label: "Coast", category: "coast" },
+  { label: "Food", category: "food" },
+  { label: "Culture", category: "culture" },
+] as const;
+
+const FEATURED_SKELETON_COUNT = 3;
+
+// ---------------------------------------------------------------------------
+// Hero search (wired to global search backend via useSearch)
+// ---------------------------------------------------------------------------
 
 const {
   query: heroSearch,
@@ -290,124 +354,26 @@ watch(heroSearch, (newQuery) => {
   heroDoSearch(newQuery);
 });
 
-const searchChips = [
-  "Cold-water swims",
-  "Northern lights",
-  "Slow coastlines",
-  "Food cities",
-  "Off-season Europe",
-];
-const placeFilters = ["All", "Nature", "Cities", "Coast", "Food", "Culture"];
+// ---------------------------------------------------------------------------
+// Discovery data
+// ---------------------------------------------------------------------------
 
-const featured = [
-  {
-    kicker: "Iceland · summer",
-    title: "The ring road, slowly",
-    days: 9,
-    stops: 7,
-    likes: "2.4k",
-  },
-  {
-    kicker: "Portugal · coast",
-    title: "Lisbon to the Algarve",
-    days: 7,
-    stops: 5,
-    likes: "1.8k",
-  },
-  {
-    kicker: "Japan · autumn",
-    title: "North to south by rail",
-    days: 18,
-    stops: 9,
-    likes: "3.1k",
-  },
-];
+const activeFilter = ref("All");
 
-const trendingPlaces = [
-  {
-    name: "Reynisfjara",
-    location: "Vík, Iceland",
-    tag: "nature",
-    saves: "4.2k",
-    trend: "+18%",
-  },
-  {
-    name: "Alfama",
-    location: "Lisbon, Portugal",
-    tag: "city",
-    saves: "3.7k",
-    trend: "+24%",
-  },
-  {
-    name: "Diamond Beach",
-    location: "Jökulsárlón, Iceland",
-    tag: "coast",
-    saves: "2.9k",
-    trend: "+12%",
-  },
-  {
-    name: "Tsukiji outer market",
-    location: "Tokyo, Japan",
-    tag: "food",
-    saves: "5.1k",
-    trend: "+9%",
-  },
-];
+const {
+  featuredTrips,
+  trendingPlaces,
+  guides,
+  suggestedPeople,
+  isLoading,
+  error: discoverError,
+  fetchAll,
+  fetchTrendingPlaces,
+} = useDiscover();
 
-const guides = [
-  {
-    title: "The cold-water swimming guide to Iceland",
-    by: "by @elsa_far · 14 spots mapped",
-    readTime: 8,
-    likes: 412,
-  },
-  {
-    title: "Lisbon on foot: a hill-by-hill walk",
-    by: "by @marco.travels · 9 stops",
-    readTime: 6,
-    likes: 287,
-  },
-  {
-    title: "Eating Tokyo for a week without a plan",
-    by: "by @yuki · 21 spots mapped",
-    readTime: 11,
-    likes: 638,
-  },
-];
-
-// Placeholder people list. The userId field maps to the Clerk user ID stored in
-// the DB and is used by the follow API. In a real implementation this list would
-// come from an API response that includes user IDs.
-const PEOPLE = [
-  {
-    userId: "user_placeholder_elsa",
-    name: "Elsa Farþegi",
-    handle: "@elsa_far",
-    location: "Reykjavík",
-    places: 84,
-  },
-  {
-    userId: "user_placeholder_marco",
-    name: "Marco Reis",
-    handle: "@marco.travels",
-    location: "Lisbon",
-    places: 2100,
-  },
-  {
-    userId: "user_placeholder_yuki",
-    name: "Yuki Tanaka",
-    handle: "@yuki",
-    location: "Tokyo",
-    places: 510,
-  },
-  {
-    userId: "user_placeholder_maya",
-    name: "Maya Rambles",
-    handle: "@mayarambles",
-    location: "Oslo",
-    places: 332,
-  },
-];
+// ---------------------------------------------------------------------------
+// Follow system
+// ---------------------------------------------------------------------------
 
 const {
   fetchFollowing,
@@ -417,17 +383,82 @@ const {
   error: followError,
 } = useFollows();
 
-// Derive follow state from the composable so it stays in sync with persisted state.
+// Merge API people with live follow state from the composable.
 const people = computed(() =>
-  PEOPLE.map((person) => ({
+  suggestedPeople.value.map((person) => ({
     ...person,
     following: isFollowing(person.userId),
     pending: isPending(person.userId),
   })),
 );
 
+// ---------------------------------------------------------------------------
+// Filter interaction
+// ---------------------------------------------------------------------------
+
+async function selectFilter(
+  filter: (typeof PLACE_FILTERS)[number],
+): Promise<void> {
+  activeFilter.value = filter.label;
+  await fetchTrendingPlaces(filter.category);
+}
+
+// ---------------------------------------------------------------------------
+// Label helpers
+// ---------------------------------------------------------------------------
+
+function tripKicker(trip: FeaturedTrip): string {
+  return trip.status.charAt(0).toUpperCase() + trip.status.slice(1);
+}
+
+function tripAuthorLabel(trip: FeaturedTrip): string {
+  if (trip.ownerHandle) {
+    return `@${trip.ownerHandle.replace(/^@/, "")}`;
+  }
+  return trip.ownerDisplayName ?? "";
+}
+
+function guideAuthorLabel(guide: DiscoverGuide): string {
+  if (guide.ownerHandle) {
+    return `by @${guide.ownerHandle.replace(/^@/, "")}`;
+  }
+  if (guide.ownerDisplayName) {
+    return `by ${guide.ownerDisplayName}`;
+  }
+  return "by a traveler";
+}
+
+function personDisplayName(person: SuggestedPerson): string {
+  return person.displayName ?? person.handle ?? "Wanderist traveler";
+}
+
+function personSubline(person: SuggestedPerson): string {
+  const parts: string[] = [];
+  if (person.handle) {
+    parts.push(`@${person.handle.replace(/^@/, "")}`);
+  }
+  if (person.homeBase) {
+    parts.push(person.homeBase);
+  }
+  if (person.placeCount > 0) {
+    parts.push(`${person.placeCount} places`);
+  }
+  return parts.join(" · ");
+}
+
+function formatSaveCount(count: number): string {
+  if (count >= 1000) {
+    return `${(count / 1000).toFixed(1)}k`;
+  }
+  return String(count);
+}
+
+// ---------------------------------------------------------------------------
+// Bootstrap
+// ---------------------------------------------------------------------------
+
 onMounted(async () => {
-  await fetchFollowing();
+  await Promise.all([fetchAll(), fetchFollowing()]);
 });
 </script>
 
@@ -528,6 +559,9 @@ section.xsec {
   grid-template-columns: repeat(3, 1fr);
   gap: 18px;
 }
+.feat-row--empty {
+  display: block;
+}
 .feat {
   position: relative;
   height: 250px;
@@ -581,21 +615,6 @@ section.xsec {
   width: 12px;
   height: 12px;
 }
-.feat__save {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  z-index: 3;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(6px);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  display: grid;
-  place-items: center;
-  color: #fff;
-}
 
 .filter-row {
   display: flex;
@@ -622,6 +641,9 @@ section.xsec {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 16px;
+}
+.place-grid--empty {
+  display: block;
 }
 .pcard {
   background: var(--surface);
@@ -761,6 +783,12 @@ section.xsec {
 }
 .person .btn {
   margin-left: auto;
+}
+
+.empty-note {
+  font-size: 12.5px;
+  color: var(--faint);
+  padding: 12px 0;
 }
 
 @media (max-width: 1100px) {
