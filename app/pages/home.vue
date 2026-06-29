@@ -275,10 +275,10 @@ const stats = computed(() => [
     icon: "plane",
     value: formatCompact(displayDistance.value),
     label: displayDistanceLabel.value,
-    delta:
-      displayDistanceDelta.value > 0
-        ? `+${formatCompact(displayDistanceDelta.value)} wk`
-        : null,
+    delta: (() => {
+      const deltaText = formatCompact(displayDistanceDelta.value);
+      return deltaText !== "0" ? `+${deltaText} wk` : null;
+    })(),
   },
   {
     icon: "flag",

@@ -221,12 +221,8 @@ export async function countPlacesThisWeek(
 }
 
 /**
- * Returns the sum of trip-stop distances (in km) for trips that were created
- * in the last 7 days. Uses the parent trip's `createdAt` as a proxy for when
- * the distance was first logged.
- *
- * This is a best-effort delta — exact per-stop precision would require a
- * dedicated `createdAt` column on `trip_stops`.
+ * Returns the sum of trip-stop distances (in km) for stops created in the
+ * last 7 days, using each stop's own `createdAt` for an exact window.
  */
 export async function sumTripStopDistanceKmThisWeek(
   database: Database,
@@ -239,7 +235,7 @@ export async function sumTripStopDistanceKmThisWeek(
     .select({ totalKm: sum(tripStops.distanceKm) })
     .from(tripStops)
     .innerJoin(trips, eq(tripStops.tripId, trips.id))
-    .where(and(eq(trips.userId, userId), gte(trips.createdAt, weekAgo)));
+    .where(and(eq(trips.userId, userId), gte(tripStops.createdAt, weekAgo)));
 
   const raw = rows[0]?.totalKm;
   const parsed = parseFloat(String(raw ?? "0"));

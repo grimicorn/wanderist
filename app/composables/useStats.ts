@@ -62,6 +62,7 @@ export function useStats() {
       const data = await apiFetch<UserStats>("/api/stats");
       stats.value = data;
     } catch (error: unknown) {
+      stats.value = { ...STATS_DEFAULTS };
       loadError.value = extractErrorMessage(error);
     } finally {
       isLoading.value = false;

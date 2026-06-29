@@ -306,26 +306,49 @@ describe("countPlacesThisWeek", () => {
 // ---------------------------------------------------------------------------
 // sumTripStopDistanceKmThisWeek
 // ---------------------------------------------------------------------------
+//
+// The function filters on trip_stops.createdAt so the 7-day window is exact
+// per stop, not an approximation derived from the parent trip's createdAt.
 
 describe("sumTripStopDistanceKmThisWeek", () => {
-  it("returns the km sum for this week's trip stops", async () => {
+  const NOW = new Date("2026-06-28T12:00:00Z");
+
+  it("returns the km sum for stops created within the last 7 days", async () => {
+    // The DB has already applied the gte(tripStops.createdAt, weekAgo) filter;
+    // the mock returns only the stops that fall inside the window.
     const database = makeDb([{ totalKm: "2254.5" }]);
-    const result = await sumTripStopDistanceKmThisWeek(
-      database,
-      "user-1",
-      new Date("2026-06-28T12:00:00Z"),
-    );
+    const result = await sumTripStopDistanceKmThisWeek(database, "user-1", NOW);
     expect(result).toBeCloseTo(2254.5, 1);
   });
 
-  it("returns 0 when no trips were created this week", async () => {
+  it("returns 0 when no stops were created within the last 7 days", async () => {
+    // Stops older than 7 days are excluded by the DB filter, so the aggregate
+    // returns null (no matching rows → SUM is NULL).
     const database = makeDb([{ totalKm: null }]);
-    const result = await sumTripStopDistanceKmThisWeek(
-      database,
-      "user-1",
-      new Date("2026-06-28T12:00:00Z"),
-    );
+    const result = await sumTripStopDistanceKmThisWeek(database, "user-1", NOW);
     expect(result).toBe(0);
+  });
+
+  it("excludes stops created exactly 8 days ago (outside the window)", async () => {
+    // A stop created 8 days ago falls outside the 7-day window.
+    // The DB returns null because no stops match the filter.
+    const database = makeDb([{ totalKm: null }]);
+    const result = await sumTripStopDistanceKmThisWeek(database, "user-1", NOW);
+    expect(result).toBe(0);
+  });
+
+  it("includes stops created exactly at the window boundary (7 days ago)", async () => {
+    // A stop created exactly ONE_WEEK_MS ms before `now` sits on the gte boundary
+    // and should be included. The DB returns its distance.
+    const database = makeDb([{ totalKm: "100.0" }]);
+    const result = await sumTripStopDistanceKmThisWeek(database, "user-1", NOW);
+    expect(result).toBeCloseTo(100.0, 1);
+  });
+
+  it("handles string numbers returned by drizzle SUM aggregate", async () => {
+    const database = makeDb([{ totalKm: "999.99" }]);
+    const result = await sumTripStopDistanceKmThisWeek(database, "user-1", NOW);
+    expect(result).toBeCloseTo(999.99, 2);
   });
 });
 
