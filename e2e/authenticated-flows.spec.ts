@@ -45,7 +45,7 @@ test.beforeAll(async () => {
 // Guard: skip individual tests when test credentials are absent.
 // ---------------------------------------------------------------------------
 
-test.beforeEach(async (_fixtures, testInfo) => {
+test.beforeEach(async ({}, testInfo) => {
   if (!process.env.E2E_TEST_EMAIL) {
     testInfo.skip(
       true,

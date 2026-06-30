@@ -1,5 +1,5 @@
 export default defineNuxtRouteMiddleware(() => {
-  const { isSignedIn, isLoaded } = useClerkAuth();
+  const { isSignedIn, isLoaded } = useAuth();
 
   if (!isLoaded.value) {
     return;
