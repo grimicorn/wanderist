@@ -34,12 +34,12 @@ export function formatNotificationTime(createdAt: string): string {
     return `${hours}h`;
   }
 
+  if (diffMs < MS_PER_DAY * 2) {
+    return "Yesterday";
+  }
+
   if (diffMs < MS_PER_WEEK) {
-    const days = Math.floor(diffMs / MS_PER_DAY);
-    if (days === 1) {
-      return "Yesterday";
-    }
-    return `${days}d`;
+    return `${Math.floor(diffMs / MS_PER_DAY)}d`;
   }
 
   const weeks = Math.floor(diffMs / MS_PER_WEEK);
