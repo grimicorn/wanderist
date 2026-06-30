@@ -57,8 +57,11 @@ export function makeSelectChainNoLimit(rows: Record<string, unknown>[]) {
   return { select };
 }
 
-export function makeInsertChain() {
-  const onConflictDoNothing = vi.fn().mockResolvedValue(undefined);
+export function makeInsertChain(
+  returningRows: Record<string, unknown>[] = [{ followerId: "follower-1" }],
+) {
+  const returning = vi.fn().mockResolvedValue(returningRows);
+  const onConflictDoNothing = vi.fn().mockReturnValue({ returning });
   const values = vi.fn().mockReturnValue({ onConflictDoNothing });
   const insert = vi.fn().mockReturnValue({ values });
   return { insert };

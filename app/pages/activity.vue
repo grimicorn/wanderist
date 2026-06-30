@@ -30,12 +30,15 @@
             class="activity__ico"
             :class="`activity__ico--${notification.tone ?? 'info'}`"
           >
-            <AppIcon :name="resolveIcon(notification.type)" :size="16" />
+            <AppIcon
+              :name="resolveNotificationIcon(notification.type)"
+              :size="16"
+            />
           </span>
           <div class="activity__body">
             <p class="activity__text">{{ notification.body }}</p>
             <span class="activity__time">{{
-              formatRelativeTime(notification.createdAt)
+              formatNotificationTime(notification.createdAt)
             }}</span>
           </div>
           <span v-if="!notification.isRead" class="activity__dot" />
@@ -46,52 +49,13 @@
 </template>
 
 <script setup lang="ts">
+import {
+  resolveNotificationIcon,
+  formatNotificationTime,
+} from "~/utils/notificationDisplay";
+
 definePageMeta({ layout: "app", middleware: "auth" });
 useHead({ title: "Wanderist — Activity" });
-
-const ICON_BY_TYPE: Record<string, string> = {
-  new_follower: "users",
-  like: "heart",
-  comment: "message",
-  import_ready: "instagram",
-  trial_ending: "alert-triangle",
-};
-
-const DEFAULT_ICON = "bell";
-
-const MS_PER_MINUTE = 60 * 1000;
-const MS_PER_HOUR = 60 * MS_PER_MINUTE;
-const MS_PER_DAY = 24 * MS_PER_HOUR;
-const MS_PER_WEEK = 7 * MS_PER_DAY;
-
-function resolveIcon(type: string): string {
-  return ICON_BY_TYPE[type] ?? DEFAULT_ICON;
-}
-
-function formatRelativeTime(createdAt: string): string {
-  const diffMs = Date.now() - new Date(createdAt).getTime();
-
-  if (diffMs < MS_PER_HOUR) {
-    const minutes = Math.max(1, Math.floor(diffMs / MS_PER_MINUTE));
-    return `${minutes}m`;
-  }
-
-  if (diffMs < MS_PER_DAY) {
-    const hours = Math.floor(diffMs / MS_PER_HOUR);
-    return `${hours}h`;
-  }
-
-  if (diffMs < MS_PER_WEEK) {
-    const days = Math.floor(diffMs / MS_PER_DAY);
-    if (days === 1) {
-      return "Yesterday";
-    }
-    return `${days}d`;
-  }
-
-  const weeks = Math.floor(diffMs / MS_PER_WEEK);
-  return `${weeks}w`;
-}
 
 const { notifications, isLoading, error, fetchNotifications } =
   useNotifications();

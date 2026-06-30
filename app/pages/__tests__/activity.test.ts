@@ -29,7 +29,7 @@ const SAMPLE_NOTIFICATIONS: AppNotification[] = [
     tone: "accent",
     body: "Someone started following you",
     isRead: false,
-    createdAt: "2024-06-01T08:00:00Z",
+    createdAt: new Date(Date.now() - 2 * 3600 * 1000).toISOString(),
   },
   {
     id: "n-2",
@@ -37,7 +37,7 @@ const SAMPLE_NOTIFICATIONS: AppNotification[] = [
     tone: "accent",
     body: "Someone liked your entry",
     isRead: true,
-    createdAt: "2024-06-01T06:00:00Z",
+    createdAt: new Date(Date.now() - 5 * 3600 * 1000).toISOString(),
   },
 ];
 

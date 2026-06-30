@@ -35,17 +35,20 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: "User not found" });
   }
 
-  await database
+  const inserted = await database
     .insert(follows)
     .values({ followerId, followeeId })
-    .onConflictDoNothing();
+    .onConflictDoNothing()
+    .returning({ followerId: follows.followerId });
 
-  await createNotification({
-    userId: followeeId,
-    type: "new_follower",
-    tone: "accent",
-    body: "Someone started following you",
-  });
+  if (inserted.length > 0) {
+    await createNotification({
+      userId: followeeId,
+      type: "new_follower",
+      tone: "accent",
+      body: "Someone started following you",
+    });
+  }
 
   return { ok: true };
 });
