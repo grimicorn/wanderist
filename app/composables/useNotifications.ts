@@ -34,7 +34,7 @@ export function useNotifications() {
       const response = await apiFetch<{ notifications: AppNotification[] }>(
         "/api/notifications",
       );
-      notifications.value = response.notifications;
+      notifications.value = response?.notifications ?? [];
     } catch (fetchError: unknown) {
       error.value = extractErrorMessage(fetchError);
     } finally {
