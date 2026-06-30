@@ -3,6 +3,7 @@ import { getDb } from "../../db/index";
 import { follows, users } from "../../db/schema";
 import { ensureUser } from "../../utils/auth";
 import { requireString } from "../../utils/db-helpers";
+import { createNotification } from "../../utils/notification-helpers";
 
 export default defineEventHandler(async (event) => {
   // ensureUser (not requireUser) because the INSERT has a FK on follows.follower_id
@@ -39,8 +40,12 @@ export default defineEventHandler(async (event) => {
     .values({ followerId, followeeId })
     .onConflictDoNothing();
 
-  // TODO(#24): emit a new-follower notification to followeeId here once the
-  // notifications backend is implemented.
+  await createNotification({
+    userId: followeeId,
+    type: "new_follower",
+    tone: "accent",
+    body: "Someone started following you",
+  });
 
   return { ok: true };
 });

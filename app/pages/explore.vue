@@ -4,7 +4,11 @@
       <button class="icon-btn" aria-label="Search">
         <AppIcon name="search" :size="18" />
       </button>
-      <button class="icon-btn" aria-label="Alerts">
+      <button
+        class="icon-btn"
+        aria-label="Alerts"
+        @click="openNotifications?.()"
+      >
         <AppIcon name="bell" :size="18" />
       </button>
       <button class="btn btn--primary btn--sm" @click="openNewEntry?.()">
@@ -299,6 +303,11 @@ import type {
   DiscoverGuide,
   SuggestedPerson,
 } from "~/composables/useDiscover";
+
+const openNotifications = inject<(() => void) | undefined>(
+  "openNotifications",
+  undefined,
+);
 
 const openNewEntry = inject<(() => void) | undefined>(
   "openNewEntry",

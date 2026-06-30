@@ -7,22 +7,38 @@
   >
     <div class="notif__head">
       <b>Notifications</b>
-      <button class="notif__mark" @click="markAllRead">mark all read</button>
+      <button class="notif__mark" @click="handleMarkAllRead">
+        mark all read
+      </button>
     </div>
     <div class="notif__list">
+      <div v-if="isLoading && notifications.length === 0" class="notif__empty">
+        Loading…
+      </div>
+      <div
+        v-else-if="error"
+        class="notif__empty notif__empty--error"
+        role="alert"
+      >
+        {{ error }}
+      </div>
       <div
         v-for="notification in notifications"
         :key="notification.id"
         class="notif__item"
-        :class="{ 'is-unread': notification.unread }"
+        :class="{ 'is-unread': !notification.isRead }"
       >
-        <span class="notif__ico" :class="`notif__ico--${notification.tone}`">
-          <AppIcon :name="notification.icon" :size="16" />
+        <span
+          class="notif__ico"
+          :class="`notif__ico--${notification.tone ?? 'info'}`"
+        >
+          <AppIcon :name="resolveIcon(notification.type)" :size="16" />
         </span>
         <div class="notif__body">
-          <!-- eslint-disable-next-line vue/no-v-html -->
-          <p class="notif__title" v-html="notification.title" />
-          <span class="notif__time">{{ notification.time }}</span>
+          <p class="notif__title">{{ notification.body }}</p>
+          <span class="notif__time">{{
+            formatRelativeTime(notification.createdAt)
+          }}</span>
         </div>
         <span class="notif__dot" />
       </div>
@@ -35,77 +51,74 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
+// No imports — all composables and Vue APIs are Nuxt auto-imports, accessed
+// as globals so tests can substitute them via vi.stubGlobal.
 
-type NotifTone = "accent" | "info" | "success" | "warning";
+const ICON_BY_TYPE: Record<string, string> = {
+  new_follower: "users",
+  like: "heart",
+  comment: "message",
+  import_ready: "instagram",
+  trial_ending: "alert-triangle",
+};
 
-interface Notification {
-  id: number;
-  icon: string;
-  tone: NotifTone;
-  unread: boolean;
-  title: string;
-  time: string;
+const DEFAULT_ICON = "bell";
+
+const MS_PER_MINUTE = 60 * 1000;
+const MS_PER_HOUR = 60 * MS_PER_MINUTE;
+const MS_PER_DAY = 24 * MS_PER_HOUR;
+const MS_PER_WEEK = 7 * MS_PER_DAY;
+
+function resolveIcon(type: string): string {
+  return ICON_BY_TYPE[type] ?? DEFAULT_ICON;
 }
 
-defineProps<{ open: boolean }>();
+function formatRelativeTime(createdAt: string): string {
+  const diffMs = Date.now() - new Date(createdAt).getTime();
+
+  if (diffMs < MS_PER_HOUR) {
+    const minutes = Math.max(1, Math.floor(diffMs / MS_PER_MINUTE));
+    return `${minutes}m`;
+  }
+
+  if (diffMs < MS_PER_DAY) {
+    const hours = Math.floor(diffMs / MS_PER_HOUR);
+    return `${hours}h`;
+  }
+
+  if (diffMs < MS_PER_WEEK) {
+    const days = Math.floor(diffMs / MS_PER_DAY);
+    if (days === 1) {
+      return "Yesterday";
+    }
+    return `${days}d`;
+  }
+
+  const weeks = Math.floor(diffMs / MS_PER_WEEK);
+  return `${weeks}w`;
+}
+
+const props = defineProps<{ open: boolean }>();
 defineEmits<{ close: [] }>();
 
-const notifications = ref<Notification[]>([
-  {
-    id: 1,
-    icon: "instagram",
-    tone: "info",
-    unread: true,
-    title: "12 geotagged photos from Lisbon are ready to import",
-    time: "2h",
-  },
-  {
-    id: 2,
-    icon: "heart",
-    tone: "accent",
-    unread: true,
-    title: '<b>elsa_far</b> liked your entry "Harbor at 4am"',
-    time: "5h",
-  },
-  {
-    id: 3,
-    icon: "message",
-    tone: "accent",
-    unread: true,
-    title: '<b>marco.travels</b> commented on "Tram 28, again"',
-    time: "Yesterday",
-  },
-  {
-    id: 4,
-    icon: "check-circle",
-    tone: "success",
-    unread: false,
-    title: 'Your trip "Iceland, the ring road" is now public',
-    time: "2d",
-  },
-  {
-    id: 5,
-    icon: "users",
-    tone: "accent",
-    unread: false,
-    title: "<b>yuki</b> started following you",
-    time: "4d",
-  },
-  {
-    id: 6,
-    icon: "alert-triangle",
-    tone: "warning",
-    unread: false,
-    title: "Your trial ends in 3 days — add a payment method",
-    time: "5d",
-  },
-]);
+const { notifications, isLoading, error, fetchNotifications, markAllRead } =
+  useNotifications();
 
-function markAllRead() {
-  notifications.value = notifications.value.map((n) => ({
-    ...n,
-    unread: false,
-  }));
+watch(
+  () => props.open,
+  (isOpen) => {
+    if (isOpen) {
+      fetchNotifications().catch((fetchError: unknown) => {
+        console.error(
+          "[AppNotifications] fetchNotifications failed",
+          fetchError,
+        );
+      });
+    }
+  },
+);
+
+async function handleMarkAllRead(): Promise<void> {
+  await markAllRead();
 }
 </script>

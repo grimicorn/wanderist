@@ -5,8 +5,11 @@
       <button class="icon-btn" aria-label="Search">
         <AppIcon name="search" :size="18" />
       </button>
-      <!-- Bell: deferred to #24 (notifications) -->
-      <button class="icon-btn" aria-label="Alerts">
+      <button
+        class="icon-btn"
+        aria-label="Alerts"
+        @click="openNotifications?.()"
+      >
         <AppIcon name="bell" :size="18" />
       </button>
       <button class="btn btn--primary btn--sm" @click="openNewEntry?.()">
@@ -324,6 +327,13 @@ function resolveUTCTimeOfDay(date: Date): string {
 // hydration mismatch). Populated in onMounted (client-side only).
 const timeOfDayLabel = ref("");
 const localDateLabel = ref("");
+
+// ── Notifications ─────────────────────────────────────────────────────────────
+
+const openNotifications = inject<(() => void) | undefined>(
+  "openNotifications",
+  undefined,
+);
 
 // ── New entry drawer ──────────────────────────────────────────────────────────
 
