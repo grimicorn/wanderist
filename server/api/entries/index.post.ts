@@ -76,8 +76,9 @@ export default defineEventHandler(async (event) => {
   // which has no transaction support (it issues each query as its own HTTP
   // call). Steps run sequentially instead; upsertTags is already idempotent
   // (insert ... onConflictDoUpdate) so a partial failure there is safe to
-  // retry. If a later step still fails, the entry row is deleted below so a
-  // 500 never leaves an orphaned entry with missing tags/photos behind.
+  // retry. If a later step still fails, the entry row is deleted below (its
+  // entryTags/entryPhotos foreign keys are ON DELETE CASCADE, so those rows
+  // are cleaned up too) so a 500 never leaves an orphaned entry behind.
   const inserted = await database
     .insert(entries)
     .values({
@@ -102,7 +103,16 @@ export default defineEventHandler(async (event) => {
 
     return { ...inserted[0], ...relations };
   } catch (error) {
-    await database.delete(entries).where(eq(entries.id, entryId));
+    try {
+      await database.delete(entries).where(eq(entries.id, entryId));
+    } catch (cleanupError) {
+      // Cleanup best-effort only: surface the original failure below, not a
+      // secondary error from the cleanup delete itself.
+      console.error(
+        "entries.post: cleanup after partial write failed",
+        cleanupError,
+      );
+    }
     throw error;
   }
 });

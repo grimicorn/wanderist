@@ -245,7 +245,10 @@ describe("Trips page (/trips)", () => {
       const wrapper = mount(TripsPage, buildGlobalConfig(pinia));
       await wrapper.find(".trips-head button").trigger("click");
 
-      await wrapper.find("button[type='button']").trigger("click");
+      const cancelButton = wrapper
+        .findAll(".new-trip-form button")
+        .find((button) => button.text().includes("cancel"));
+      await cancelButton?.trigger("click");
 
       expect(wrapper.find(".new-trip-form").exists()).toBe(false);
     });
