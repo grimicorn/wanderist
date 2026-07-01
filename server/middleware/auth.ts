@@ -1,5 +1,5 @@
 import type { H3Event } from "h3";
-import { verifyToken } from "@clerk/backend";
+import { requireClerkSecretKey, verifyClerkToken } from "../utils/clerk";
 
 const API_PATH_PREFIX = "/api/";
 const WEBHOOK_PATH_PREFIX = "/api/webhooks/";
@@ -24,16 +24,11 @@ async function verifyBearerToken(event: H3Event): Promise<string> {
   if (!token) {
     throw createError({ statusCode: 401, statusMessage: "Unauthorized" });
   }
-  const secretKey = process.env.NUXT_CLERK_SECRET_KEY;
-  if (!secretKey) {
-    throw new Error("NUXT_CLERK_SECRET_KEY is not set");
-  }
+  // Resolved outside the try below so a missing/misconfigured secret key
+  // surfaces as a 500 (server misconfiguration), not a 401 (invalid token).
+  const secretKey = requireClerkSecretKey();
   try {
-    // @clerk/backend exports verifyToken as a standalone function, not a
-    // method on the client returned by createClerkClient() (that client only
-    // exposes resource APIs like `users`, `sessions`, etc.).
-    const { sub } = await verifyToken(token, { secretKey });
-    return sub;
+    return await verifyClerkToken(token, secretKey);
   } catch (error) {
     console.error("verifyBearerToken: token verification failed", error);
     throw createError({ statusCode: 401, statusMessage: "Unauthorized" });
