@@ -169,4 +169,12 @@ Object.assign(globalThis, {
       fetchStats: vi.fn().mockResolvedValue(undefined),
     };
   }),
+  useNotifications: vi.fn(() => ({
+    notifications: vue.ref([]),
+    isLoading: vue.ref(false),
+    error: vue.ref(null),
+    unreadCount: vue.computed(() => 0),
+    fetchNotifications: vi.fn().mockResolvedValue(undefined),
+    markAllRead: vi.fn().mockResolvedValue(undefined),
+  })),
 });
