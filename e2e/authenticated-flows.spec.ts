@@ -8,55 +8,63 @@
  * Pre-requisites:
  *   - The app is running at http://localhost:3000 (or via the Playwright
  *     webServer config in playwright.config.ts).
- *   - E2E_TEST_EMAIL must be set to a Clerk dev-instance user email. The
- *     address must end with "+clerk_test@<domain>" so Clerk auto-fills the
- *     OTP code during e2e (e.g. wanderist+clerk_test@example.com).
- *   - NUXT_CLERK_SECRET_KEY must be set so @clerk/testing can fetch a backend
- *     testing token. The wanderist.env file already includes this for local
- *     agent runs.
+ *   - NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY and NUXT_CLERK_SECRET_KEY must be set.
+ *     Locally they come from .env (playwright.config.ts loads it); CI injects
+ *     them as job env. clerkSetup uses them to fetch a backend testing token.
+ *   - A Clerk user matching CLERK_TEST_EMAIL (below) must exist in the dev
+ *     instance. Its +clerk_test suffix lets @clerk/testing auto-verify the OTP
+ *     (424242) without sending real email — create the account once via /login.
  *
- * Tests are skipped automatically when E2E_TEST_EMAIL is unset, so a CI run
+ * Tests are skipped automatically when the Clerk keys are absent, so a CI run
  * without credentials degrades gracefully rather than erroring.
  */
 import { test, expect, type TestInfo } from "@playwright/test";
 import { clerk, clerkSetup } from "@clerk/testing/playwright";
 
+// Fixed Clerk test identifier — no env var needed. The +clerk_test suffix marks
+// it a Clerk test address, so @clerk/testing signs in with the fixed OTP 424242
+// and no real email is sent. The matching user must exist in the dev instance
+// (create it once via /login); the domain is irrelevant since delivery is bypassed.
+const CLERK_TEST_EMAIL = "wanderist+clerk_test@example.com";
+
+// clerkSetup needs the dev instance's Clerk keys, passed explicitly because
+// @clerk/testing reads CLERK_SECRET_KEY / CLERK_PUBLISHABLE_KEY, not the
+// NUXT_-prefixed names the app uses.
+const publishableKey = process.env.NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+const secretKey = process.env.NUXT_CLERK_SECRET_KEY;
+
+function hasClerkCredentials(): boolean {
+  return Boolean(publishableKey && secretKey);
+}
+
 // ---------------------------------------------------------------------------
 // Global setup — fetches a testing token from Clerk's Backend API once.
-// Skipped when E2E_TEST_EMAIL is absent so the suite does not error on CI.
-// clerkSetup reads NUXT_CLERK_SECRET_KEY from the environment.
+// Skipped when the Clerk keys are absent so the suite does not error on CI.
 // ---------------------------------------------------------------------------
 
 test.beforeAll(async () => {
-  if (!process.env.E2E_TEST_EMAIL) {
+  if (!hasClerkCredentials()) {
     return;
   }
-  const publishableKey = process.env.NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
-  const secretKey = process.env.NUXT_CLERK_SECRET_KEY;
-  if (!publishableKey || !secretKey) {
-    throw new Error(
-      "E2E_TEST_EMAIL is set but NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY or NUXT_CLERK_SECRET_KEY is missing",
-    );
-  }
-  await clerkSetup({ publishableKey });
+  await clerkSetup({ publishableKey, secretKey });
 });
 
 // ---------------------------------------------------------------------------
-// Guard: skip individual tests when test credentials are absent.
+// Guard: skip individual tests when the Clerk keys are absent.
 // ---------------------------------------------------------------------------
 
 test.beforeEach(async ({}, testInfo) => {
-  if (!process.env.E2E_TEST_EMAIL) {
+  if (!hasClerkCredentials()) {
     testInfo.skip(
       true,
-      "E2E_TEST_EMAIL is not set — add it to .env.test to run authenticated flows",
+      "Clerk keys are not set — add NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY and NUXT_CLERK_SECRET_KEY to .env to run authenticated flows",
     );
   }
 });
 
 // ---------------------------------------------------------------------------
-// Helper: sign in with the Clerk testing helper using email_code strategy.
-// The +clerk_test suffix tells Clerk to auto-fill the OTP in dev mode.
+// Helper: sign in with the Clerk testing helper using the email_code strategy.
+// The +clerk_test suffix lets @clerk/testing auto-fill the OTP in dev mode.
 // ---------------------------------------------------------------------------
 
 async function signIn(page: Parameters<typeof clerk.signIn>[0]["page"]) {
@@ -65,7 +73,7 @@ async function signIn(page: Parameters<typeof clerk.signIn>[0]["page"]) {
     page,
     signInParams: {
       strategy: "email_code",
-      identifier: process.env.E2E_TEST_EMAIL!,
+      identifier: CLERK_TEST_EMAIL,
     },
   });
 }

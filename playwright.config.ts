@@ -1,7 +1,11 @@
 import { defineConfig, devices } from "@playwright/test";
 import dotenv from "dotenv";
 
+// .env.e2e holds e2e-only overrides (E2E_DATABASE_URL); .env supplies the Clerk
+// keys the authenticated-flow tests need. Load the specific file first so its
+// values win — dotenv does not override already-set vars.
 dotenv.config({ path: ".env.e2e" });
+dotenv.config({ path: ".env" });
 
 export default defineConfig({
   testDir: "./e2e",
