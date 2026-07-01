@@ -1,10 +1,10 @@
 import { vi } from "vitest";
 
 /**
- * Installs Nitro/H3 global stubs (defineEventHandler, createError,
- * readBody, getRouterParam) before importing server route modules.
+ * Installs Nitro/H3 global stubs (defineEventHandler, createError)
+ * before importing server route modules.
  *
- * Call this at the top of each follows-endpoint test file, before any
+ * Call this at the top of each notifications-endpoint test file, before any
  * vi.mock() or import() calls that touch the server handlers.
  */
 export function installNitroGlobals() {
@@ -24,15 +24,10 @@ export function installNitroGlobals() {
       return error;
     },
   );
-  vi.stubGlobal("readBody", vi.fn());
-  vi.stubGlobal("getRouterParam", vi.fn());
 }
 
 /**
  * Unwraps the default export from a dynamically-imported server route module.
- * Nitro route modules export a function wrapped by defineEventHandler; the
- * stub above returns the inner handler directly, so this helper handles both
- * the "default" property shape and the bare-function shape.
  */
 export function unwrapHandler(
   module: Record<string, unknown>,
@@ -44,31 +39,22 @@ export function unwrapHandler(
 
 export function makeSelectChain(rows: Record<string, unknown>[]) {
   const limit = vi.fn().mockResolvedValue(rows);
-  const where = vi.fn().mockReturnValue({ limit });
+  const orderBy = vi.fn().mockReturnValue({ limit });
+  const where = vi.fn().mockReturnValue({ orderBy });
   const from = vi.fn().mockReturnValue({ where });
   const select = vi.fn().mockReturnValue({ from });
   return { select };
 }
 
-export function makeSelectChainNoLimit(rows: Record<string, unknown>[]) {
-  const where = vi.fn().mockResolvedValue(rows);
-  const from = vi.fn().mockReturnValue({ where });
-  const select = vi.fn().mockReturnValue({ from });
-  return { select };
-}
-
-export function makeInsertChain(
-  returningRows: Record<string, unknown>[] = [{ followerId: "follower-1" }],
-) {
-  const returning = vi.fn().mockResolvedValue(returningRows);
-  const onConflictDoNothing = vi.fn().mockReturnValue({ returning });
-  const values = vi.fn().mockReturnValue({ onConflictDoNothing });
+export function makeInsertChain() {
+  const values = vi.fn().mockResolvedValue(undefined);
   const insert = vi.fn().mockReturnValue({ values });
   return { insert };
 }
 
-export function makeDeleteChain() {
+export function makeUpdateChain() {
   const where = vi.fn().mockResolvedValue(undefined);
-  const deleteFn = vi.fn().mockReturnValue({ where });
-  return { delete: deleteFn };
+  const set = vi.fn().mockReturnValue({ where });
+  const update = vi.fn().mockReturnValue({ set });
+  return { update };
 }

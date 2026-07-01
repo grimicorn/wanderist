@@ -97,6 +97,7 @@ const projectGlobals = {
   useTripsStore: "readonly",
   usePlacesStore: "readonly",
   useDiscover: "readonly",
+  useNotifications: "readonly",
 };
 
 export default [

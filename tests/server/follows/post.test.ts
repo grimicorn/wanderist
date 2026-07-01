@@ -65,7 +65,8 @@ describe("POST /api/follows", () => {
     mockReadBody.mockResolvedValue({ followeeId: "followee-1" });
 
     const selectChain = makeSelectChain([{ id: "followee-1" }]);
-    const insertChain = makeInsertChain();
+    // Pass empty array to simulate onConflictDoNothing skipping the insert
+    const insertChain = makeInsertChain([]);
     mockGetDb.mockReturnValue({
       ...selectChain,
       ...insertChain,
