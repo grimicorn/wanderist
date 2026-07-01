@@ -213,14 +213,19 @@ function activateItem(item: PaletteItem): void {
   emit("close");
 }
 
+function activateHighlighted(): void {
+  const activeItem = flatItems.value[activeIndex.value];
+  if (!activeItem) {
+    return;
+  }
+  activateItem(activeItem);
+}
+
 function onKeydown(event: KeyboardEvent) {
   const total = flatItems.value.length;
   if (event.key === "Enter") {
     event.preventDefault();
-    const activeItem = flatItems.value[activeIndex.value];
-    if (activeItem) {
-      activateItem(activeItem);
-    }
+    activateHighlighted();
   } else if (event.key === "Escape") {
     emit("close");
   } else if (total === 0) {

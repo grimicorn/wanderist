@@ -74,11 +74,14 @@ export default defineEventHandler(async (event) => {
   // Not wrapped in database.transaction(): the app's drizzle client is
   // configured with the neon-http driver everywhere (see server/db/index.ts),
   // which has no transaction support (it issues each query as its own HTTP
-  // call). Steps run sequentially instead; upsertTags is already idempotent
-  // (insert ... onConflictDoUpdate) so a partial failure there is safe to
-  // retry. If a later step still fails, the entry row is deleted below (its
-  // entryTags/entryPhotos foreign keys are ON DELETE CASCADE, so those rows
-  // are cleaned up too) so a 500 never leaves an orphaned entry behind.
+  // call). Write steps run sequentially instead; upsertTags is already
+  // idempotent (insert ... onConflictDoUpdate) so a partial failure there is
+  // safe to retry. If a later write step still fails, the entry row is
+  // deleted below (its entryTags/entryPhotos foreign keys are ON DELETE
+  // CASCADE, so those rows are cleaned up too) so a 500 never leaves an
+  // orphaned entry behind. The relations load that follows is a read, not a
+  // write, so it is deliberately outside this try/catch: a transient read
+  // failure must not delete an entry whose writes already committed.
   const inserted = await database
     .insert(entries)
     .values({
@@ -98,10 +101,6 @@ export default defineEventHandler(async (event) => {
     const tagIds = await upsertTags(database, tagNames);
     await insertEntryPhotos(database, entryId, photoMediaIds);
     await insertEntryTags(database, entryId, tagIds);
-
-    const relations = await loadEntryRelations(database, entryId);
-
-    return { ...inserted[0], ...relations };
   } catch (error) {
     try {
       await database.delete(entries).where(eq(entries.id, entryId));
@@ -115,4 +114,7 @@ export default defineEventHandler(async (event) => {
     }
     throw error;
   }
+
+  const relations = await loadEntryRelations(database, entryId);
+  return { ...inserted[0], ...relations };
 });
