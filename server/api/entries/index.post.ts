@@ -70,30 +70,31 @@ export default defineEventHandler(async (event) => {
 
   const entryId = generateId();
 
-  return database.transaction(async (transaction) => {
-    const db = transaction as unknown as DbClient;
+  // Not wrapped in database.transaction(): the app's drizzle client is
+  // configured with the neon-http driver everywhere (see server/db/index.ts),
+  // which has no transaction support (it issues each query as its own HTTP
+  // call). Steps run sequentially instead; upsertTags is already idempotent
+  // (insert ... onConflictDoUpdate) so a partial failure here is safe to retry.
+  const inserted = await database
+    .insert(entries)
+    .values({
+      id: entryId,
+      userId,
+      title,
+      body: bodyText,
+      tripId,
+      placeId,
+      weather,
+      occurredAt,
+      visibility,
+    })
+    .returning();
 
-    const inserted = await db
-      .insert(entries)
-      .values({
-        id: entryId,
-        userId,
-        title,
-        body: bodyText,
-        tripId,
-        placeId,
-        weather,
-        occurredAt,
-        visibility,
-      })
-      .returning();
+  const tagIds = await upsertTags(database, tagNames);
+  await insertEntryPhotos(database, entryId, photoMediaIds);
+  await insertEntryTags(database, entryId, tagIds);
 
-    const tagIds = await upsertTags(db, tagNames);
-    await insertEntryPhotos(db, entryId, photoMediaIds);
-    await insertEntryTags(db, entryId, tagIds);
+  const relations = await loadEntryRelations(database, entryId);
 
-    const relations = await loadEntryRelations(db, entryId);
-
-    return { ...inserted[0], ...relations };
-  });
+  return { ...inserted[0], ...relations };
 });

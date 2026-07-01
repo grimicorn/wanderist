@@ -177,12 +177,14 @@ test("user can create a trip and view its detail page", async ({
   await page.locator("button[type='submit']").click();
 
   // After creation, the trip should appear in the list.
-  await expect(page.locator(".card__name", { hasText: tripName })).toBeVisible({
-    timeout: 10_000,
-  });
+  await expect(page.locator(".tcard__name", { hasText: tripName })).toBeVisible(
+    {
+      timeout: 10_000,
+    },
+  );
 
   // Click through to the trip detail page.
-  await page.locator(".card__name", { hasText: tripName }).click();
+  await page.locator(".tcard__name", { hasText: tripName }).click();
   await expect(page).toHaveURL(/\/trips\/.+/);
 
   // The hero should show the trip name.

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ref, computed } from "vue";
-import { mount } from "@vue/test-utils";
+import { mount, flushPromises } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import TripsPage from "../trips/index.vue";
 import { useTripsStore } from "~/stores/trips";
@@ -228,6 +228,78 @@ describe("Trips page (/trips)", () => {
     cards.forEach((card, index) => {
       const expectedId = SAMPLE_TRIPS[index].id;
       expect(card.attributes("href")).toBe(`/trips/${expectedId}`);
+    });
+  });
+
+  describe("plan a new route", () => {
+    it("shows the new trip form when the button is clicked", async () => {
+      const wrapper = mount(TripsPage, buildGlobalConfig(pinia));
+      expect(wrapper.find(".new-trip-form").exists()).toBe(false);
+
+      await wrapper.find(".trips-head button").trigger("click");
+
+      expect(wrapper.find(".new-trip-form").exists()).toBe(true);
+    });
+
+    it("hides the form when cancel is clicked", async () => {
+      const wrapper = mount(TripsPage, buildGlobalConfig(pinia));
+      await wrapper.find(".trips-head button").trigger("click");
+
+      await wrapper.find("button[type='button']").trigger("click");
+
+      expect(wrapper.find(".new-trip-form").exists()).toBe(false);
+    });
+
+    it("creates a trip with the entered name and closes the form", async () => {
+      const tripsStore = useTripsStore();
+      const createdTrip: Trip = {
+        ...SAMPLE_TRIPS[0],
+        id: "new-trip-id",
+        name: "Patagonia loop",
+      };
+      vi.spyOn(tripsStore, "createTrip").mockResolvedValue(createdTrip);
+
+      const wrapper = mount(TripsPage, buildGlobalConfig(pinia));
+      await wrapper.find(".trips-head button").trigger("click");
+      await wrapper.find(".new-trip-form__input").setValue("Patagonia loop");
+      await wrapper.find(".new-trip-form__row").trigger("submit");
+      await flushPromises();
+
+      expect(tripsStore.createTrip).toHaveBeenCalledWith({
+        name: "Patagonia loop",
+      });
+      expect(wrapper.find(".new-trip-form").exists()).toBe(false);
+    });
+
+    it("does not submit when the name is blank", async () => {
+      const tripsStore = useTripsStore();
+      vi.spyOn(tripsStore, "createTrip").mockResolvedValue(SAMPLE_TRIPS[0]);
+
+      const wrapper = mount(TripsPage, buildGlobalConfig(pinia));
+      await wrapper.find(".trips-head button").trigger("click");
+      await wrapper.find(".new-trip-form__row").trigger("submit");
+      await flushPromises();
+
+      expect(tripsStore.createTrip).not.toHaveBeenCalled();
+      expect(wrapper.find(".new-trip-form").exists()).toBe(true);
+    });
+
+    it("shows an error message when trip creation fails", async () => {
+      const tripsStore = useTripsStore();
+      vi.spyOn(tripsStore, "createTrip").mockRejectedValue(
+        new Error("Failed to create trip"),
+      );
+
+      const wrapper = mount(TripsPage, buildGlobalConfig(pinia));
+      await wrapper.find(".trips-head button").trigger("click");
+      await wrapper.find(".new-trip-form__input").setValue("Bad trip");
+      await wrapper.find(".new-trip-form__row").trigger("submit");
+      await flushPromises();
+
+      expect(wrapper.find(".new-trip-form__error").text()).toBe(
+        "Failed to create trip",
+      );
+      expect(wrapper.find(".new-trip-form").exists()).toBe(true);
     });
   });
 });

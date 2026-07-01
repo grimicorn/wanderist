@@ -63,16 +63,12 @@ function makeDbForCreate(createdEntry: Record<string, unknown>) {
   const returningMock = vi.fn().mockResolvedValue([createdEntry]);
   const valuesMock = vi.fn().mockReturnValue({ returning: returningMock });
 
-  const txClient = {
-    insert: vi.fn().mockImplementation(() => ({ values: valuesMock })),
-  };
-
+  // The handler no longer wraps writes in database.transaction() — the
+  // neon-http driver used everywhere in this app has no transaction support
+  // (see the comment in server/api/entries/index.post.ts) — so it calls
+  // database.insert(...) directly.
   return {
-    transaction: vi
-      .fn()
-      .mockImplementation(async (callback: (tx: unknown) => Promise<unknown>) =>
-        callback(txClient),
-      ),
+    insert: vi.fn().mockImplementation(() => ({ values: valuesMock })),
   };
 }
 

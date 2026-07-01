@@ -103,6 +103,10 @@ jobs:
           project_id: ${{ secrets.NEON_PROJECT_ID }}
           api_key: ${{ secrets.NEON_API_KEY }}
           branch_name: ci-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.spec }}
+      - name: Run database migrations
+        run: npm run db:migrate
+        env:
+          E2E_DATABASE_URL: ${{ steps.neon.outputs.db_url_pooled }}
       - name: Run E2E tests (${{ matrix.spec }})
         run: npx playwright test e2e/${{ matrix.spec }}.spec.ts
         env:
