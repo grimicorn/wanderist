@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { stubNitroGlobals } from "../test-utils";
+import { makeDbForDelete } from "./_helpers";
 
 stubNitroGlobals();
 
@@ -55,9 +56,11 @@ vi.mock("../../../server/utils/entry-helpers", () => ({
 
 import { ensureUser } from "../../../server/utils/auth";
 import { getDb } from "../../../server/db/index";
+import { upsertTags } from "../../../server/utils/entry-helpers";
 
 const mockEnsureUser = vi.mocked(ensureUser);
 const mockGetDb = vi.mocked(getDb);
+const mockUpsertTags = vi.mocked(upsertTags);
 
 function makeDbForCreate(createdEntry: Record<string, unknown>) {
   const returningMock = vi.fn().mockResolvedValue([createdEntry]);
@@ -133,5 +136,27 @@ describe("POST /api/entries", () => {
     const result = await (defaultHandler as (event: unknown) => unknown)({});
 
     expect(result).toMatchObject(createdEntry);
+  });
+
+  it("deletes the orphaned entry and rethrows when a post-insert step fails", async () => {
+    const createdEntry = { id: "generated-id", userId: "user-1" };
+    mockEnsureUser.mockResolvedValue("user-1");
+    mockReadBody.mockResolvedValue({ title: "My Entry" });
+    const mockDb = {
+      ...makeDbForCreate(createdEntry),
+      ...makeDbForDelete(),
+    };
+    mockGetDb.mockReturnValue(mockDb as unknown as ReturnType<typeof getDb>);
+
+    const upsertError = new Error("tag upsert failed");
+    mockUpsertTags.mockRejectedValueOnce(upsertError);
+
+    const defaultHandler = "default" in handler ? handler.default : handler;
+
+    await expect(
+      (defaultHandler as (event: unknown) => unknown)({}),
+    ).rejects.toThrow(upsertError);
+
+    expect(mockDb.delete).toHaveBeenCalledTimes(1);
   });
 });
