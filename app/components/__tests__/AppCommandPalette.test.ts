@@ -3,6 +3,9 @@ import { mount, flushPromises } from "@vue/test-utils";
 import { ref } from "vue";
 import AppCommandPalette from "../AppCommandPalette.vue";
 
+// navigateTo is stubbed globally in vitest.setup.ts; cast for spy access
+const mockNavigateTo = navigateTo as ReturnType<typeof vi.fn>;
+
 const iconStub = { template: "<svg data-icon />" };
 const linkStub = { template: "<a><slot /></a>", props: ["to"] };
 
@@ -12,6 +15,7 @@ const mockResults = ref({ places: [], trips: [], entries: [], people: [] });
 const mockIsLoading = ref(false);
 const mockError = ref<string | null>(null);
 const mockSearch = vi.fn();
+const mockOpenNewEntry = vi.fn();
 
 vi.stubGlobal("useSearch", () => ({
   query: mockQuery,
@@ -27,6 +31,9 @@ const globalConfig = {
       AppIcon: iconStub,
       NuxtLink: linkStub,
     },
+    provide: {
+      openNewEntry: mockOpenNewEntry,
+    },
   },
 };
 
@@ -37,6 +44,7 @@ describe("AppCommandPalette", () => {
     mockResults.value = { places: [], trips: [], entries: [], people: [] };
     mockIsLoading.value = false;
     mockError.value = null;
+    mockOpenNewEntry.mockReset();
   });
 
   it("renders nothing when closed", () => {
@@ -71,6 +79,51 @@ describe("AppCommandPalette", () => {
       ...globalConfig,
     });
     expect(wrapper.findAll(".cmdk__item")).toHaveLength(5);
+  });
+
+  it("New entry quick action calls openNewEntry and emits close on click", async () => {
+    const wrapper = mount(AppCommandPalette, {
+      props: { open: true },
+      ...globalConfig,
+    });
+
+    // "New entry" renders as a <button> (action item, not a NuxtLink)
+    const newEntryButton = wrapper
+      .findAll("button.cmdk__item")
+      .find((button) => button.text().includes("New entry"));
+
+    expect(newEntryButton).toBeDefined();
+    await newEntryButton!.trigger("click");
+
+    expect(mockOpenNewEntry).toHaveBeenCalledOnce();
+    expect(wrapper.emitted("close")).toBeTruthy();
+  });
+
+  it("Enter key activates the highlighted action item and emits close", async () => {
+    const wrapper = mount(AppCommandPalette, {
+      props: { open: true },
+      ...globalConfig,
+    });
+
+    // "New entry" is the first quick action (index 0, highlighted by default)
+    await wrapper.find(".cmdk").trigger("keydown", { key: "Enter" });
+
+    expect(mockOpenNewEntry).toHaveBeenCalledOnce();
+    expect(wrapper.emitted("close")).toBeTruthy();
+  });
+
+  it("Enter key navigates to href for a highlighted link item", async () => {
+    const wrapper = mount(AppCommandPalette, {
+      props: { open: true },
+      ...globalConfig,
+    });
+
+    // Move highlight to index 1 ("Drop a pin" → href "/map")
+    await wrapper.find(".cmdk").trigger("keydown", { key: "ArrowDown" });
+    await wrapper.find(".cmdk").trigger("keydown", { key: "Enter" });
+
+    expect(mockNavigateTo).toHaveBeenCalledWith("/map");
+    expect(wrapper.emitted("close")).toBeTruthy();
   });
 
   it("shows API search results when query is typed", async () => {

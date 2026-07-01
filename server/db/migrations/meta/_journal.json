@@ -8,6 +8,41 @@
       "when": 1782553495255,
       "tag": "0000_spooky_mandroid",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1782618472000,
+      "tag": "0001_add_media_metadata_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1782668766000,
+      "tag": "0002_add_users_deleted_at",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1782689461000,
+      "tag": "0003_add_media_source_idempotency",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1782691237000,
+      "tag": "0004_add_trip_stops_created_at",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1782699512000,
+      "tag": "0005_add_guides_table",
+      "breakpoints": true
     }
   ]
 }

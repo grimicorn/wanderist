@@ -29,15 +29,17 @@
             class="cmdk__group"
           >
             <div class="cmdk__glabel">{{ group.label }}</div>
-            <NuxtLink
+            <component
+              :is="item.action ? 'button' : 'NuxtLink'"
               v-for="(item, index) in group.items"
               :key="item.id"
-              :to="item.href"
+              :type="item.action ? 'button' : undefined"
+              :to="item.action ? undefined : (item.href ?? '/')"
               class="cmdk__item"
               :class="{
                 'is-active': activeIndex === flatIndex(group.key, index),
               }"
-              @click="$emit('close')"
+              @click="item.action ? handleAction(item) : $emit('close')"
               @mouseenter="activeIndex = flatIndex(group.key, index)"
             >
               <span class="cmdk__ico">
@@ -51,7 +53,7 @@
                 }}</span>
               </span>
               <AppIcon name="arrow-right" :size="15" class="cmdk__go" />
-            </NuxtLink>
+            </component>
           </div>
         </template>
         <div v-else-if="searchError && query" class="cmdk__error" role="alert">
@@ -76,14 +78,26 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, nextTick } from "vue";
+import { ref, computed, watch, nextTick, inject } from "vue";
 import type { SearchItem } from "~/composables/useSearch";
+
+// PaletteItem extends SearchItem so search results (which always have href) fit
+// directly, while quick actions can supply either href or action (never both).
+interface PaletteItem extends Omit<SearchItem, "href"> {
+  href?: string;
+  action?: () => void;
+}
 
 interface SearchGroup {
   key: string;
   label: string;
-  items: SearchItem[];
+  items: PaletteItem[];
 }
+
+const openNewEntry = inject<(() => void) | undefined>(
+  "openNewEntry",
+  undefined,
+);
 
 const QUICK_ACTIONS: SearchGroup = {
   key: "actions",
@@ -94,7 +108,7 @@ const QUICK_ACTIONS: SearchGroup = {
       title: "New entry",
       subtitle: "Write a journal entry",
       icon: "plus",
-      href: "/journal/new",
+      action: () => openNewEntry?.(),
     },
     {
       id: "action-drop-pin",
@@ -141,6 +155,11 @@ const {
   search,
 } = useSearch();
 
+function handleAction(item: PaletteItem): void {
+  item.action?.();
+  emit("close");
+}
+
 const visibleGroups = computed<SearchGroup[]>(() => {
   const trimmed = query.value.trim();
 
@@ -183,16 +202,40 @@ function highlight(text: string): string {
   return `${text.slice(0, i)}<mark>${text.slice(i, i + q.length)}</mark>${text.slice(i + q.length)}`;
 }
 
+function activateItem(item: PaletteItem): void {
+  if (item.action) {
+    handleAction(item);
+    return;
+  }
+  if (item.href) {
+    navigateTo(item.href);
+  }
+  emit("close");
+}
+
+function activateHighlighted(): void {
+  const activeItem = flatItems.value[activeIndex.value];
+  if (!activeItem) {
+    return;
+  }
+  activateItem(activeItem);
+}
+
 function onKeydown(event: KeyboardEvent) {
   const total = flatItems.value.length;
-  if (event.key === "ArrowDown") {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    activateHighlighted();
+  } else if (event.key === "Escape") {
+    emit("close");
+  } else if (total === 0) {
+    return;
+  } else if (event.key === "ArrowDown") {
     event.preventDefault();
     activeIndex.value = (activeIndex.value + 1) % total;
   } else if (event.key === "ArrowUp") {
     event.preventDefault();
     activeIndex.value = (activeIndex.value - 1 + total) % total;
-  } else if (event.key === "Escape") {
-    emit("close");
   }
 }
 

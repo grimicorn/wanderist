@@ -8,7 +8,9 @@ exports[`Trips page (/trips) > renders without crashing and matches snapshot 1`]
       <h1 data-v-f103826c="">Your trips</h1>
       <p data-v-f103826c="">One ongoing, two on the calendar, six in the books.</p>
     </div><button data-v-f103826c="" class="btn btn--outline"><svg data-v-f103826c="" data-icon="" name="route" size="15"></svg> plan a new route </button>
-  </div><!-- Stats load error -->
+  </div><!-- New trip form -->
+  <!--v-if-->
+  <!-- Stats load error -->
   <!--v-if-->
   <!-- Featured active trip -->
   <div data-v-f103826c="" class="feature"><a data-v-f103826c="" href="/trips/1" class="feature__cover ph">

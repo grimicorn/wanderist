@@ -1,5 +1,5 @@
 import type { H3Event } from "h3";
-import { getClerkClient } from "../utils/clerk";
+import { requireClerkSecretKey, verifyClerkToken } from "../utils/clerk";
 
 const API_PATH_PREFIX = "/api/";
 const WEBHOOK_PATH_PREFIX = "/api/webhooks/";
@@ -24,11 +24,13 @@ async function verifyBearerToken(event: H3Event): Promise<string> {
   if (!token) {
     throw createError({ statusCode: 401, statusMessage: "Unauthorized" });
   }
-  const clerkClient = getClerkClient();
+  // Resolved outside the try below so a missing/misconfigured secret key
+  // surfaces as a 500 (server misconfiguration), not a 401 (invalid token).
+  const secretKey = requireClerkSecretKey();
   try {
-    const { sub } = await clerkClient.verifyToken(token);
-    return sub;
-  } catch {
+    return await verifyClerkToken(token, secretKey);
+  } catch (error) {
+    console.error("verifyBearerToken: token verification failed", error);
     throw createError({ statusCode: 401, statusMessage: "Unauthorized" });
   }
 }
