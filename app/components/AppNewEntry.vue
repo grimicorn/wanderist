@@ -1,5 +1,10 @@
 <template>
-  <div v-if="open" class="drawer is-open" role="dialog" aria-label="New entry">
+  <div
+    v-if="open"
+    class="drawer new-entry is-open"
+    role="dialog"
+    aria-label="New entry"
+  >
     <div class="drawer__scrim" @click="!isPublishing && emit('close')" />
     <aside class="drawer__panel">
       <header class="drawer__head">

@@ -88,6 +88,27 @@ function runTag(testInfo: TestInfo): string {
 }
 
 // ---------------------------------------------------------------------------
+// Helper: wait for the app shell to be genuinely interactive.
+//
+// Clerk's Nuxt module runs with skipServerMiddleware: true, so auth resolves
+// client-side only: the app/layouts/app.vue shell (and its click handlers,
+// e.g. the compose bar) paints from SSR markup before Clerk finishes loading
+// and hydration attaches listeners. A click that lands in that window is
+// accepted by the DOM but silently dropped, since Vue has not bound the
+// handler yet. app/layouts/app.vue exposes `data-auth-ready` once Clerk's
+// `isLoaded` is true; waiting on it here avoids racing on paint.
+// ---------------------------------------------------------------------------
+
+async function waitForAppReady(
+  page: Parameters<typeof clerk.signIn>[0]["page"],
+) {
+  await page.locator('.shell[data-auth-ready="true"]').waitFor({
+    state: "attached",
+    timeout: 15_000,
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -106,6 +127,7 @@ test("user can create a new journal entry", async ({ page }, testInfo) => {
   await signIn(page);
   await page.goto("/journal");
   await expect(page.locator(".feed")).toBeVisible({ timeout: 15_000 });
+  await waitForAppReady(page);
 
   // Open the new-entry drawer via the compose bar.
   await page.locator(".compose").click();
@@ -113,15 +135,17 @@ test("user can create a new journal entry", async ({ page }, testInfo) => {
   // The entry drawer should open.
   await expect(page.locator(".new-entry")).toBeVisible({ timeout: 5_000 });
 
-  // Fill in the entry title — use .first() in case multiple title-like
-  // inputs exist in the drawer, to avoid a strict-mode violation.
+  // Fill in the entry title. The field's placeholder is descriptive rather
+  // than literally "title" ("Give this moment a name…"); the field wrapper
+  // directly under the "Title" label is the first field__wrap in the drawer.
   const titleInput = page
-    .locator(".new-entry input[placeholder*='title' i]")
+    .locator(".new-entry .field__wrap input.field__input")
     .first();
   await titleInput.fill(entryTitle);
 
-  // Submit the form.
-  await page.locator(".new-entry button[type='submit']").click();
+  // Submit the form. The drawer's actions are plain buttons (no <form>/
+  // type="submit"), so target the "publish" button by its label instead.
+  await page.locator(".new-entry button", { hasText: "publish" }).click();
 
   // The new entry should appear in the feed.
   await expect(
@@ -142,6 +166,7 @@ test("user can create a trip and view its detail page", async ({
   await expect(page.locator("h1", { hasText: "Your trips" })).toBeVisible({
     timeout: 15_000,
   });
+  await waitForAppReady(page);
 
   // Click the plan-a-new-route button.
   await page.locator("button", { hasText: "plan a new route" }).click();
