@@ -1,7 +1,7 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
 exports[`AppNewEntry > renders the drawer when open and matches snapshot 1`] = `
-"<div class="drawer is-open" role="dialog" aria-label="New entry">
+"<div class="drawer new-entry is-open" role="dialog" aria-label="New entry">
   <div class="drawer__scrim"></div>
   <aside class="drawer__panel">
     <header class="drawer__head">

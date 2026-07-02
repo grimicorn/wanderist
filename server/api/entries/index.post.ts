@@ -1,3 +1,4 @@
+import { eq } from "drizzle-orm";
 import { ensureUser } from "../../utils/auth";
 import { getDb } from "../../db/index";
 import { entries, entryPhotos, entryTags } from "../../db/schema";
@@ -70,30 +71,50 @@ export default defineEventHandler(async (event) => {
 
   const entryId = generateId();
 
-  return database.transaction(async (transaction) => {
-    const db = transaction as unknown as DbClient;
+  // Not wrapped in database.transaction(): the app's drizzle client is
+  // configured with the neon-http driver everywhere (see server/db/index.ts),
+  // which has no transaction support (it issues each query as its own HTTP
+  // call). Write steps run sequentially instead; upsertTags is already
+  // idempotent (insert ... onConflictDoUpdate) so a partial failure there is
+  // safe to retry. If a later write step still fails, the entry row is
+  // deleted below (its entryTags/entryPhotos foreign keys are ON DELETE
+  // CASCADE, so those rows are cleaned up too) so a 500 never leaves an
+  // orphaned entry behind. The relations load that follows is a read, not a
+  // write, so it is deliberately outside this try/catch: a transient read
+  // failure must not delete an entry whose writes already committed.
+  const inserted = await database
+    .insert(entries)
+    .values({
+      id: entryId,
+      userId,
+      title,
+      body: bodyText,
+      tripId,
+      placeId,
+      weather,
+      occurredAt,
+      visibility,
+    })
+    .returning();
 
-    const inserted = await db
-      .insert(entries)
-      .values({
-        id: entryId,
-        userId,
-        title,
-        body: bodyText,
-        tripId,
-        placeId,
-        weather,
-        occurredAt,
-        visibility,
-      })
-      .returning();
+  try {
+    const tagIds = await upsertTags(database, tagNames);
+    await insertEntryPhotos(database, entryId, photoMediaIds);
+    await insertEntryTags(database, entryId, tagIds);
+  } catch (error) {
+    try {
+      await database.delete(entries).where(eq(entries.id, entryId));
+    } catch (cleanupError) {
+      // Cleanup best-effort only: surface the original failure below, not a
+      // secondary error from the cleanup delete itself.
+      console.error(
+        "entries.post: cleanup after partial write failed",
+        cleanupError,
+      );
+    }
+    throw error;
+  }
 
-    const tagIds = await upsertTags(db, tagNames);
-    await insertEntryPhotos(db, entryId, photoMediaIds);
-    await insertEntryTags(db, entryId, tagIds);
-
-    const relations = await loadEntryRelations(db, entryId);
-
-    return { ...inserted[0], ...relations };
-  });
+  const relations = await loadEntryRelations(database, entryId);
+  return { ...inserted[0], ...relations };
 });

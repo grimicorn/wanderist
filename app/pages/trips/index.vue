@@ -8,10 +8,46 @@
         <h1>Your trips</h1>
         <p>One ongoing, two on the calendar, six in the books.</p>
       </div>
-      <button class="btn btn--outline">
+      <button class="btn btn--outline" @click="openNewTripForm">
         <AppIcon name="route" :size="15" />
         plan a new route
       </button>
+    </div>
+
+    <!-- New trip form -->
+    <div
+      v-if="showNewTripForm"
+      class="new-trip-form"
+      role="dialog"
+      aria-label="Plan a new route"
+    >
+      <div class="new-trip-form__title">New trip</div>
+      <form class="new-trip-form__row" @submit.prevent="handleCreateTrip">
+        <input
+          v-model="newTripName"
+          class="new-trip-form__input"
+          placeholder="Trip name…"
+          aria-label="Trip name"
+        />
+        <button
+          type="submit"
+          class="btn btn--primary btn--sm"
+          :disabled="!newTripName.trim() || isCreatingTrip"
+        >
+          <AppIcon name="check" :size="14" />
+          {{ isCreatingTrip ? "creating…" : "create trip" }}
+        </button>
+        <button
+          type="button"
+          class="btn btn--outline btn--sm"
+          @click="closeNewTripForm"
+        >
+          cancel
+        </button>
+      </form>
+      <p v-if="createTripError" class="new-trip-form__error" role="alert">
+        {{ createTripError }}
+      </p>
     </div>
 
     <!-- Stats load error -->
@@ -154,6 +190,41 @@ const ongoingTrip = computed<Trip | null>(
   () => tripsStore.tripList.find((trip) => trip.status === "ongoing") ?? null,
 );
 
+const showNewTripForm = ref(false);
+const newTripName = ref("");
+const isCreatingTrip = ref(false);
+const createTripError = ref<string | null>(null);
+
+function openNewTripForm(): void {
+  newTripName.value = "";
+  createTripError.value = null;
+  showNewTripForm.value = true;
+}
+
+function closeNewTripForm(): void {
+  showNewTripForm.value = false;
+}
+
+async function handleCreateTrip(): Promise<void> {
+  const name = newTripName.value.trim();
+  if (!name) {
+    return;
+  }
+
+  isCreatingTrip.value = true;
+  createTripError.value = null;
+
+  try {
+    await tripsStore.createTrip({ name });
+    closeNewTripForm();
+  } catch (error) {
+    createTripError.value =
+      error instanceof Error ? error.message : "Failed to create trip";
+  } finally {
+    isCreatingTrip.value = false;
+  }
+}
+
 const filteredTrips = computed<Trip[]>(() => {
   if (activeTab.value === "All") {
     return tripsStore.tripList;
@@ -227,6 +298,45 @@ function formatDistance(distanceKm: number): string {
   margin: 6px 0 0;
   font-size: 12.5px;
   color: var(--muted);
+}
+
+.new-trip-form {
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  padding: 16px;
+  margin-bottom: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.new-trip-form__title {
+  font-size: 14px;
+  font-weight: 600;
+}
+.new-trip-form__row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.new-trip-form__input {
+  flex: 1;
+  min-width: 200px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--ink);
+  outline: none;
+}
+.new-trip-form__input:focus {
+  border-color: var(--accent-line);
+}
+.new-trip-form__error {
+  font-size: 12px;
+  color: var(--error, #c0392b);
 }
 
 .feature {
