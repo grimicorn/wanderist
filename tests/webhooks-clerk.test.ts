@@ -25,6 +25,7 @@ const {
   mockReadRawBody,
   mockGetHeader,
   mockGetUser,
+  mockUseRuntimeConfig,
 } = vi.hoisted(() => {
   const mockOnConflictDoUpdate = vi.fn().mockResolvedValue(undefined);
   const mockValues = vi.fn(() => ({
@@ -56,6 +57,7 @@ const {
     mockReadRawBody: vi.fn(),
     mockGetHeader: vi.fn(),
     mockGetUser,
+    mockUseRuntimeConfig: vi.fn(() => ({ disableSignups: "" })),
   };
 });
 
@@ -92,6 +94,7 @@ Object.assign(globalThis, {
   createError: (options: { statusCode: number; statusMessage: string }) =>
     Object.assign(new Error(options.statusMessage), options),
   defineEventHandler: (handler: (event: object) => unknown) => handler,
+  useRuntimeConfig: mockUseRuntimeConfig,
 });
 
 // ---------------------------------------------------------------------------
@@ -147,6 +150,7 @@ describe("clerk webhook handler", () => {
     process.env.NUXT_CLERK_WEBHOOK_SECRET = TEST_SECRET;
     mockReadRawBody.mockResolvedValue(JSON.stringify(SAMPLE_PAYLOAD));
     mockGetHeader.mockReturnValue("test-value");
+    mockUseRuntimeConfig.mockReturnValue({ disableSignups: "" });
     resetDbMocks();
   });
 
@@ -314,6 +318,54 @@ describe("clerk webhook handler", () => {
     expect(mockInsert).not.toHaveBeenCalled();
     expect(result).toEqual({ ok: true });
   });
+
+  it("skips provisioning a brand-new user when sign-ups are disabled", async () => {
+    mockUseRuntimeConfig.mockReturnValue({ disableSignups: "true" });
+    mockLimit.mockResolvedValue([]); // no existing row for this user
+    mockVerifySvixSignature.mockReturnValue({
+      type: "user.created",
+      data: {
+        id: "user_blocked",
+        email_addresses: [
+          { id: "idn_1", email_address: "blocked@example.com" },
+        ],
+        primary_email_address_id: "idn_1",
+      },
+    });
+
+    const result = await (
+      clerkWebhookHandler as (event: object) => Promise<unknown>
+    )(buildMockEvent());
+
+    expect(mockInsert).not.toHaveBeenCalled();
+    expect(result).toEqual({ ok: true });
+  });
+
+  it("still mirrors updates for existing users when sign-ups are disabled", async () => {
+    mockUseRuntimeConfig.mockReturnValue({ disableSignups: "true" });
+    mockLimit.mockResolvedValue([{ id: "user_existing" }]); // row already exists
+    mockVerifySvixSignature.mockReturnValue({
+      type: "user.updated",
+      data: {
+        id: "user_existing",
+        email_addresses: [
+          { id: "idn_1", email_address: "updated@example.com" },
+        ],
+        primary_email_address_id: "idn_1",
+      },
+    });
+
+    const result = await (
+      clerkWebhookHandler as (event: object) => Promise<unknown>
+    )(buildMockEvent());
+
+    expect(mockInsert).toHaveBeenCalled();
+    expect(mockValues).toHaveBeenCalledWith({
+      id: "user_existing",
+      email: "updated@example.com",
+    });
+    expect(result).toEqual({ ok: true });
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -328,6 +380,7 @@ describe("ensureUser", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.NUXT_CLERK_SECRET_KEY = "sk_test_abc123";
+    mockUseRuntimeConfig.mockReturnValue({ disableSignups: "" });
     resetDbMocks();
   });
 
@@ -383,5 +436,27 @@ describe("ensureUser", () => {
     await expect(
       ensureUser(buildAuthEvent("user_clerk_error") as never),
     ).rejects.toMatchObject({ statusCode: 503 });
+  });
+
+  it("throws 403 for a missing user when sign-ups are disabled", async () => {
+    mockUseRuntimeConfig.mockReturnValue({ disableSignups: "true" });
+    mockLimit.mockResolvedValue([]);
+
+    await expect(
+      ensureUser(buildAuthEvent("user_blocked") as never),
+    ).rejects.toMatchObject({ statusCode: 403 });
+    // Blocked before ever touching Clerk or the DB insert.
+    expect(mockGetUser).not.toHaveBeenCalled();
+    expect(mockInsert).not.toHaveBeenCalled();
+  });
+
+  it("still returns an existing user when sign-ups are disabled", async () => {
+    mockUseRuntimeConfig.mockReturnValue({ disableSignups: "true" });
+    mockLimit.mockResolvedValue([{ id: "user_existing" }]);
+
+    const result = await ensureUser(buildAuthEvent("user_existing") as never);
+
+    expect(result).toBe("user_existing");
+    expect(mockInsert).not.toHaveBeenCalled();
   });
 });

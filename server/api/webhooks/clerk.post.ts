@@ -2,6 +2,7 @@ import type { H3Event } from "h3";
 import { eq } from "drizzle-orm";
 import { getDb } from "../../db/index";
 import { users } from "../../db/schema";
+import { signupsDisabled } from "../../utils/auth";
 import {
   verifySvixSignature,
   SVIX_ID_HEADER,
@@ -77,10 +78,25 @@ async function handleUserUpsert(
     return;
   }
 
+  const db = getDb();
+
+  // Invite-only mode: mirror updates for users who already have a row, but never
+  // provision a brand-new one, so a Clerk account that slipped through still gets
+  // no usable app-DB row. This matches the ensureUser gate on the request path.
+  if (signupsDisabled()) {
+    const existing = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.id, payload.id))
+      .limit(1);
+    if (existing.length === 0) {
+      return;
+    }
+  }
+
   // Note: Svix does not guarantee delivery order. A delayed user.updated could
   // arrive after a newer event. We accept this risk and do not guard against it
   // here since Clerk's webhook payloads carry no stable sequence number.
-  const db = getDb();
   try {
     await db
       .insert(users)

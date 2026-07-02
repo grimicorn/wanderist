@@ -13,6 +13,17 @@ export function requireUser(event: H3Event): string {
 }
 
 /**
+ * True when new-user provisioning is turned off (invite-only mode).
+ * Read via runtimeConfig (not process.env) so the value bakes into the server
+ * bundle at build time and survives into the deployed Netlify function.
+ * Clerk still owns account creation; this only governs whether an account gets
+ * a usable app-DB row.
+ */
+export function signupsDisabled(): boolean {
+  return useRuntimeConfig().disableSignups === "true";
+}
+
+/**
  * Ensures a users row exists for the current request's Clerk user.
  * Call this at the top of any API handler that inserts rows referencing users.id,
  * so the first request after signup never fails before the webhook lands.
@@ -29,6 +40,16 @@ export async function ensureUser(event: H3Event): Promise<string> {
 
   if (existing.length > 0) {
     return userId;
+  }
+
+  // No row yet means this is a first-time provision. When sign-ups are disabled
+  // refuse it rather than creating the user, so invite-only mode holds even for
+  // an account that made it through Clerk.
+  if (signupsDisabled()) {
+    throw createError({
+      statusCode: 403,
+      statusMessage: "Sign-ups are currently disabled",
+    });
   }
 
   const clerkClient = getClerkClient();

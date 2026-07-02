@@ -17,6 +17,10 @@ export default defineNuxtConfig({
   },
   runtimeConfig: {
     databaseUrl: process.env.E2E_DATABASE_URL || process.env.DATABASE_URL || "",
+    // Set to "true" to block new-user provisioning (invite-only). Read via
+    // runtimeConfig so the value bakes into the server bundle at build time and
+    // survives into the deployed Netlify function.
+    disableSignups: process.env.NUXT_DISABLE_SIGNUPS || "",
     public: {
       sentryDsn: "",
       siteOrigin: "",
