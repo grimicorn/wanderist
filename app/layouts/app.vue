@@ -14,6 +14,10 @@
       :open="notificationsOpen"
       @close="notificationsOpen = false"
     />
+    <AppCommandPalette
+      :open="commandPaletteOpen"
+      @close="commandPaletteOpen = false"
+    />
   </div>
 </template>
 
@@ -27,6 +31,7 @@ const { isLoaded } = useClerkAuth();
 const sidebarOpen = ref(false);
 const newEntryOpen = ref(false);
 const notificationsOpen = ref(false);
+const commandPaletteOpen = ref(false);
 
 provide("openSidebar", () => {
   sidebarOpen.value = true;
@@ -38,5 +43,13 @@ provide("openNewEntry", () => {
 
 provide("openNotifications", () => {
   notificationsOpen.value = true;
+});
+
+provide("openCommandPalette", () => {
+  commandPaletteOpen.value = true;
+});
+
+useCommandPaletteShortcut(() => {
+  commandPaletteOpen.value = true;
 });
 </script>

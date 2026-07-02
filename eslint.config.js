@@ -98,6 +98,7 @@ const projectGlobals = {
   usePlacesStore: "readonly",
   useDiscover: "readonly",
   useNotifications: "readonly",
+  useCommandPaletteShortcut: "readonly",
 };
 
 export default [
