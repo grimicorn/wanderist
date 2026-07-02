@@ -2,9 +2,7 @@
 
 exports[`Home / Dashboard page (/home) > renders without crashing and matches snapshot 1`] = `
 "<div data-v-10844834="" class="content content--wide">
-  <header data-v-10844834="" class="topbar">
-    <!-- Search: deferred to #23 (command palette) --><button data-v-10844834="" class="icon-btn" aria-label="Search"><svg data-v-10844834="" data-icon="" name="search" size="18"></svg></button><button data-v-10844834="" class="icon-btn" aria-label="Alerts"><svg data-v-10844834="" data-icon="" name="bell" size="18"></svg></button><button data-v-10844834="" class="btn btn--primary btn--sm"><svg data-v-10844834="" data-icon="" name="plus" size="14"></svg> new entry </button>
-  </header><!-- Greeting -->
+  <header data-v-10844834="" class="topbar"><button data-v-10844834="" class="icon-btn" aria-label="Search"><svg data-v-10844834="" data-icon="" name="search" size="18"></svg></button><button data-v-10844834="" class="icon-btn" aria-label="Alerts"><svg data-v-10844834="" data-icon="" name="bell" size="18"></svg></button><button data-v-10844834="" class="btn btn--primary btn--sm"><svg data-v-10844834="" data-icon="" name="plus" size="14"></svg> new entry </button></header><!-- Greeting -->
   <div data-v-10844834="" class="hello">
     <div data-v-10844834="">
       <div data-v-10844834="" class="label">// evening · fri, jun 14</div>

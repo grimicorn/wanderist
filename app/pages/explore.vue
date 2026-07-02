@@ -1,7 +1,11 @@
 <template>
   <div class="content content--wide">
     <AppTopbar title="Explore" crumb="Discover">
-      <button class="icon-btn" aria-label="Search">
+      <button
+        class="icon-btn"
+        aria-label="Search"
+        @click="openCommandPalette?.()"
+      >
         <AppIcon name="search" :size="18" />
       </button>
       <button
@@ -311,6 +315,11 @@ const openNotifications = inject<(() => void) | undefined>(
 
 const openNewEntry = inject<(() => void) | undefined>(
   "openNewEntry",
+  undefined,
+);
+
+const openCommandPalette = inject<(() => void) | undefined>(
+  "openCommandPalette",
   undefined,
 );
 
