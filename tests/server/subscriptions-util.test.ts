@@ -372,7 +372,11 @@ describe("upsertSubscriptionFromEvent", () => {
     expect(mockInsert).not.toHaveBeenCalled();
   });
 
-  it("proceeds when the existing row has no subscription id recorded yet", async () => {
+  it("proceeds when the existing row has no subscription id recorded yet (e.g. after a prior cancellation cleared it)", async () => {
+    // markSubscriptionItemInactive clears clerkSubscriptionId on cancel
+    // precisely so that a genuinely new subscription.created for a
+    // re-subscribing user (a fresh Clerk subscription id) isn't rejected as
+    // a stale/out-of-order event for the old, terminated subscription.
     mockSelectLimit.mockResolvedValue([{ clerkSubscriptionId: null }]);
 
     await upsertSubscriptionFromEvent(buildPayload());
@@ -405,13 +409,17 @@ describe("markSubscriptionItemInactive", () => {
     };
   }
 
-  it("marks the row canceled when the item id matches", async () => {
+  it("marks the row canceled and clears the recorded Clerk IDs when the item id matches", async () => {
     mockSelectLimit.mockResolvedValue([{ clerkSubscriptionItemId: "si_123" }]);
 
     await markSubscriptionItemInactive(buildItemPayload());
 
     expect(mockUpdate).toHaveBeenCalledTimes(1);
-    expect(mockUpdateSet).toHaveBeenCalledWith({ status: "canceled" });
+    expect(mockUpdateSet).toHaveBeenCalledWith({
+      status: "canceled",
+      clerkSubscriptionId: null,
+      clerkSubscriptionItemId: null,
+    });
   });
 
   it("marks the row canceled when there is no row yet", async () => {

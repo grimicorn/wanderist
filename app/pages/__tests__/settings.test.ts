@@ -301,6 +301,29 @@ describe("Settings page (/settings)", () => {
     const billingSection = wrapper.find("#billing");
     expect(billingSection.find(".plan-manage-btn").exists()).toBe(true);
     expect(billingSection.text()).toContain("Wanderer plan");
+    expect(billingSection.text()).toContain("Payment issue");
+    expect(billingSection.text()).not.toContain("Renews");
+  });
+
+  it("shows an access-ends message (not 'Renews') for a canceled subscription", async () => {
+    const { useBilling } = await import("~/composables/useBilling");
+    vi.mocked(useBilling).mockReturnValueOnce(
+      makeBillingMock({
+        subscription: {
+          plan: "nomad",
+          status: "canceled",
+          billingCycle: "yearly",
+          trialEndsAt: null,
+          currentPeriodEnd: "2026-07-20T00:00:00.000Z",
+        },
+      }),
+    );
+
+    const wrapper = mount(SettingsPage, globalConfig);
+    const billingText = wrapper.find("#billing").text();
+    expect(billingText).toContain("Access ends");
+    expect(billingText).not.toContain("Renews");
+    expect(billingText).not.toContain("Payment issue");
   });
 
   it("renders the 6 map style options", () => {

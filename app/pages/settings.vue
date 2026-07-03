@@ -318,16 +318,7 @@
             <div class="opt-row">
               <div class="lbl">
                 <b>{{ planDisplayName }} plan</b>
-                <p v-if="trialEndsAtLabel">
-                  Trial ends {{ trialEndsAtLabel }}.
-                </p>
-                <p v-else-if="renewalDateLabel">
-                  Renews {{ renewalDateLabel }} ({{ billingCycleLabel }}).
-                </p>
-                <p v-else>
-                  Free forever — upgrade for unlimited places, trips and photo
-                  storage.
-                </p>
+                <p>{{ billingStatusMessage }}</p>
               </div>
               <PlanManageButton
                 v-if="subscription.plan !== 'drifter'"
@@ -621,6 +612,26 @@ const trialEndsAtLabel = computed(() => {
 const renewalDateLabel = computed(() =>
   formatBillingDate(subscription.value.currentPeriodEnd),
 );
+
+// Single source of truth for the plan-status line so the wording always
+// matches the real subscription status — a canceled or past_due row must
+// never render as if it were still renewing (currentPeriodEnd on the row
+// isn't cleared just because status changed; see server/utils/subscriptions.ts).
+const billingStatusMessage = computed<string>(() => {
+  if (trialEndsAtLabel.value) {
+    return `Trial ends ${trialEndsAtLabel.value}.`;
+  }
+  if (!renewalDateLabel.value) {
+    return "Free forever — upgrade for unlimited places, trips and photo storage.";
+  }
+  if (subscription.value.status === "past_due") {
+    return `Payment issue — access ends ${renewalDateLabel.value} unless resolved.`;
+  }
+  if (subscription.value.status === "canceled") {
+    return `Access ends ${renewalDateLabel.value}.`;
+  }
+  return `Renews ${renewalDateLabel.value} (${billingCycleLabel.value}).`;
+});
 
 // Local editable copies — populated once preferences load.
 const profile = reactive({

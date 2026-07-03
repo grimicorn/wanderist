@@ -240,9 +240,20 @@ export async function markSubscriptionItemInactive(
     return;
   }
 
+  // Clear the recorded Clerk IDs along with the status. This app's B2C plans
+  // are single-item, so a canceled item means the whole subscription is done.
+  // Clearing the IDs (rather than leaving the old ones in place) means a
+  // future subscription.created for a genuinely new subscription — e.g. the
+  // user re-subscribes later — isn't rejected as a stale/out-of-order event by
+  // upsertSubscriptionFromEvent's isStaleEvent check, which treats a row with
+  // no recorded ID as never stale.
   await database
     .update(subscriptions)
-    .set({ status: SUBSCRIPTION_STATUS.CANCELED })
+    .set({
+      status: SUBSCRIPTION_STATUS.CANCELED,
+      clerkSubscriptionId: null,
+      clerkSubscriptionItemId: null,
+    })
     .where(eq(subscriptions.userId, userId));
 }
 
