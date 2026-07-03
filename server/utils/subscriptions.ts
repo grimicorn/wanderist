@@ -100,6 +100,17 @@ export function mapClerkPlanPeriod(
  * three-value enum. Only "active" is treated as a distinct entitled state
  * from "past_due"; every other terminal status collapses to "canceled" since
  * enforcement only needs to know whether the row is currently entitled.
+ *
+ * Product decision to verify against real Clerk behavior before launch: the
+ * `subscriptionItem.canceled` webhook event (handled by
+ * markSubscriptionItemInactive below) may mean "scheduled to cancel at period
+ * end" rather than "access revoked now" — Clerk's event names don't make this
+ * unambiguous from the SDK types alone. This app currently treats `.canceled`
+ * the same as `.ended`/`.abandoned` and revokes paid entitlements immediately,
+ * which is the safer default for a paywall but may cut off a user who paid
+ * through the end of their current period. If Clerk's actual semantics are
+ * cancel-at-period-end, change markSubscriptionItemInactive to keep `status:
+ * active` for `.canceled` until `.ended` fires or `currentPeriodEnd` passes.
  */
 export function mapClerkSubscriptionStatus(status: string): SubscriptionStatus {
   if (status === "active") {
@@ -225,6 +236,19 @@ export async function upsertSubscriptionFromEvent(
  * so an out-of-order "ended" event for a since-replaced item must not clobber
  * a newer, already-active subscription — the same risk already accepted for
  * user.updated in handleUserUpsert above.
+ *
+ * Known accepted risk: clearing the Clerk IDs on cancel (below) means a
+ * genuinely new subscription.created for a re-subscribing user is correctly
+ * accepted afterward, but it also means a *delayed* subscription.updated for
+ * the just-canceled subscription arriving after this event would no longer be
+ * recognized as stale and could briefly re-activate the row. Clerk's item-level
+ * webhook payloads carry no event timestamp to order against (verified against
+ * the @clerk/backend types), so a fully race-proof fix isn't achievable from
+ * this payload alone without either a Clerk-side event timestamp or a
+ * reconciliation pass against the Billing REST API. This app accepts that
+ * narrow, transient race in exchange for not permanently locking out
+ * legitimate re-subscriptions — the same class of tradeoff the codebase
+ * already accepts for out-of-order user.updated events.
  */
 export async function markSubscriptionItemInactive(
   payload: ClerkBillingSubscriptionItemPayload,
@@ -240,13 +264,24 @@ export async function markSubscriptionItemInactive(
     return;
   }
 
+  if (!existing) {
+    // The cancellation arrived before subscription.created ever created a
+    // row (Svix delivery order isn't guaranteed). There's nothing to mark
+    // canceled yet; log so this isn't silently swallowed if a subsequent
+    // subscription.created then incorrectly leaves the user "active".
+    console.warn(
+      `markSubscriptionItemInactive: no subscriptions row yet for user ${userId}; cancellation for item ${payload.id} may have arrived before subscription.created`,
+    );
+    return;
+  }
+
   // Clear the recorded Clerk IDs along with the status. This app's B2C plans
   // are single-item, so a canceled item means the whole subscription is done.
   // Clearing the IDs (rather than leaving the old ones in place) means a
   // future subscription.created for a genuinely new subscription — e.g. the
   // user re-subscribes later — isn't rejected as a stale/out-of-order event by
   // upsertSubscriptionFromEvent's isStaleEvent check, which treats a row with
-  // no recorded ID as never stale.
+  // no recorded ID as never stale. See the accepted-risk note above.
   await database
     .update(subscriptions)
     .set({
@@ -277,6 +312,13 @@ export async function recordTrialEndingSoon(
   const database = getDb();
   const existing = await getSubscriptionRow(database, userId);
   if (isStaleEvent(existing?.clerkSubscriptionItemId, payload.id)) {
+    return;
+  }
+
+  if (!existing) {
+    console.warn(
+      `recordTrialEndingSoon: no subscriptions row yet for user ${userId}; freeTrialEnding for item ${payload.id} may have arrived before subscription.created`,
+    );
     return;
   }
 

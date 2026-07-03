@@ -422,12 +422,15 @@ describe("markSubscriptionItemInactive", () => {
     });
   });
 
-  it("marks the row canceled when there is no row yet", async () => {
+  it("no-ops (and warns) when the cancellation arrives before any row exists", async () => {
     mockSelectLimit.mockResolvedValue([]);
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     await markSubscriptionItemInactive(buildItemPayload());
 
-    expect(mockUpdate).toHaveBeenCalledTimes(1);
+    expect(mockUpdate).not.toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    warnSpy.mockRestore();
   });
 
   it("marks the row canceled when the existing row has no item id recorded", async () => {
@@ -489,6 +492,17 @@ describe("recordTrialEndingSoon", () => {
   it("no-ops when payer.user_id is missing", async () => {
     await recordTrialEndingSoon(buildItemPayload({ payer: {} }));
     expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  it("no-ops (and warns) when the event arrives before any row exists", async () => {
+    mockSelectLimit.mockResolvedValue([]);
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    await recordTrialEndingSoon(buildItemPayload());
+
+    expect(mockUpdate).not.toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    warnSpy.mockRestore();
   });
 
   it("skips a stale event for an item that's since been replaced", async () => {
