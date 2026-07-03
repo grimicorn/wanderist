@@ -15,6 +15,11 @@ vi.mock("../../../server/db/index", () => ({
   getDb: vi.fn(),
 }));
 
+const mockAssertPlaceLimit = vi.fn().mockResolvedValue(undefined);
+vi.mock("../../../server/utils/planLimits", () => ({
+  assertPlaceLimit: mockAssertPlaceLimit,
+}));
+
 import { ensureUser } from "../../../server/utils/auth";
 import { getDb } from "../../../server/db/index";
 
@@ -33,6 +38,19 @@ const handler = await import("../../../server/api/places/index.post");
 describe("POST /api/places", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockAssertPlaceLimit.mockResolvedValue(undefined);
+  });
+
+  it("propagates a 402 when the plan's place limit has been reached", async () => {
+    mockEnsureUser.mockResolvedValue("user-1");
+    mockAssertPlaceLimit.mockRejectedValue(
+      Object.assign(new Error("Plan limit reached"), { statusCode: 402 }),
+    );
+
+    await expect(
+      (handler.default as (event: unknown) => unknown)({}),
+    ).rejects.toMatchObject({ statusCode: 402 });
+    expect(mockAssertPlaceLimit).toHaveBeenCalledWith("user-1");
   });
 
   it("creates a place and returns it", async () => {

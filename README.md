@@ -106,6 +106,32 @@ To configure the webhook in the Clerk Dashboard:
 3. Subscribe to the `user.created`, `user.updated`, and `user.deleted` events.
 4. Copy the **Signing Secret** (starts with `whsec_`) and set it as `NUXT_CLERK_WEBHOOK_SECRET` in your environment.
 
+## Billing
+
+Wanderist uses **[Clerk Billing](https://clerk.com/docs/billing/b2c-saas)** to sell the Wanderer and Nomad plans advertised on `/pricing` and the `/` pricing teaser. Clerk Billing was chosen over a direct Stripe integration because the app already depends on `@clerk/nuxt` for auth (see "Authentication" above) — Clerk Billing reuses that same webhook endpoint and signing secret, and needs no separate Stripe account for development (Clerk provides a shared test payment gateway). Clerk uses Stripe as its payment processor under the hood, but this app never talks to Stripe directly. No concrete blocker pushed this toward a custom Stripe integration instead.
+
+### Dashboard setup (required before checkout works)
+
+1. Go to **Clerk Dashboard → Billing Settings** and enable Billing (the shared development gateway is fine for local/staging; switch to your own Stripe account for production).
+2. Go to **Billing → Plans for Users** and create two plans:
+   - **Wanderer** — slug must be exactly `wanderer` (the webhook handler matches on this slug; see `server/utils/subscriptions.ts`). Set the monthly/annual price to match the `/pricing` page ($8/mo, $6/mo billed yearly).
+   - **Nomad** — slug must be exactly `nomad`. Price to match `/pricing` ($16/mo, $12/mo billed yearly).
+   - Mark both **Publicly available**.
+3. Copy each plan's **Plan ID** (not the slug) from the dashboard and set them as `NUXT_PUBLIC_CLERK_PLAN_ID_WANDERER` / `NUXT_PUBLIC_CLERK_PLAN_ID_NOMAD`. These IDs are dashboard-generated and cannot be guessed or hardcoded — until they're set, the checkout buttons on `/pricing` and `/` render disabled instead of opening a broken checkout.
+4. On the same webhook endpoint configured above (`https://<your-domain>/api/webhooks/clerk`), also subscribe to the billing event types: `subscription.created`, `subscription.updated`, `subscription.active`, `subscription.pastDue`, `subscriptionItem.canceled`, `subscriptionItem.ended`, `subscriptionItem.abandoned`, `subscriptionItem.freeTrialEnding`. No new secret is needed — the existing `NUXT_CLERK_WEBHOOK_SECRET` covers these events too.
+
+### How it works
+
+- The `subscriptions` table (`server/db/schema.ts`) holds the current plan, status, billing cycle, and trial/renewal dates for each user. A user with no row is on the free Drifter plan by definition — Clerk never sends a subscription webhook for the implicit free tier.
+- `server/api/webhooks/clerk.post.ts` extends the existing Svix-verified handler to upsert that row from `subscription.*` events and mark it canceled from `subscriptionItem.canceled` / `.ended` / `.abandoned`. `subscriptionItem.freeTrialEnding` records the trial end date — see the code comment in `server/utils/subscriptions.ts` for why that's the only reliable trial signal in Clerk's webhook payload (its JSON has no explicit "is trialing" flag at the time of writing).
+- `server/utils/planLimits.ts` centralizes the advertised `/pricing` limits (places, active trips, photo storage, map styles, Instagram sync, public traveler profile) and is wired into the relevant API routes (`POST /api/places`, `POST /api/trips`, `POST /api/media`, the Instagram connection routes, and `PATCH /api/preferences`). A request that would exceed the current plan's limit gets a `402 Payment Required` with a message naming the limit and plan.
+- `<PlanCheckoutButton>` (`app/components/PlanCheckoutButton.vue`) wraps Clerk's experimental `<CheckoutButton>` and is used on `/pricing` and `/` for signed-in visitors; signed-out visitors still see a plain `/login` link. `<PlanManageButton>` wraps Clerk's `<SubscriptionDetailsButton>` for viewing/canceling an existing subscription, shown in **Settings → Plan & billing**.
+- `GET /api/billing/subscription` (used by `app/composables/useBilling.ts`) returns the current user's plan/status/trial/renewal info for the Settings page.
+
+### Known limitation
+
+Clerk's Billing webhook JSON (verified against the `@clerk/backend` SDK types) does not expose a first-class "currently trialing" flag — only the one-time `subscriptionItem.freeTrialEnding` event (fired 3 days before a trial ends) reliably indicates a trial is active. `trialEndsAt` is therefore populated from that event only, not from day one of a trial. This doesn't affect plan-limit enforcement (a trialing subscription's `status` is `active`, so it's already treated as fully entitled) — it only means the "trial ends" messaging in Settings won't appear until 3 days before the trial ends.
+
 ## Connected accounts
 
 ### Instagram (photo import)

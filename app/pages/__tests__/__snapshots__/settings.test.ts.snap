@@ -7,7 +7,7 @@ exports[`Settings page (/settings) > renders without crashing and matches snapsh
     <!--v-if-->
     <div data-v-a376170b="" class="set-layout">
       <!-- Side nav -->
-      <nav data-v-a376170b="" class="set-nav"><a data-v-a376170b="" href="#profile" class="is-active">Profile</a><a data-v-a376170b="" href="#account" class="">Email &amp; password</a><a data-v-a376170b="" href="#connections" class="">Connections</a><a data-v-a376170b="" href="#prefs" class="">Units &amp; map</a><a data-v-a376170b="" href="#privacy" class="">Privacy</a><a data-v-a376170b="" href="#danger" class="">Danger zone</a></nav>
+      <nav data-v-a376170b="" class="set-nav"><a data-v-a376170b="" href="#profile" class="is-active">Profile</a><a data-v-a376170b="" href="#account" class="">Email &amp; password</a><a data-v-a376170b="" href="#connections" class="">Connections</a><a data-v-a376170b="" href="#billing" class="">Plan &amp; billing</a><a data-v-a376170b="" href="#prefs" class="">Units &amp; map</a><a data-v-a376170b="" href="#privacy" class="">Privacy</a><a data-v-a376170b="" href="#danger" class="">Danger zone</a></nav>
       <div data-v-a376170b="" class="set-sections">
         <!-- Profile -->
         <section data-v-a376170b="" id="profile" class="sect">
@@ -69,10 +69,23 @@ exports[`Settings page (/settings) > renders without crashing and matches snapsh
             </div>
             <div data-v-a376170b="" class="right"><span data-v-a376170b="" class="muted" style="font-size: 12px;">not connected</span></div>
           </div>
+        </section><!-- Plan & billing -->
+        <section data-v-a376170b="" id="billing" class="sect">
+          <div data-v-a376170b="" class="sect__head">
+            <div data-v-a376170b="" class="label">// 04 — plan &amp; billing</div>
+            <h3 data-v-a376170b="" class="display" style="margin-top: 8px;"> Plan &amp; billing </h3>
+            <p data-v-a376170b="">Your current tier, renewal date, and trial status.</p>
+          </div>
+          <!--v-if-->
+          <div data-v-a376170b="" class="opt-row">
+            <div data-v-a376170b="" class="lbl"><b data-v-a376170b="">Drifter plan</b>
+              <p data-v-a376170b=""> Free forever — upgrade for unlimited places, trips and photo storage. </p>
+            </div><a data-v-a376170b="" class="btn btn--primary btn--sm">view plans</a>
+          </div>
         </section><!-- Prefs -->
         <section data-v-a376170b="" id="prefs" class="sect">
           <div data-v-a376170b="" class="sect__head">
-            <div data-v-a376170b="" class="label">// 04 — preferences</div>
+            <div data-v-a376170b="" class="label">// 05 — preferences</div>
             <h3 data-v-a376170b="" class="display" style="margin-top: 8px;">Units &amp; map</h3>
             <p data-v-a376170b="">How distances and your map look across the app.</p>
           </div>
@@ -119,7 +132,7 @@ exports[`Settings page (/settings) > renders without crashing and matches snapsh
         </section><!-- Privacy -->
         <section data-v-a376170b="" id="privacy" class="sect">
           <div data-v-a376170b="" class="sect__head">
-            <div data-v-a376170b="" class="label">// 05 — privacy</div>
+            <div data-v-a376170b="" class="label">// 06 — privacy</div>
             <h3 data-v-a376170b="" class="display" style="margin-top: 8px;">Privacy</h3>
             <p data-v-a376170b="">Decide what's public and how precise your locations are.</p>
           </div>

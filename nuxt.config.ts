@@ -25,6 +25,12 @@ export default defineNuxtConfig({
       sentryDsn: "",
       siteOrigin: "",
       mapboxToken: "",
+      // Clerk Billing Plan IDs (dashboard-generated, e.g. "cplan_..."). Set by a
+      // human after creating the corresponding Plan in the Clerk Dashboard — see
+      // README "Billing" section. Left blank, the matching checkout CTA disables
+      // itself instead of opening a broken checkout.
+      clerkPlanIdWanderer: process.env.NUXT_PUBLIC_CLERK_PLAN_ID_WANDERER || "",
+      clerkPlanIdNomad: process.env.NUXT_PUBLIC_CLERK_PLAN_ID_NOMAD || "",
     },
   },
   css: ["~/assets/css/main.css", "mapbox-gl/dist/mapbox-gl.css"],

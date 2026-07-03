@@ -10,11 +10,32 @@ import {
   SVIX_SIGNATURE_HEADER,
   type SvixHeaders,
 } from "../../utils/svix";
+import {
+  upsertSubscriptionFromEvent,
+  markSubscriptionItemInactive,
+  recordTrialEndingSoon,
+  type ClerkBillingSubscriptionPayload,
+  type ClerkBillingSubscriptionItemPayload,
+} from "../../utils/subscriptions";
 
 // Clerk webhook event type strings.
 const EVENT_USER_CREATED = "user.created";
 const EVENT_USER_UPDATED = "user.updated";
 const EVENT_USER_DELETED = "user.deleted";
+
+// Clerk Billing webhook event type strings. Subscription-level events carry
+// the full item list and are used to upsert the current plan/status/cycle.
+// Item-level events are used for the two things that don't reliably show up
+// at the subscription level: cancellation and trial-ending notice.
+const EVENT_SUBSCRIPTION_CREATED = "subscription.created";
+const EVENT_SUBSCRIPTION_UPDATED = "subscription.updated";
+const EVENT_SUBSCRIPTION_ACTIVE = "subscription.active";
+const EVENT_SUBSCRIPTION_PAST_DUE = "subscription.pastDue";
+const EVENT_SUBSCRIPTION_ITEM_CANCELED = "subscriptionItem.canceled";
+const EVENT_SUBSCRIPTION_ITEM_ENDED = "subscriptionItem.ended";
+const EVENT_SUBSCRIPTION_ITEM_ABANDONED = "subscriptionItem.abandoned";
+const EVENT_SUBSCRIPTION_ITEM_FREE_TRIAL_ENDING =
+  "subscriptionItem.freeTrialEnding";
 
 interface ClerkEmailAddress {
   id: string;
@@ -35,7 +56,11 @@ interface ClerkUserDeletedPayload {
 
 interface ClerkWebhookEvent {
   type: string;
-  data: ClerkUserUpsertPayload | ClerkUserDeletedPayload;
+  data:
+    | ClerkUserUpsertPayload
+    | ClerkUserDeletedPayload
+    | ClerkBillingSubscriptionPayload
+    | ClerkBillingSubscriptionItemPayload;
 }
 
 function getWebhookSecret(): string {
@@ -157,6 +182,36 @@ export default defineEventHandler(async (event) => {
 
   if (webhookEvent.type === EVENT_USER_DELETED) {
     await handleUserDelete(webhookEvent.data as ClerkUserDeletedPayload);
+    return { ok: true };
+  }
+
+  if (
+    webhookEvent.type === EVENT_SUBSCRIPTION_CREATED ||
+    webhookEvent.type === EVENT_SUBSCRIPTION_UPDATED ||
+    webhookEvent.type === EVENT_SUBSCRIPTION_ACTIVE ||
+    webhookEvent.type === EVENT_SUBSCRIPTION_PAST_DUE
+  ) {
+    await upsertSubscriptionFromEvent(
+      webhookEvent.data as ClerkBillingSubscriptionPayload,
+    );
+    return { ok: true };
+  }
+
+  if (
+    webhookEvent.type === EVENT_SUBSCRIPTION_ITEM_CANCELED ||
+    webhookEvent.type === EVENT_SUBSCRIPTION_ITEM_ENDED ||
+    webhookEvent.type === EVENT_SUBSCRIPTION_ITEM_ABANDONED
+  ) {
+    await markSubscriptionItemInactive(
+      webhookEvent.data as ClerkBillingSubscriptionItemPayload,
+    );
+    return { ok: true };
+  }
+
+  if (webhookEvent.type === EVENT_SUBSCRIPTION_ITEM_FREE_TRIAL_ENDING) {
+    await recordTrialEndingSoon(
+      webhookEvent.data as ClerkBillingSubscriptionItemPayload,
+    );
     return { ok: true };
   }
 

@@ -3,15 +3,13 @@ import { ensureUser } from "../utils/auth";
 import { getDb } from "../db/index";
 import { userPreferences, DISTANCE_UNIT } from "../db/schema";
 import { optionalString } from "../utils/db-helpers";
+import {
+  MAP_STYLES,
+  assertMapStyleAllowed,
+  assertPublicProfileAllowed,
+} from "../utils/planLimits";
 
-const VALID_MAP_STYLES = [
-  "outdoors",
-  "streets",
-  "satellite",
-  "light",
-  "dark",
-  "custom",
-] as const;
+const VALID_MAP_STYLES = MAP_STYLES;
 
 type ValidMapStyle = (typeof VALID_MAP_STYLES)[number];
 
@@ -200,6 +198,13 @@ export default defineEventHandler(async (event) => {
       statusCode: 400,
       statusMessage: "No valid fields to update",
     });
+  }
+
+  if (patch.defaultMapStyle !== undefined) {
+    await assertMapStyleAllowed(userId, patch.defaultMapStyle);
+  }
+  if (patch.publicProfile !== undefined) {
+    await assertPublicProfileAllowed(userId, patch.publicProfile);
   }
 
   const database = getDb();

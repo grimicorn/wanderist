@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ref, readonly } from "vue";
 import { mount } from "@vue/test-utils";
 import SettingsPage from "../settings.vue";
+import type { UserSubscriptionDto } from "~/composables/useBilling";
 
 const mockChangePassword = vi.fn().mockResolvedValue(true);
 const mockUploadAvatar = vi.fn().mockResolvedValue(null);
@@ -100,6 +101,29 @@ vi.mock("~/composables/useApiClient", () => ({
   })),
 }));
 
+const defaultSubscriptionData: UserSubscriptionDto = {
+  plan: "drifter",
+  status: "active",
+  billingCycle: null,
+  trialEndsAt: null,
+  currentPeriodEnd: null,
+};
+
+function makeBillingMock(
+  overrides: { subscription?: UserSubscriptionDto } = {},
+) {
+  return {
+    subscription: ref(overrides.subscription ?? defaultSubscriptionData),
+    isLoading: readonly(ref(false)),
+    loadError: readonly(ref(null)),
+    fetchSubscription: vi.fn().mockResolvedValue(undefined),
+  };
+}
+
+vi.mock("~/composables/useBilling", () => ({
+  useBilling: vi.fn(() => makeBillingMock()),
+}));
+
 vi.mock("~/composables/useConnections", () => {
   const { ref: vueRef, readonly: vueReadonly } = require("vue");
 
@@ -150,6 +174,9 @@ const topbarStub = {
   template: '<header class="topbar"><slot /></header>',
   props: ["title", "crumb"],
 };
+const planManageButtonStub = {
+  template: '<button class="plan-manage-btn"><slot /></button>',
+};
 
 const globalConfig = {
   global: {
@@ -159,6 +186,8 @@ const globalConfig = {
       InputText: inputStub,
       InputTextarea: textareaStub,
       AppAlert: alertStub,
+      PlanManageButton: planManageButtonStub,
+      NuxtLink: { template: "<a><slot /></a>", props: ["to"] },
     },
   },
 };
@@ -174,14 +203,61 @@ describe("Settings page (/settings)", () => {
     expect(wrapper.html()).toMatchSnapshot();
   });
 
-  it("renders the side navigation with all 6 sections", () => {
+  it("renders the side navigation with all 7 sections", () => {
     const wrapper = mount(SettingsPage, globalConfig);
-    expect(wrapper.findAll(".set-nav a")).toHaveLength(6);
+    expect(wrapper.findAll(".set-nav a")).toHaveLength(7);
   });
 
-  it("renders all 6 settings sections", () => {
+  it("renders all 7 settings sections", () => {
     const wrapper = mount(SettingsPage, globalConfig);
-    expect(wrapper.findAll(".sect")).toHaveLength(6);
+    expect(wrapper.findAll(".sect")).toHaveLength(7);
+  });
+
+  it("shows an upgrade CTA on the free Drifter plan", () => {
+    const wrapper = mount(SettingsPage, globalConfig);
+    const billingSection = wrapper.find("#billing");
+    expect(billingSection.text()).toContain("Drifter plan");
+    expect(billingSection.find(".plan-manage-btn").exists()).toBe(false);
+    expect(billingSection.text()).toContain("view plans");
+  });
+
+  it("shows a manage-subscription button on a paid plan", async () => {
+    const { useBilling } = await import("~/composables/useBilling");
+    vi.mocked(useBilling).mockReturnValueOnce(
+      makeBillingMock({
+        subscription: {
+          plan: "wanderer",
+          status: "active",
+          billingCycle: "monthly",
+          trialEndsAt: null,
+          currentPeriodEnd: "2026-08-01T00:00:00.000Z",
+        },
+      }),
+    );
+
+    const wrapper = mount(SettingsPage, globalConfig);
+    const billingSection = wrapper.find("#billing");
+    expect(billingSection.text()).toContain("Wanderer plan");
+    expect(billingSection.find(".plan-manage-btn").exists()).toBe(true);
+    expect(billingSection.text()).toContain("Renews");
+  });
+
+  it("shows the trial-ends message when a trial is active", async () => {
+    const { useBilling } = await import("~/composables/useBilling");
+    vi.mocked(useBilling).mockReturnValueOnce(
+      makeBillingMock({
+        subscription: {
+          plan: "nomad",
+          status: "active",
+          billingCycle: "yearly",
+          trialEndsAt: "2026-07-10T00:00:00.000Z",
+          currentPeriodEnd: "2026-07-10T00:00:00.000Z",
+        },
+      }),
+    );
+
+    const wrapper = mount(SettingsPage, globalConfig);
+    expect(wrapper.find("#billing").text()).toContain("Trial ends");
   });
 
   it("renders the 6 map style options", () => {

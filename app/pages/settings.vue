@@ -301,10 +301,50 @@
             </div>
           </section>
 
+          <!-- Plan & billing -->
+          <section id="billing" class="sect">
+            <div class="sect__head">
+              <div class="label">// 04 — plan &amp; billing</div>
+              <h3 class="display" style="margin-top: 8px">
+                Plan &amp; billing
+              </h3>
+              <p>Your current tier, renewal date, and trial status.</p>
+            </div>
+
+            <div v-if="billingLoadError" style="margin-bottom: 12px">
+              <AppAlert intent="error" :title="billingLoadError" />
+            </div>
+
+            <div class="opt-row">
+              <div class="lbl">
+                <b>{{ planDisplayName }} plan</b>
+                <p v-if="trialEndsAtLabel">
+                  Trial ends {{ trialEndsAtLabel }}.
+                </p>
+                <p v-else-if="renewalDateLabel">
+                  Renews {{ renewalDateLabel }} ({{ billingCycleLabel }}).
+                </p>
+                <p v-else>
+                  Free forever — upgrade for unlimited places, trips and photo
+                  storage.
+                </p>
+              </div>
+              <PlanManageButton
+                v-if="subscription.plan !== 'drifter'"
+                class="btn btn--outline btn--sm"
+              >
+                manage subscription
+              </PlanManageButton>
+              <NuxtLink v-else class="btn btn--primary btn--sm" to="/pricing"
+                >view plans</NuxtLink
+              >
+            </div>
+          </section>
+
           <!-- Prefs -->
           <section id="prefs" class="sect">
             <div class="sect__head">
-              <div class="label">// 04 — preferences</div>
+              <div class="label">// 05 — preferences</div>
               <h3 class="display" style="margin-top: 8px">Units &amp; map</h3>
               <p>How distances and your map look across the app.</p>
             </div>
@@ -364,7 +404,7 @@
           <!-- Privacy -->
           <section id="privacy" class="sect">
             <div class="sect__head">
-              <div class="label">// 05 — privacy</div>
+              <div class="label">// 06 — privacy</div>
               <h3 class="display" style="margin-top: 8px">Privacy</h3>
               <p>Decide what's public and how precise your locations are.</p>
             </div>
@@ -497,6 +537,7 @@ import type { Ref } from "vue";
 import { usePreferences } from "~/composables/usePreferences";
 import { useConnections } from "~/composables/useConnections";
 import { useAccountActions } from "~/composables/useAccountActions";
+import { useBilling } from "~/composables/useBilling";
 
 definePageMeta({ layout: "app", middleware: "auth" });
 useHead({ title: "Wanderist — Settings" });
@@ -505,6 +546,7 @@ const sections = [
   { id: "profile", label: "Profile" },
   { id: "account", label: "Email & password" },
   { id: "connections", label: "Connections" },
+  { id: "billing", label: "Plan & billing" },
   { id: "prefs", label: "Units & map" },
   { id: "privacy", label: "Privacy" },
   { id: "danger", label: "Danger zone" },
@@ -526,6 +568,50 @@ const {
   disconnectGoogle,
   importInstagramPhotos,
 } = useConnections();
+
+const {
+  subscription,
+  loadError: billingLoadError,
+  fetchSubscription,
+} = useBilling();
+
+const PLAN_DISPLAY_NAMES: Record<string, string> = {
+  drifter: "Drifter",
+  wanderer: "Wanderer",
+  nomad: "Nomad",
+};
+
+const BILLING_CYCLE_LABELS: Record<string, string> = {
+  monthly: "monthly",
+  yearly: "yearly",
+};
+
+const planDisplayName = computed(
+  () => PLAN_DISPLAY_NAMES[subscription.value.plan] ?? subscription.value.plan,
+);
+
+const billingCycleLabel = computed(
+  () => BILLING_CYCLE_LABELS[subscription.value.billingCycle ?? ""] ?? "",
+);
+
+function formatBillingDate(isoDate: string | null): string | null {
+  if (!isoDate) {
+    return null;
+  }
+  return new Date(isoDate).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+const trialEndsAtLabel = computed(() =>
+  formatBillingDate(subscription.value.trialEndsAt),
+);
+
+const renewalDateLabel = computed(() =>
+  formatBillingDate(subscription.value.currentPeriodEnd),
+);
 
 // Local editable copies — populated once preferences load.
 const profile = reactive({
@@ -618,6 +704,7 @@ onMounted(async () => {
   hasPopulatedFromServer.value = true;
 
   await fetchConnections();
+  await fetchSubscription();
 });
 
 function handleConnectInstagram(): void {

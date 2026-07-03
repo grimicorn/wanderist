@@ -7,6 +7,7 @@ import {
   optionalLatitude,
   optionalLongitude,
 } from "../../utils/db-helpers";
+import { assertPlaceLimit } from "../../utils/planLimits";
 
 function generateId(): string {
   return crypto.randomUUID();
@@ -14,6 +15,8 @@ function generateId(): string {
 
 export default defineEventHandler(async (event) => {
   const userId = await ensureUser(event);
+  await assertPlaceLimit(userId);
+
   const database = getDb();
   const body = await readBody(event);
 

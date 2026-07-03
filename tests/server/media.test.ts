@@ -92,6 +92,11 @@ vi.mock("../../server/db/index", () => ({
   getDb: mockGetDb,
 }));
 
+const mockAssertPhotoLimit = vi.fn().mockResolvedValue(undefined);
+vi.mock("../../server/utils/planLimits", () => ({
+  assertPhotoLimit: mockAssertPhotoLimit,
+}));
+
 // Stub Nitro/h3 auto-imports
 Object.assign(globalThis, {
   defineEventHandler: (handler: (event: object) => unknown) => handler,
@@ -165,6 +170,19 @@ describe("POST /api/media", () => {
     const sampleBuffer = Buffer.from("fake-image-data");
     mockReadRawBody.mockResolvedValue(sampleBuffer);
     resetDbMocks();
+    mockAssertPhotoLimit.mockResolvedValue(undefined);
+  });
+
+  it("propagates a 402 when the plan's photo-storage limit has been reached", async () => {
+    mockAssertPhotoLimit.mockRejectedValue(
+      Object.assign(new Error("Plan limit reached"), { statusCode: 402 }),
+    );
+
+    await expect(callHandler(postHandler, buildEvent())).rejects.toMatchObject({
+      statusCode: 402,
+    });
+    expect(mockAssertPhotoLimit).toHaveBeenCalledWith("user-1");
+    expect(mockPutMediaBlob).not.toHaveBeenCalled();
   });
 
   it("returns 201 with id and url on success", async () => {

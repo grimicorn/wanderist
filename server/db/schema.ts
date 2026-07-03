@@ -46,6 +46,31 @@ export const DISTANCE_UNIT = {
   KM: "km",
 } as const;
 
+// Billing plan tiers — mirrors the three tiers advertised on /pricing.
+// DRIFTER is the free tier and never has a row in `subscriptions`; a missing
+// row IS the free tier (see server/utils/subscriptions.ts).
+export const PLAN = {
+  DRIFTER: "drifter",
+  WANDERER: "wanderer",
+  NOMAD: "nomad",
+} as const;
+
+// Collapsed subscription-state vocabulary. Clerk Billing's own status enum is
+// wider ('active' | 'past_due' | 'canceled' | 'ended' | 'abandoned' |
+// 'incomplete'), but plan-limit enforcement only needs to know whether a row
+// is currently entitled to its plan — every non-active/past_due terminal
+// status collapses to CANCELED. See server/utils/subscriptions.ts.
+export const SUBSCRIPTION_STATUS = {
+  ACTIVE: "active",
+  PAST_DUE: "past_due",
+  CANCELED: "canceled",
+} as const;
+
+export const BILLING_CYCLE = {
+  MONTHLY: "monthly",
+  YEARLY: "yearly",
+} as const;
+
 // Referential actions for foreign keys — named so call sites and tests share
 // one source of truth instead of repeating the raw Postgres action strings.
 export const ON_DELETE = {
@@ -78,6 +103,23 @@ export const connectedAccountProviderEnum = pgEnum(
 export const distanceUnitEnum = pgEnum("distance_unit", [
   DISTANCE_UNIT.MI,
   DISTANCE_UNIT.KM,
+]);
+
+export const planEnum = pgEnum("plan", [
+  PLAN.DRIFTER,
+  PLAN.WANDERER,
+  PLAN.NOMAD,
+]);
+
+export const subscriptionStatusEnum = pgEnum("subscription_status", [
+  SUBSCRIPTION_STATUS.ACTIVE,
+  SUBSCRIPTION_STATUS.PAST_DUE,
+  SUBSCRIPTION_STATUS.CANCELED,
+]);
+
+export const billingCycleEnum = pgEnum("billing_cycle", [
+  BILLING_CYCLE.MONTHLY,
+  BILLING_CYCLE.YEARLY,
 ]);
 
 // ---------------------------------------------------------------------------
@@ -435,4 +477,38 @@ export const userPreferences = pgTable("user_preferences", {
   handle: text("handle").unique(),
   homeBase: text("home_base"),
   bio: text("bio"),
+});
+
+// ---------------------------------------------------------------------------
+// subscriptions — 1:1 with users, userId is PK.
+// Synced from Clerk Billing webhook events (see server/api/webhooks/clerk.post.ts
+// and server/utils/subscriptions.ts). A user with no row here is on the free
+// Drifter plan; there is deliberately no row-per-free-user since Clerk never
+// fires a subscription webhook for the default free tier.
+// ---------------------------------------------------------------------------
+
+export const subscriptions = pgTable("subscriptions", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: ON_DELETE.CASCADE }),
+  plan: planEnum("plan").notNull().default(PLAN.DRIFTER),
+  status: subscriptionStatusEnum("status")
+    .notNull()
+    .default(SUBSCRIPTION_STATUS.ACTIVE),
+  billingCycle: billingCycleEnum("billing_cycle"),
+  // Populated via the subscriptionItem.freeTrialEnding webhook event, the one
+  // Clerk Billing event that unambiguously indicates an active trial window
+  // (see server/utils/subscriptions.ts for why other events can't be used for
+  // trial detection).
+  trialEndsAt: timestamp("trial_ends_at"),
+  currentPeriodEnd: timestamp("current_period_end"),
+  // Clerk-side identifiers, kept so later webhook events for the same
+  // subscription/item can be correlated and out-of-order events detected.
+  clerkSubscriptionId: text("clerk_subscription_id").unique(),
+  clerkSubscriptionItemId: text("clerk_subscription_item_id"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at")
+    .defaultNow()
+    .notNull()
+    .$onUpdate(() => new Date()),
 });

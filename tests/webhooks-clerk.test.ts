@@ -26,6 +26,9 @@ const {
   mockGetHeader,
   mockGetUser,
   mockUseRuntimeConfig,
+  mockUpsertSubscriptionFromEvent,
+  mockMarkSubscriptionItemInactive,
+  mockRecordTrialEndingSoon,
 } = vi.hoisted(() => {
   const mockOnConflictDoUpdate = vi.fn().mockResolvedValue(undefined);
   const mockValues = vi.fn(() => ({
@@ -58,6 +61,9 @@ const {
     mockGetHeader: vi.fn(),
     mockGetUser,
     mockUseRuntimeConfig: vi.fn(() => ({ disableSignups: "" })),
+    mockUpsertSubscriptionFromEvent: vi.fn().mockResolvedValue(undefined),
+    mockMarkSubscriptionItemInactive: vi.fn().mockResolvedValue(undefined),
+    mockRecordTrialEndingSoon: vi.fn().mockResolvedValue(undefined),
   };
 });
 
@@ -80,6 +86,15 @@ vi.mock("../server/db/index", () => ({
 // auth.ts and middleware both import getClerkClient from the shared clerk util.
 vi.mock("../server/utils/clerk", () => ({
   getClerkClient: () => ({ users: { getUser: mockGetUser } }),
+}));
+
+// The billing-event mapping/upsert logic itself is covered in depth by
+// tests/server/subscriptions-util.test.ts; here we only need to verify the
+// webhook handler dispatches each event type to the right function.
+vi.mock("../server/utils/subscriptions", () => ({
+  upsertSubscriptionFromEvent: mockUpsertSubscriptionFromEvent,
+  markSubscriptionItemInactive: mockMarkSubscriptionItemInactive,
+  recordTrialEndingSoon: mockRecordTrialEndingSoon,
 }));
 
 // ---------------------------------------------------------------------------
@@ -458,5 +473,103 @@ describe("ensureUser", () => {
 
     expect(result).toBe("user_existing");
     expect(mockInsert).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Clerk Billing webhook event dispatch
+// ---------------------------------------------------------------------------
+
+describe("clerk webhook handler — billing events", () => {
+  const SUBSCRIPTION_PAYLOAD = {
+    id: "sub_123",
+    status: "active",
+    payer: { user_id: "user_abc123" },
+    items: [
+      {
+        id: "si_123",
+        status: "active",
+        plan_period: "month",
+        period_end: 1785000000000,
+        plan: { slug: "wanderer", period: "month" },
+      },
+    ],
+  };
+
+  const SUBSCRIPTION_ITEM_PAYLOAD = {
+    id: "si_123",
+    status: "canceled",
+    plan_period: "month",
+    period_end: null,
+    payer: { user_id: "user_abc123" },
+  };
+
+  beforeEach(() => {
+    mockVerifySvixSignature.mockReset();
+    vi.clearAllMocks();
+    process.env.NUXT_CLERK_WEBHOOK_SECRET = TEST_SECRET;
+    mockReadRawBody.mockResolvedValue(JSON.stringify(SUBSCRIPTION_PAYLOAD));
+    mockGetHeader.mockReturnValue("test-value");
+  });
+
+  it.each([
+    "subscription.created",
+    "subscription.updated",
+    "subscription.active",
+    "subscription.pastDue",
+  ])("dispatches %s to upsertSubscriptionFromEvent", async (eventType) => {
+    mockVerifySvixSignature.mockReturnValue({
+      type: eventType,
+      data: SUBSCRIPTION_PAYLOAD,
+    });
+
+    const result = await (
+      clerkWebhookHandler as (event: object) => Promise<unknown>
+    )(buildMockEvent());
+
+    expect(mockUpsertSubscriptionFromEvent).toHaveBeenCalledWith(
+      SUBSCRIPTION_PAYLOAD,
+    );
+    expect(mockMarkSubscriptionItemInactive).not.toHaveBeenCalled();
+    expect(mockRecordTrialEndingSoon).not.toHaveBeenCalled();
+    expect(result).toEqual({ ok: true });
+  });
+
+  it.each([
+    "subscriptionItem.canceled",
+    "subscriptionItem.ended",
+    "subscriptionItem.abandoned",
+  ])("dispatches %s to markSubscriptionItemInactive", async (eventType) => {
+    mockVerifySvixSignature.mockReturnValue({
+      type: eventType,
+      data: SUBSCRIPTION_ITEM_PAYLOAD,
+    });
+
+    const result = await (
+      clerkWebhookHandler as (event: object) => Promise<unknown>
+    )(buildMockEvent());
+
+    expect(mockMarkSubscriptionItemInactive).toHaveBeenCalledWith(
+      SUBSCRIPTION_ITEM_PAYLOAD,
+    );
+    expect(mockUpsertSubscriptionFromEvent).not.toHaveBeenCalled();
+    expect(result).toEqual({ ok: true });
+  });
+
+  it("dispatches subscriptionItem.freeTrialEnding to recordTrialEndingSoon", async () => {
+    mockVerifySvixSignature.mockReturnValue({
+      type: "subscriptionItem.freeTrialEnding",
+      data: SUBSCRIPTION_ITEM_PAYLOAD,
+    });
+
+    const result = await (
+      clerkWebhookHandler as (event: object) => Promise<unknown>
+    )(buildMockEvent());
+
+    expect(mockRecordTrialEndingSoon).toHaveBeenCalledWith(
+      SUBSCRIPTION_ITEM_PAYLOAD,
+    );
+    expect(mockMarkSubscriptionItemInactive).not.toHaveBeenCalled();
+    expect(result).toEqual({ ok: true });
   });
 });

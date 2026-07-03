@@ -3,6 +3,7 @@ import { trips, TRIP_STATUS, VISIBILITY } from "../../db/schema";
 import { ensureUser } from "../../utils/auth";
 import { requireString } from "../../utils/db-helpers";
 import { parseEnum, parseOptionalDate } from "../../utils/validation";
+import { assertActiveTripLimit } from "../../utils/planLimits";
 
 const VALID_STATUSES = [
   TRIP_STATUS.ONGOING,
@@ -43,6 +44,12 @@ export default defineEventHandler(async (event) => {
       statusCode: 400,
       statusMessage: "endDate must be on or after startDate",
     });
+  }
+
+  // A trip created directly as "past" doesn't count against the active-trips
+  // limit — only ongoing/upcoming trips do (see assertActiveTripLimit).
+  if (status !== TRIP_STATUS.PAST) {
+    await assertActiveTripLimit(userId);
   }
 
   const database = getDb();
