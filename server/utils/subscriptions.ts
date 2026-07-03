@@ -112,14 +112,15 @@ export function mapClerkSubscriptionStatus(status: string): SubscriptionStatus {
 }
 
 /**
- * Returns the authenticated user's current subscription, defaulting to the
- * free Drifter plan when no row exists.
+ * Returns the authenticated user's real subscription state, defaulting to the
+ * free Drifter plan when no row exists at all.
  *
- * A row with a non-active status (past_due/canceled) has no live entitlement:
- * this returns the free plan's limits rather than the stale paid plan, while
- * still surfacing the original trialEndsAt/currentPeriodEnd for display.
- * Treating past_due the same as canceled (no grace period) is a product
- * decision — see the PR description for the human to confirm before launch.
+ * This reflects the row as Clerk reported it — including `plan` for a
+ * `past_due` subscription — so callers like Settings can still show billing-
+ * management UI (e.g. "update your card") for a customer whose payment is
+ * failing. Use `getEffectivePlan` instead when the question is "what plan is
+ * this user entitled to use right now" (enforcement), not "what does their
+ * billing record say."
  */
 export async function getSubscriptionForUser(
   userId: string,
@@ -136,15 +137,6 @@ export async function getSubscriptionForUser(
     return FREE_SUBSCRIPTION;
   }
 
-  if (row.status !== SUBSCRIPTION_STATUS.ACTIVE) {
-    return {
-      ...FREE_SUBSCRIPTION,
-      status: row.status,
-      trialEndsAt: row.trialEndsAt,
-      currentPeriodEnd: row.currentPeriodEnd,
-    };
-  }
-
   return {
     plan: row.plan,
     status: row.status,
@@ -154,9 +146,19 @@ export async function getSubscriptionForUser(
   };
 }
 
-/** Returns just the plan tier entitled to `userId` right now — see getSubscriptionForUser. */
+/**
+ * Returns the plan tier `userId` is entitled to use right now, for plan-limit
+ * enforcement. A `past_due` or `canceled` row has no live entitlement, so
+ * this collapses to the free Drifter plan even though `getSubscriptionForUser`
+ * (used for display) still reports the real plan on the row. Treating
+ * past_due the same as canceled (no grace period) is a product decision —
+ * see the PR description for the human to confirm before launch.
+ */
 export async function getEffectivePlan(userId: string): Promise<Plan> {
   const subscription = await getSubscriptionForUser(userId);
+  if (subscription.status !== SUBSCRIPTION_STATUS.ACTIVE) {
+    return PLAN.DRIFTER;
+  }
   return subscription.plan;
 }
 
@@ -166,6 +168,11 @@ export async function getEffectivePlan(userId: string): Promise<Plan> {
  * event. No-ops (rather than throwing) for shapes we don't handle, so unknown
  * or org-level (B2B) payloads don't fail webhook delivery — Clerk retries on
  * non-2xx, and there is nothing actionable to retry here.
+ *
+ * Guards against the same out-of-order-delivery risk as the item handlers
+ * below: a stale event for a subscription that's since been superseded (e.g.
+ * canceled, then replaced by a new one) must not resurrect the old row's plan
+ * and re-grant entitlements to a churned user.
  */
 export async function upsertSubscriptionFromEvent(
   payload: ClerkBillingSubscriptionPayload,
@@ -186,6 +193,11 @@ export async function upsertSubscriptionFromEvent(
   }
 
   const database = getDb();
+  const existing = await getSubscriptionRow(database, userId);
+  if (isStaleEvent(existing?.clerkSubscriptionId, payload.id)) {
+    return;
+  }
+
   const values = {
     userId,
     plan,
@@ -224,7 +236,7 @@ export async function markSubscriptionItemInactive(
 
   const database = getDb();
   const existing = await getSubscriptionRow(database, userId);
-  if (isStaleItemEvent(existing, payload.id)) {
+  if (isStaleEvent(existing?.clerkSubscriptionItemId, payload.id)) {
     return;
   }
 
@@ -253,7 +265,7 @@ export async function recordTrialEndingSoon(
 
   const database = getDb();
   const existing = await getSubscriptionRow(database, userId);
-  if (isStaleItemEvent(existing, payload.id)) {
+  if (isStaleEvent(existing?.clerkSubscriptionItemId, payload.id)) {
     return;
   }
 
@@ -263,14 +275,18 @@ export async function recordTrialEndingSoon(
     .where(eq(subscriptions.userId, userId));
 }
 
-type SubscriptionItemIdRow = { clerkSubscriptionItemId: string | null };
+type SubscriptionIdsRow = {
+  clerkSubscriptionId: string | null;
+  clerkSubscriptionItemId: string | null;
+};
 
 async function getSubscriptionRow(
   database: ReturnType<typeof getDb>,
   userId: string,
-): Promise<SubscriptionItemIdRow | undefined> {
+): Promise<SubscriptionIdsRow | undefined> {
   const rows = await database
     .select({
+      clerkSubscriptionId: subscriptions.clerkSubscriptionId,
       clerkSubscriptionItemId: subscriptions.clerkSubscriptionItemId,
     })
     .from(subscriptions)
@@ -280,17 +296,18 @@ async function getSubscriptionRow(
 }
 
 /**
- * True when there's an existing row recording a *different* subscription item
- * than the one this webhook event is about — i.e. this event is stale/
- * out-of-order relative to a newer subscription already recorded. A missing
- * row, or a row with no item id recorded yet, is never considered stale.
+ * True when a row already exists recording a *different* Clerk ID (subscription
+ * or item, depending on the caller) than the one this webhook event is about —
+ * i.e. this event is stale/out-of-order relative to a newer subscription
+ * already recorded. No existing row, or a row with no ID recorded yet on that
+ * field, is never considered stale (nothing to be stale relative to).
  */
-function isStaleItemEvent(
-  existing: SubscriptionItemIdRow | undefined,
-  incomingItemId: string,
+function isStaleEvent(
+  recordedId: string | null | undefined,
+  incomingId: string,
 ): boolean {
-  if (!existing || !existing.clerkSubscriptionItemId) {
+  if (!recordedId) {
     return false;
   }
-  return existing.clerkSubscriptionItemId !== incomingItemId;
+  return recordedId !== incomingId;
 }

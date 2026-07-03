@@ -188,7 +188,7 @@ describe("getSubscriptionForUser", () => {
     });
   });
 
-  it("falls back to the free plan when status is past_due, keeping trial/renewal dates", async () => {
+  it("still reports the real plan when status is past_due (for billing-management display)", async () => {
     const periodEnd = new Date("2026-08-01T00:00:00.000Z");
     mockSelectLimit.mockResolvedValue([
       {
@@ -202,12 +202,12 @@ describe("getSubscriptionForUser", () => {
 
     const result = await getSubscriptionForUser("user-1");
 
-    expect(result.plan).toBe("drifter");
+    expect(result.plan).toBe("wanderer");
     expect(result.status).toBe("past_due");
     expect(result.currentPeriodEnd).toBe(periodEnd);
   });
 
-  it("falls back to the free plan when status is canceled", async () => {
+  it("still reports the real plan when status is canceled", async () => {
     mockSelectLimit.mockResolvedValue([
       {
         plan: "wanderer",
@@ -220,12 +220,12 @@ describe("getSubscriptionForUser", () => {
 
     const result = await getSubscriptionForUser("user-1");
 
-    expect(result.plan).toBe("drifter");
+    expect(result.plan).toBe("wanderer");
   });
 });
 
 describe("getEffectivePlan", () => {
-  it("returns just the plan tier", async () => {
+  it("returns the plan tier for an active subscription", async () => {
     mockSelectLimit.mockResolvedValue([
       {
         plan: "nomad",
@@ -237,6 +237,39 @@ describe("getEffectivePlan", () => {
     ]);
 
     expect(await getEffectivePlan("user-1")).toBe("nomad");
+  });
+
+  it("collapses to the free Drifter plan when status is past_due", async () => {
+    mockSelectLimit.mockResolvedValue([
+      {
+        plan: "wanderer",
+        status: "past_due",
+        billingCycle: "monthly",
+        trialEndsAt: null,
+        currentPeriodEnd: null,
+      },
+    ]);
+
+    expect(await getEffectivePlan("user-1")).toBe("drifter");
+  });
+
+  it("collapses to the free Drifter plan when status is canceled", async () => {
+    mockSelectLimit.mockResolvedValue([
+      {
+        plan: "nomad",
+        status: "canceled",
+        billingCycle: "yearly",
+        trialEndsAt: null,
+        currentPeriodEnd: null,
+      },
+    ]);
+
+    expect(await getEffectivePlan("user-1")).toBe("drifter");
+  });
+
+  it("returns the free Drifter plan when no row exists", async () => {
+    mockSelectLimit.mockResolvedValue([]);
+    expect(await getEffectivePlan("user-1")).toBe("drifter");
   });
 });
 
@@ -326,6 +359,33 @@ describe("upsertSubscriptionFromEvent", () => {
     expect(mockInsertValues).toHaveBeenCalledWith(
       expect.objectContaining({ plan: "nomad", currentPeriodEnd: null }),
     );
+  });
+
+  it("skips a stale event for a subscription that's since been superseded", async () => {
+    // The row already tracks a different (newer) subscription id — an
+    // out-of-order event for the old, superseded subscription must not
+    // resurrect its plan and re-grant entitlements.
+    mockSelectLimit.mockResolvedValue([{ clerkSubscriptionId: "sub_newer" }]);
+
+    await upsertSubscriptionFromEvent(buildPayload({ id: "sub_123" }));
+
+    expect(mockInsert).not.toHaveBeenCalled();
+  });
+
+  it("proceeds when the existing row has no subscription id recorded yet", async () => {
+    mockSelectLimit.mockResolvedValue([{ clerkSubscriptionId: null }]);
+
+    await upsertSubscriptionFromEvent(buildPayload());
+
+    expect(mockInsert).toHaveBeenCalledTimes(1);
+  });
+
+  it("proceeds when the existing row tracks the same subscription id", async () => {
+    mockSelectLimit.mockResolvedValue([{ clerkSubscriptionId: "sub_123" }]);
+
+    await upsertSubscriptionFromEvent(buildPayload({ id: "sub_123" }));
+
+    expect(mockInsert).toHaveBeenCalledTimes(1);
   });
 });
 

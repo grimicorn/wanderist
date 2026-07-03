@@ -260,6 +260,49 @@ describe("Settings page (/settings)", () => {
     expect(wrapper.find("#billing").text()).toContain("Trial ends");
   });
 
+  it("shows the renewal message (not a stale trial message) once a past trial has converted", async () => {
+    const { useBilling } = await import("~/composables/useBilling");
+    vi.mocked(useBilling).mockReturnValueOnce(
+      makeBillingMock({
+        subscription: {
+          plan: "nomad",
+          status: "active",
+          billingCycle: "yearly",
+          // Trial ended in the past — the row hasn't necessarily had
+          // trialEndsAt cleared (see server/utils/subscriptions.ts), so the
+          // UI must not keep showing "Trial ends" once the date has passed.
+          trialEndsAt: "2020-01-01T00:00:00.000Z",
+          currentPeriodEnd: "2026-08-01T00:00:00.000Z",
+        },
+      }),
+    );
+
+    const wrapper = mount(SettingsPage, globalConfig);
+    const billingText = wrapper.find("#billing").text();
+    expect(billingText).not.toContain("Trial ends");
+    expect(billingText).toContain("Renews");
+  });
+
+  it("shows a manage-subscription button for a past_due paid plan (not the free-tier upgrade CTA)", async () => {
+    const { useBilling } = await import("~/composables/useBilling");
+    vi.mocked(useBilling).mockReturnValueOnce(
+      makeBillingMock({
+        subscription: {
+          plan: "wanderer",
+          status: "past_due",
+          billingCycle: "monthly",
+          trialEndsAt: null,
+          currentPeriodEnd: "2026-07-15T00:00:00.000Z",
+        },
+      }),
+    );
+
+    const wrapper = mount(SettingsPage, globalConfig);
+    const billingSection = wrapper.find("#billing");
+    expect(billingSection.find(".plan-manage-btn").exists()).toBe(true);
+    expect(billingSection.text()).toContain("Wanderer plan");
+  });
+
   it("renders the 6 map style options", () => {
     const wrapper = mount(SettingsPage, globalConfig);
     expect(wrapper.findAll(".map-style")).toHaveLength(6);

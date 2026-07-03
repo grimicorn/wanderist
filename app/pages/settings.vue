@@ -605,9 +605,18 @@ function formatBillingDate(isoDate: string | null): string | null {
   });
 }
 
-const trialEndsAtLabel = computed(() =>
-  formatBillingDate(subscription.value.trialEndsAt),
-);
+// Only shown while the trial end date is still in the future. Once a trial
+// converts to a paid subscription (or lapses), trialEndsAt on the row isn't
+// necessarily cleared — see server/utils/subscriptions.ts — so a stale past
+// date must fall through to the renewal-date message below rather than
+// showing "Trial ends" forever.
+const trialEndsAtLabel = computed(() => {
+  const trialEndsAt = subscription.value.trialEndsAt;
+  if (!trialEndsAt || new Date(trialEndsAt) <= new Date()) {
+    return null;
+  }
+  return formatBillingDate(trialEndsAt);
+});
 
 const renewalDateLabel = computed(() =>
   formatBillingDate(subscription.value.currentPeriodEnd),
