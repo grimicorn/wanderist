@@ -76,6 +76,23 @@ describe("mapPriceIdToPlan", () => {
     });
   });
 
+  it("correctly disambiguates when all four tier/cycle Price IDs are configured", async () => {
+    process.env.STRIPE_PRICE_WANDERER_MONTHLY = "price_wanderer_monthly";
+    process.env.STRIPE_PRICE_WANDERER_YEARLY = "price_wanderer_yearly";
+    process.env.STRIPE_PRICE_NOMAD_MONTHLY = "price_nomad_monthly";
+    process.env.STRIPE_PRICE_NOMAD_YEARLY = "price_nomad_yearly";
+    const { mapPriceIdToPlan } = await importFreshStripeUtil();
+
+    expect(mapPriceIdToPlan("price_wanderer_monthly")).toEqual({
+      plan: "wanderer",
+      cycle: "monthly",
+    });
+    expect(mapPriceIdToPlan("price_nomad_monthly")).toEqual({
+      plan: "nomad",
+      cycle: "monthly",
+    });
+  });
+
   it("returns null for an unrecognized Price ID", async () => {
     process.env.STRIPE_PRICE_WANDERER_MONTHLY = "price_wanderer_monthly";
     const { mapPriceIdToPlan } = await importFreshStripeUtil();

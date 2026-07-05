@@ -80,7 +80,12 @@ export async function getSubscriptionForUser(
 
   const row = rows[0];
   if (!row) {
-    return FREE_SUBSCRIPTION;
+    // Spread a fresh copy rather than returning the shared FREE_SUBSCRIPTION
+    // object by reference — every free user would otherwise get the exact
+    // same instance, and a future mutation by one caller would silently leak
+    // into every other caller's "default". Mirrors the same defensive copy
+    // in app/composables/useBilling.ts's FREE_SUBSCRIPTION_DEFAULT.
+    return { ...FREE_SUBSCRIPTION };
   }
 
   return {

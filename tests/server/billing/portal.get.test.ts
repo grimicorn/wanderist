@@ -81,6 +81,13 @@ describe("GET /api/billing/portal", () => {
     await expect(call()).rejects.toMatchObject({ statusCode: 500 });
   });
 
+  it("throws 502 when Stripe does not return a billing portal URL", async () => {
+    mockCreateBillingPortalSession.mockResolvedValue({ url: null });
+
+    await expect(call()).rejects.toMatchObject({ statusCode: 502 });
+    expect(mockSendRedirect).not.toHaveBeenCalled();
+  });
+
   it("propagates a 401 when the user is not authenticated", async () => {
     mockEnsureUser.mockRejectedValue(
       Object.assign(new Error("Unauthorized"), { statusCode: 401 }),

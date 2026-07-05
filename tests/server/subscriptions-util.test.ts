@@ -145,6 +145,17 @@ describe("getSubscriptionForUser", () => {
     });
   });
 
+  it("returns a fresh object per call for the free plan (not a shared mutable singleton)", async () => {
+    mockSelectLimit.mockResolvedValue([]);
+
+    const first = await getSubscriptionForUser("user-1");
+    const second = await getSubscriptionForUser("user-2");
+
+    expect(first).not.toBe(second);
+    first.plan = "nomad";
+    expect(second.plan).toBe("drifter");
+  });
+
   it("returns the row's plan when status is active", async () => {
     const periodEnd = new Date("2026-08-01T00:00:00.000Z");
     mockSelectLimit.mockResolvedValue([

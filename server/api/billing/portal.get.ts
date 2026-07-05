@@ -41,5 +41,12 @@ export default defineEventHandler(async (event) => {
     returnUrl: `${origin}${RETURN_PATH}`,
   });
 
+  if (!session.url) {
+    throw createError({
+      statusCode: 502,
+      statusMessage: "Stripe did not return a billing portal URL",
+    });
+  }
+
   return sendRedirect(event, session.url, 302);
 });

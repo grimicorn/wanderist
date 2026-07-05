@@ -58,6 +58,19 @@ export function getPriceId(
   return process.env[PRICE_ID_ENV_VAR[tier][cycle]] || null;
 }
 
+// Flat list of every tier/cycle combination, derived from PRICE_ID_ENV_VAR so
+// it can never drift out of sync with it. Used by mapPriceIdToPlan as a single
+// flat pass instead of a nested loop.
+const ALL_TIER_CYCLES: ReadonlyArray<{
+  tier: PlanTier;
+  cycle: BillingCycleOption;
+}> = Object.keys(PRICE_ID_ENV_VAR).flatMap((tier) =>
+  Object.keys(PRICE_ID_ENV_VAR[tier as PlanTier]).map((cycle) => ({
+    tier: tier as PlanTier,
+    cycle: cycle as BillingCycleOption,
+  })),
+);
+
 /**
  * Reverse lookup from a Stripe Price ID (as it appears on a subscription
  * item) back to this app's plan tier + billing cycle. Built once per call
@@ -69,16 +82,10 @@ export function mapPriceIdToPlan(
   if (!priceId) {
     return null;
   }
-  for (const tier of Object.keys(PRICE_ID_ENV_VAR) as PlanTier[]) {
-    for (const cycle of Object.keys(
-      PRICE_ID_ENV_VAR[tier],
-    ) as BillingCycleOption[]) {
-      if (getPriceId(tier, cycle) === priceId) {
-        return { plan: tier, cycle };
-      }
-    }
-  }
-  return null;
+  const match = ALL_TIER_CYCLES.find(
+    ({ tier, cycle }) => getPriceId(tier, cycle) === priceId,
+  );
+  return match ? { plan: match.tier, cycle: match.cycle } : null;
 }
 
 export interface CreateCheckoutSessionParams {
