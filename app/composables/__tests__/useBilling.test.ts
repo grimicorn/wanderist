@@ -19,6 +19,7 @@ const SAMPLE_SUBSCRIPTION = {
   billingCycle: "monthly" as const,
   trialEndsAt: null,
   currentPeriodEnd: "2026-08-01T00:00:00.000Z",
+  cancelAtPeriodEnd: false,
 };
 
 describe("useBilling", () => {
@@ -34,6 +35,7 @@ describe("useBilling", () => {
       billingCycle: null,
       trialEndsAt: null,
       currentPeriodEnd: null,
+      cancelAtPeriodEnd: false,
     });
   });
 

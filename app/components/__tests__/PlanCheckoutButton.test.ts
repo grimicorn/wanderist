@@ -1,84 +1,99 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount } from "@vue/test-utils";
 import PlanCheckoutButton from "../PlanCheckoutButton.vue";
 
-const checkoutButtonStub = vi.hoisted(() => ({
-  name: "CheckoutButton",
-  props: ["planId", "planPeriod", "newSubscriptionRedirectUrl"],
-  template: '<div class="checkout-button-stub"><slot /></div>',
-}));
-
-vi.mock("@clerk/vue/experimental", () => ({
-  CheckoutButton: checkoutButtonStub,
-}));
-
 let runtimeConfigMock = {
-  public: { clerkPlanIdWanderer: "cplan_wanderer_123", clerkPlanIdNomad: "" },
+  public: {
+    stripeWandererMonthlyConfigured: true,
+    stripeWandererYearlyConfigured: false,
+    stripeNomadMonthlyConfigured: false,
+    stripeNomadYearlyConfigured: false,
+  },
 };
 
 vi.stubGlobal("useRuntimeConfig", () => runtimeConfigMock);
 
 describe("PlanCheckoutButton", () => {
+  const originalLocation = window.location;
+
   beforeEach(() => {
     runtimeConfigMock = {
       public: {
-        clerkPlanIdWanderer: "cplan_wanderer_123",
-        clerkPlanIdNomad: "",
+        stripeWandererMonthlyConfigured: true,
+        stripeWandererYearlyConfigured: false,
+        stripeNomadMonthlyConfigured: false,
+        stripeNomadYearlyConfigured: false,
       },
     };
+    // window.location.href is not settable via jsdom by default; stub it so
+    // startCheckout's navigation can be observed without actually navigating.
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: { ...originalLocation, href: "" },
+    });
   });
 
-  it("renders the Clerk CheckoutButton with the configured plan ID", () => {
+  afterEach(() => {
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: originalLocation,
+    });
+  });
+
+  it("renders an enabled button for a configured tier/cycle", () => {
     const wrapper = mount(PlanCheckoutButton, {
       props: { tier: "wanderer", cycle: "monthly" },
       slots: { default: "free trial" },
     });
 
-    const checkout = wrapper.findComponent(checkoutButtonStub);
-    expect(checkout.exists()).toBe(true);
-    expect(checkout.props("planId")).toBe("cplan_wanderer_123");
+    const button = wrapper.find("button");
+    expect(button.attributes("disabled")).toBeUndefined();
     expect(wrapper.text()).toContain("free trial");
   });
 
-  it("maps 'monthly' to Clerk's 'month' period", () => {
-    const wrapper = mount(PlanCheckoutButton, {
-      props: { tier: "wanderer", cycle: "monthly" },
-    });
-    expect(wrapper.findComponent(checkoutButtonStub).props("planPeriod")).toBe(
-      "month",
-    );
-  });
-
-  it("maps 'yearly' to Clerk's 'annual' period", () => {
-    const wrapper = mount(PlanCheckoutButton, {
-      props: { tier: "wanderer", cycle: "yearly" },
-    });
-    expect(wrapper.findComponent(checkoutButtonStub).props("planPeriod")).toBe(
-      "annual",
-    );
-  });
-
-  it("passes redirectTo through as newSubscriptionRedirectUrl", () => {
-    const wrapper = mount(PlanCheckoutButton, {
-      props: { tier: "wanderer", cycle: "monthly", redirectTo: "/settings" },
-    });
-    expect(
-      wrapper
-        .findComponent(checkoutButtonStub)
-        .props("newSubscriptionRedirectUrl"),
-    ).toBe("/settings");
-  });
-
-  it("renders a disabled button instead of CheckoutButton when the plan ID is not configured", () => {
+  it("renders a disabled button for an unconfigured tier/cycle", () => {
     const wrapper = mount(PlanCheckoutButton, {
       props: { tier: "nomad", cycle: "monthly" },
       slots: { default: "free trial" },
     });
 
-    expect(wrapper.findComponent(checkoutButtonStub).exists()).toBe(false);
     const button = wrapper.find("button");
     expect(button.attributes("disabled")).toBeDefined();
-    expect(button.text()).toContain("free trial");
+    expect(button.attributes("title")).toBe("Checkout is not configured yet");
+  });
+
+  it("navigates to /api/billing/checkout with tier + cycle on click", async () => {
+    const wrapper = mount(PlanCheckoutButton, {
+      props: { tier: "wanderer", cycle: "monthly" },
+    });
+
+    await wrapper.find("button").trigger("click");
+
+    expect(window.location.href).toBe(
+      "/api/billing/checkout?tier=wanderer&cycle=monthly",
+    );
+  });
+
+  it("includes redirectTo as a query param when provided", async () => {
+    const wrapper = mount(PlanCheckoutButton, {
+      props: { tier: "wanderer", cycle: "monthly", redirectTo: "/settings" },
+    });
+
+    await wrapper.find("button").trigger("click");
+
+    expect(window.location.href).toBe(
+      "/api/billing/checkout?tier=wanderer&cycle=monthly&redirectTo=%2Fsettings",
+    );
+  });
+
+  it("does not navigate when the button is disabled", async () => {
+    const wrapper = mount(PlanCheckoutButton, {
+      props: { tier: "nomad", cycle: "monthly" },
+    });
+
+    await wrapper.find("button").trigger("click");
+
+    expect(window.location.href).toBe("");
   });
 
   it("forwards attrs like class onto the rendered button", () => {

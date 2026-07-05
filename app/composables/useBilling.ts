@@ -13,6 +13,7 @@ export interface UserSubscriptionDto {
   billingCycle: BillingCycle | null;
   trialEndsAt: string | null;
   currentPeriodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
 }
 
 const BILLING_STATE_KEY = "user-subscription";
@@ -23,6 +24,7 @@ const FREE_SUBSCRIPTION_DEFAULT: UserSubscriptionDto = {
   billingCycle: null,
   trialEndsAt: null,
   currentPeriodEnd: null,
+  cancelAtPeriodEnd: false,
 };
 
 /**

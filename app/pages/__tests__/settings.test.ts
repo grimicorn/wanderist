@@ -107,6 +107,7 @@ const defaultSubscriptionData: UserSubscriptionDto = {
   billingCycle: null,
   trialEndsAt: null,
   currentPeriodEnd: null,
+  cancelAtPeriodEnd: false,
 };
 
 function makeBillingMock(
@@ -231,6 +232,7 @@ describe("Settings page (/settings)", () => {
           billingCycle: "monthly",
           trialEndsAt: null,
           currentPeriodEnd: "2026-08-01T00:00:00.000Z",
+          cancelAtPeriodEnd: false,
         },
       }),
     );
@@ -252,6 +254,7 @@ describe("Settings page (/settings)", () => {
           billingCycle: "yearly",
           trialEndsAt: "2026-07-10T00:00:00.000Z",
           currentPeriodEnd: "2026-07-10T00:00:00.000Z",
+          cancelAtPeriodEnd: false,
         },
       }),
     );
@@ -273,6 +276,7 @@ describe("Settings page (/settings)", () => {
           // UI must not keep showing "Trial ends" once the date has passed.
           trialEndsAt: "2020-01-01T00:00:00.000Z",
           currentPeriodEnd: "2026-08-01T00:00:00.000Z",
+          cancelAtPeriodEnd: false,
         },
       }),
     );
@@ -293,6 +297,7 @@ describe("Settings page (/settings)", () => {
           billingCycle: "monthly",
           trialEndsAt: null,
           currentPeriodEnd: "2026-07-15T00:00:00.000Z",
+          cancelAtPeriodEnd: false,
         },
       }),
     );
@@ -315,6 +320,7 @@ describe("Settings page (/settings)", () => {
           billingCycle: "yearly",
           trialEndsAt: null,
           currentPeriodEnd: "2026-07-20T00:00:00.000Z",
+          cancelAtPeriodEnd: false,
         },
       }),
     );
@@ -324,6 +330,29 @@ describe("Settings page (/settings)", () => {
     expect(billingText).toContain("Access ends");
     expect(billingText).not.toContain("Renews");
     expect(billingText).not.toContain("Payment issue");
+  });
+
+  it("shows an access-ends message (not 'Renews') for a still-active subscription scheduled to cancel", async () => {
+    const { useBilling } = await import("~/composables/useBilling");
+    vi.mocked(useBilling).mockReturnValueOnce(
+      makeBillingMock({
+        subscription: {
+          plan: "nomad",
+          status: "active",
+          billingCycle: "yearly",
+          trialEndsAt: null,
+          currentPeriodEnd: "2026-07-20T00:00:00.000Z",
+          cancelAtPeriodEnd: true,
+        },
+      }),
+    );
+
+    const wrapper = mount(SettingsPage, globalConfig);
+    const billingSection = wrapper.find("#billing");
+    const billingText = billingSection.text();
+    expect(billingSection.find(".plan-manage-btn").exists()).toBe(true);
+    expect(billingText).toContain("Access ends");
+    expect(billingText).not.toContain("Renews");
   });
 
   it("renders the 6 map style options", () => {

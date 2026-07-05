@@ -1,19 +1,23 @@
 <template>
-  <SubscriptionDetailsButton>
-    <button type="button" v-bind="$attrs">
-      <slot />
-    </button>
-  </SubscriptionDetailsButton>
+  <button type="button" v-bind="$attrs" @click="openBillingPortal">
+    <slot />
+  </button>
 </template>
 
 <script setup lang="ts">
 /**
- * Wraps Clerk Billing's experimental <SubscriptionDetailsButton /> — opens
- * Clerk's own self-serve UI for viewing/canceling the current subscription.
- * Isolated behind this component for the same reason as PlanCheckoutButton:
- * only this file needs to change if Clerk's experimental billing API moves.
+ * Redirects the browser to GET /api/billing/portal, which creates a Stripe
+ * Billing Portal session server-side and 302s the user there to view
+ * invoices, update their payment method, or cancel — mirrors
+ * PlanCheckoutButton's redirect-to-a-server-route convention.
+ *
+ * Only rendered by callers once the user already has a paid-tier
+ * subscription row (see app/pages/settings.vue), so there is no
+ * "unconfigured" state to handle here the way PlanCheckoutButton has to.
  */
-import { SubscriptionDetailsButton } from "@clerk/vue/experimental";
-
 defineOptions({ inheritAttrs: false });
+
+function openBillingPortal(): void {
+  window.location.href = "/api/billing/portal";
+}
 </script>

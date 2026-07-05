@@ -1,47 +1,36 @@
 <template>
   <button
-    v-if="!planId"
     type="button"
-    disabled
-    :title="unconfiguredTitle"
+    :disabled="!configured"
+    :title="configured ? undefined : unconfiguredTitle"
     v-bind="$attrs"
+    @click="startCheckout"
   >
     <slot />
   </button>
-  <CheckoutButton
-    v-else
-    :plan-id="planId"
-    :plan-period="planPeriod"
-    :new-subscription-redirect-url="redirectTo"
-  >
-    <button type="button" v-bind="$attrs">
-      <slot />
-    </button>
-  </CheckoutButton>
 </template>
 
 <script setup lang="ts">
 /**
- * Wraps Clerk Billing's experimental <CheckoutButton /> behind a project-level
- * component so the rest of the app depends on a stable, small prop surface
- * (tier + cycle) instead of Clerk's plan-ID/period vocabulary directly. Isolating
- * the import here means only this file needs to change if Clerk's experimental
- * billing API is renamed or stabilized.
+ * Redirects the browser to GET /api/billing/checkout, which creates a Stripe
+ * Checkout Session server-side and 302s to Stripe's hosted checkout page —
+ * the same "navigate to a server route that redirects to a hosted
+ * third-party flow" convention app/composables/useConnections.ts uses for
+ * Instagram OAuth.
  *
- * The Clerk Plan ID for each tier is dashboard-generated and read from runtime
- * config (see nuxt.config.ts / README "Billing" section) — this component
- * never invents one. Until a human configures it, the button renders disabled
- * rather than opening a checkout that would fail at runtime.
+ * The Stripe Price ID for each tier/cycle is a human-configured value (see
+ * nuxt.config.ts / README "Billing" section) that never reaches the client;
+ * this component only knows whether one is configured via a public boolean
+ * flag, and renders disabled until it is, rather than opening a checkout
+ * that would fail at runtime.
  */
-import { CheckoutButton } from "@clerk/vue/experimental";
-
 type PlanTier = "wanderer" | "nomad";
 type BillingCycleOption = "monthly" | "yearly";
 
 const props = defineProps<{
   tier: PlanTier;
   cycle: BillingCycleOption;
-  /** Path or full URL to send the user to once checkout completes. */
+  /** Path to send the user to once checkout completes. */
   redirectTo?: string;
 }>();
 
@@ -51,17 +40,31 @@ const config = useRuntimeConfig();
 
 const unconfiguredTitle = "Checkout is not configured yet";
 
-const planId = computed<string | null>(() => {
-  const idsByTier: Record<PlanTier, string> = {
-    wanderer: config.public.clerkPlanIdWanderer,
-    nomad: config.public.clerkPlanIdNomad,
+const configured = computed<boolean>(() => {
+  const flagsByTierAndCycle: Record<
+    PlanTier,
+    Record<BillingCycleOption, boolean>
+  > = {
+    wanderer: {
+      monthly: config.public.stripeWandererMonthlyConfigured,
+      yearly: config.public.stripeWandererYearlyConfigured,
+    },
+    nomad: {
+      monthly: config.public.stripeNomadMonthlyConfigured,
+      yearly: config.public.stripeNomadYearlyConfigured,
+    },
   };
-  return idsByTier[props.tier] || null;
+  return flagsByTierAndCycle[props.tier][props.cycle];
 });
 
-// Clerk Billing's own vocabulary is "month" | "annual"; this app's pricing UI
-// uses "monthly" | "yearly" — translated at this one boundary.
-const planPeriod = computed<"month" | "annual">(() =>
-  props.cycle === "yearly" ? "annual" : "month",
-);
+function startCheckout(): void {
+  const params = new URLSearchParams({
+    tier: props.tier,
+    cycle: props.cycle,
+  });
+  if (props.redirectTo) {
+    params.set("redirectTo", props.redirectTo);
+  }
+  window.location.href = `/api/billing/checkout?${params.toString()}`;
+}
 </script>

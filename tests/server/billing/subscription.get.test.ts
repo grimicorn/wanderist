@@ -34,6 +34,7 @@ describe("GET /api/billing/subscription", () => {
       billingCycle: "monthly",
       trialEndsAt: null,
       currentPeriodEnd: new Date("2026-08-01T00:00:00.000Z"),
+      cancelAtPeriodEnd: false,
     };
     mockGetSubscriptionForUser.mockResolvedValue(subscription);
 

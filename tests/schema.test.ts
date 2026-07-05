@@ -279,15 +279,16 @@ describe("column presence", () => {
     expect(guides.visibility).toBeDefined();
   });
 
-  it("subscriptions has plan, status, billingCycle, trialEndsAt, currentPeriodEnd, clerkSubscriptionId", () => {
+  it("subscriptions has plan, status, billingCycle, trialEndsAt, currentPeriodEnd, cancelAtPeriodEnd, stripeCustomerId, stripeSubscriptionId", () => {
     expect(subscriptions.userId).toBeDefined();
     expect(subscriptions.plan).toBeDefined();
     expect(subscriptions.status).toBeDefined();
     expect(subscriptions.billingCycle).toBeDefined();
     expect(subscriptions.trialEndsAt).toBeDefined();
     expect(subscriptions.currentPeriodEnd).toBeDefined();
-    expect(subscriptions.clerkSubscriptionId).toBeDefined();
-    expect(subscriptions.clerkSubscriptionItemId).toBeDefined();
+    expect(subscriptions.cancelAtPeriodEnd).toBeDefined();
+    expect(subscriptions.stripeCustomerId).toBeDefined();
+    expect(subscriptions.stripeSubscriptionId).toBeDefined();
   });
 });
 

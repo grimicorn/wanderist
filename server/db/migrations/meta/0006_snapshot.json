@@ -894,14 +894,21 @@
           "primaryKey": false,
           "notNull": false
         },
-        "clerk_subscription_id": {
-          "name": "clerk_subscription_id",
+        "cancel_at_period_end": {
+          "name": "cancel_at_period_end",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "stripe_customer_id": {
+          "name": "stripe_customer_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false
         },
-        "clerk_subscription_item_id": {
-          "name": "clerk_subscription_item_id",
+        "stripe_subscription_id": {
+          "name": "stripe_subscription_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -935,10 +942,10 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
-        "subscriptions_clerk_subscription_id_unique": {
-          "name": "subscriptions_clerk_subscription_id_unique",
+        "subscriptions_stripe_subscription_id_unique": {
+          "name": "subscriptions_stripe_subscription_id_unique",
           "nullsNotDistinct": false,
-          "columns": ["clerk_subscription_id"]
+          "columns": ["stripe_subscription_id"]
         }
       },
       "policies": {},

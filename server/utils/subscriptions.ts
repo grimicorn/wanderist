@@ -1,3 +1,4 @@
+import type Stripe from "stripe";
 import { eq } from "drizzle-orm";
 import { getDb } from "../db/index";
 import {
@@ -6,48 +7,12 @@ import {
   SUBSCRIPTION_STATUS,
   BILLING_CYCLE,
 } from "../db/schema";
+import { mapPriceIdToPlan } from "./stripe";
 
 export type Plan = (typeof PLAN)[keyof typeof PLAN];
 export type SubscriptionStatus =
   (typeof SUBSCRIPTION_STATUS)[keyof typeof SUBSCRIPTION_STATUS];
 export type BillingCycle = (typeof BILLING_CYCLE)[keyof typeof BILLING_CYCLE];
-
-// ---------------------------------------------------------------------------
-// Clerk Billing webhook payload shapes.
-//
-// These are hand-written, minimal subsets of Clerk's real webhook JSON
-// (verified against the BillingSubscriptionWebhookEventJSON /
-// BillingSubscriptionItemWebhookEventJSON types shipped in @clerk/backend) —
-// only the fields this module actually reads. Kept local (rather than
-// importing @clerk/backend's internal JSON types) to match the existing
-// pattern in server/api/webhooks/clerk.post.ts, which does the same for user
-// events.
-// ---------------------------------------------------------------------------
-
-export interface ClerkBillingPayer {
-  user_id?: string;
-}
-
-export interface ClerkBillingPlanRef {
-  slug: string;
-  period: "month" | "annual";
-}
-
-export interface ClerkBillingSubscriptionItemPayload {
-  id: string;
-  status: string;
-  plan_period: "month" | "annual";
-  period_end: number | null;
-  plan?: ClerkBillingPlanRef | null;
-  payer?: ClerkBillingPayer;
-}
-
-export interface ClerkBillingSubscriptionPayload {
-  id: string;
-  status: string;
-  payer: ClerkBillingPayer;
-  items: ClerkBillingSubscriptionItemPayload[];
-}
 
 export interface UserSubscription {
   plan: Plan;
@@ -55,6 +20,7 @@ export interface UserSubscription {
   billingCycle: BillingCycle | null;
   trialEndsAt: Date | null;
   currentPeriodEnd: Date | null;
+  cancelAtPeriodEnd: boolean;
 }
 
 const FREE_SUBSCRIPTION: UserSubscription = {
@@ -63,57 +29,26 @@ const FREE_SUBSCRIPTION: UserSubscription = {
   billingCycle: null,
   trialEndsAt: null,
   currentPeriodEnd: null,
+  cancelAtPeriodEnd: false,
 };
-
-// Clerk Plan slugs are chosen by a human when creating each Plan in the Clerk
-// Dashboard (see README "Billing" section). The paid tiers must use these
-// exact slugs — the free Drifter tier has no corresponding Clerk Plan at all.
-const PLAN_SLUGS: Record<string, Plan> = {
-  wanderer: PLAN.WANDERER,
-  nomad: PLAN.NOMAD,
-};
-
-/** Maps a Clerk Plan slug to one of this app's paid plan tiers, or null if unrecognized. */
-export function mapClerkPlanSlug(slug: string | null | undefined): Plan | null {
-  if (!slug) {
-    return null;
-  }
-  return PLAN_SLUGS[slug] ?? null;
-}
-
-/** Maps Clerk's plan period ("month" | "annual") to this app's billing cycle vocabulary. */
-export function mapClerkPlanPeriod(
-  period: string | null | undefined,
-): BillingCycle | null {
-  if (period === "month") {
-    return BILLING_CYCLE.MONTHLY;
-  }
-  if (period === "annual") {
-    return BILLING_CYCLE.YEARLY;
-  }
-  return null;
-}
 
 /**
- * Collapses Clerk's wider status vocabulary ('active' | 'past_due' |
- * 'canceled' | 'ended' | 'abandoned' | 'incomplete' | ...) onto this app's
- * three-value enum. Only "active" is treated as a distinct entitled state
- * from "past_due"; every other terminal status collapses to "canceled" since
- * enforcement only needs to know whether the row is currently entitled.
- *
- * Product decision to verify against real Clerk behavior before launch: the
- * `subscriptionItem.canceled` webhook event (handled by
- * markSubscriptionItemInactive below) may mean "scheduled to cancel at period
- * end" rather than "access revoked now" — Clerk's event names don't make this
- * unambiguous from the SDK types alone. This app currently treats `.canceled`
- * the same as `.ended`/`.abandoned` and revokes paid entitlements immediately,
- * which is the safer default for a paywall but may cut off a user who paid
- * through the end of their current period. If Clerk's actual semantics are
- * cancel-at-period-end, change markSubscriptionItemInactive to keep `status:
- * active` for `.canceled` until `.ended` fires or `currentPeriodEnd` passes.
+ * Collapses Stripe's wider subscription status vocabulary ('trialing' |
+ * 'active' | 'past_due' | 'canceled' | 'unpaid' | 'incomplete' |
+ * 'incomplete_expired' | 'paused') onto this app's three-value enum.
+ * `trialing` counts as ACTIVE — a trialing subscription is already fully
+ * entitled (see getEffectivePlan). Every other non-`active`/`past_due` status
+ * collapses to CANCELED: `incomplete`/`incomplete_expired` mean the first
+ * payment never went through (no entitlement was ever earned), and `unpaid`/
+ * `paused` mean payment has definitively failed past Stripe's retry schedule.
+ * Treating all of those as "no entitlement" is the safer default for a
+ * paywall — the alternative (treating incomplete as active) risks granting
+ * a paid tier to someone who never successfully paid.
  */
-export function mapClerkSubscriptionStatus(status: string): SubscriptionStatus {
-  if (status === "active") {
+export function mapStripeSubscriptionStatus(
+  status: Stripe.Subscription.Status,
+): SubscriptionStatus {
+  if (status === "active" || status === "trialing") {
     return SUBSCRIPTION_STATUS.ACTIVE;
   }
   if (status === "past_due") {
@@ -126,7 +61,7 @@ export function mapClerkSubscriptionStatus(status: string): SubscriptionStatus {
  * Returns the authenticated user's real subscription state, defaulting to the
  * free Drifter plan when no row exists at all.
  *
- * This reflects the row as Clerk reported it — including `plan` for a
+ * This reflects the row as Stripe reported it — including `plan` for a
  * `past_due` subscription — so callers like Settings can still show billing-
  * management UI (e.g. "update your card") for a customer whose payment is
  * failing. Use `getEffectivePlan` instead when the question is "what plan is
@@ -154,6 +89,7 @@ export async function getSubscriptionForUser(
     billingCycle: row.billingCycle,
     trialEndsAt: row.trialEndsAt,
     currentPeriodEnd: row.currentPeriodEnd,
+    cancelAtPeriodEnd: row.cancelAtPeriodEnd,
   };
 }
 
@@ -174,174 +110,33 @@ export async function getEffectivePlan(userId: string): Promise<Plan> {
 }
 
 /**
- * Upserts the local `subscriptions` row from a subscription.created /
- * subscription.updated / subscription.active / subscription.pastDue webhook
- * event. No-ops (rather than throwing) for shapes we don't handle, so unknown
- * or org-level (B2B) payloads don't fail webhook delivery — Clerk retries on
- * non-2xx, and there is nothing actionable to retry here.
- *
- * Guards against the same out-of-order-delivery risk as the item handlers
- * below: a stale event for a subscription that's since been superseded (e.g.
- * canceled, then replaced by a new one) must not resurrect the old row's plan
- * and re-grant entitlements to a churned user.
+ * Returns the Stripe customer ID recorded for `userId`, or null if no row
+ * exists yet or none was ever recorded. Used by the billing-portal route
+ * (which requires a customer ID) and by checkout-session creation (to reuse
+ * an existing customer instead of creating a duplicate one).
  */
-export async function upsertSubscriptionFromEvent(
-  payload: ClerkBillingSubscriptionPayload,
-): Promise<void> {
-  const userId = payload.payer?.user_id;
-  if (!userId) {
-    // Org-level (B2B) subscription, or a payload shape we don't recognize.
-    // This app only bills individual users — nothing to sync.
-    return;
-  }
-
-  const primaryItem = payload.items?.[0];
-  const plan = mapClerkPlanSlug(primaryItem?.plan?.slug);
-  if (!primaryItem || !plan) {
-    // No item, or a plan slug this app doesn't map to a known tier (e.g. the
-    // implicit free-plan container, if Clerk ever sends one). Nothing to sync.
-    return;
-  }
-
+export async function getStripeCustomerIdForUser(
+  userId: string,
+): Promise<string | null> {
   const database = getDb();
-  const existing = await getSubscriptionRow(database, userId);
-  if (isStaleEvent(existing?.clerkSubscriptionId, payload.id)) {
-    return;
-  }
-
-  const values = {
-    userId,
-    plan,
-    status: mapClerkSubscriptionStatus(payload.status),
-    billingCycle: mapClerkPlanPeriod(primaryItem.plan_period),
-    currentPeriodEnd: primaryItem.period_end
-      ? new Date(primaryItem.period_end)
-      : null,
-    clerkSubscriptionId: payload.id,
-    clerkSubscriptionItemId: primaryItem.id,
-  };
-
-  await database
-    .insert(subscriptions)
-    .values(values)
-    .onConflictDoUpdate({ target: subscriptions.userId, set: values });
+  const rows = await database
+    .select({ stripeCustomerId: subscriptions.stripeCustomerId })
+    .from(subscriptions)
+    .where(eq(subscriptions.userId, userId))
+    .limit(1);
+  return rows[0]?.stripeCustomerId ?? null;
 }
 
-/**
- * Marks the user's subscription row canceled from a subscriptionItem.canceled
- * / subscriptionItem.ended / subscriptionItem.abandoned webhook event.
- *
- * Only applies when the incoming item matches the row's clerkSubscriptionItemId
- * (or the row has none recorded yet). Svix does not guarantee delivery order,
- * so an out-of-order "ended" event for a since-replaced item must not clobber
- * a newer, already-active subscription — the same risk already accepted for
- * user.updated in handleUserUpsert above.
- *
- * Known accepted risk: clearing the Clerk IDs on cancel (below) means a
- * genuinely new subscription.created for a re-subscribing user is correctly
- * accepted afterward, but it also means a *delayed* subscription.updated for
- * the just-canceled subscription arriving after this event would no longer be
- * recognized as stale and could briefly re-activate the row. Clerk's item-level
- * webhook payloads carry no event timestamp to order against (verified against
- * the @clerk/backend types), so a fully race-proof fix isn't achievable from
- * this payload alone without either a Clerk-side event timestamp or a
- * reconciliation pass against the Billing REST API. This app accepts that
- * narrow, transient race in exchange for not permanently locking out
- * legitimate re-subscriptions — the same class of tradeoff the codebase
- * already accepts for out-of-order user.updated events.
- */
-export async function markSubscriptionItemInactive(
-  payload: ClerkBillingSubscriptionItemPayload,
-): Promise<void> {
-  const userId = payload.payer?.user_id;
-  if (!userId) {
-    return;
-  }
-
-  const database = getDb();
-  const existing = await getSubscriptionRow(database, userId);
-  if (isStaleEvent(existing?.clerkSubscriptionItemId, payload.id)) {
-    return;
-  }
-
-  if (!existing) {
-    // The cancellation arrived before subscription.created ever created a
-    // row (Svix delivery order isn't guaranteed). There's nothing to mark
-    // canceled yet; log so this isn't silently swallowed if a subsequent
-    // subscription.created then incorrectly leaves the user "active".
-    console.warn(
-      `markSubscriptionItemInactive: no subscriptions row yet for user ${userId}; cancellation for item ${payload.id} may have arrived before subscription.created`,
-    );
-    return;
-  }
-
-  // Clear the recorded Clerk IDs along with the status. This app's B2C plans
-  // are single-item, so a canceled item means the whole subscription is done.
-  // Clearing the IDs (rather than leaving the old ones in place) means a
-  // future subscription.created for a genuinely new subscription — e.g. the
-  // user re-subscribes later — isn't rejected as a stale/out-of-order event by
-  // upsertSubscriptionFromEvent's isStaleEvent check, which treats a row with
-  // no recorded ID as never stale. See the accepted-risk note above.
-  await database
-    .update(subscriptions)
-    .set({
-      status: SUBSCRIPTION_STATUS.CANCELED,
-      clerkSubscriptionId: null,
-      clerkSubscriptionItemId: null,
-    })
-    .where(eq(subscriptions.userId, userId));
-}
-
-/**
- * Records the trial end date from a subscriptionItem.freeTrialEnding webhook
- * event — the one Clerk Billing event that unambiguously indicates an active
- * trial window ending soon. Clerk's webhook JSON does not otherwise expose a
- * first-class "is in trial" flag at the subscription/item status level
- * (verified against the @clerk/backend type definitions), so trialEndsAt is
- * best-effort and only populated once this event fires (3 days before the
- * trial ends per Clerk's docs), not from day one of the trial.
- */
-export async function recordTrialEndingSoon(
-  payload: ClerkBillingSubscriptionItemPayload,
-): Promise<void> {
-  const userId = payload.payer?.user_id;
-  if (!userId || !payload.period_end) {
-    return;
-  }
-
-  const database = getDb();
-  const existing = await getSubscriptionRow(database, userId);
-  if (isStaleEvent(existing?.clerkSubscriptionItemId, payload.id)) {
-    return;
-  }
-
-  if (!existing) {
-    console.warn(
-      `recordTrialEndingSoon: no subscriptions row yet for user ${userId}; freeTrialEnding for item ${payload.id} may have arrived before subscription.created`,
-    );
-    return;
-  }
-
-  await database
-    .update(subscriptions)
-    .set({ trialEndsAt: new Date(payload.period_end) })
-    .where(eq(subscriptions.userId, userId));
-}
-
-type SubscriptionIdsRow = {
-  clerkSubscriptionId: string | null;
-  clerkSubscriptionItemId: string | null;
+type SubscriptionIdRow = {
+  stripeSubscriptionId: string | null;
 };
 
-async function getSubscriptionRow(
+async function getSubscriptionIdRow(
   database: ReturnType<typeof getDb>,
   userId: string,
-): Promise<SubscriptionIdsRow | undefined> {
+): Promise<SubscriptionIdRow | undefined> {
   const rows = await database
-    .select({
-      clerkSubscriptionId: subscriptions.clerkSubscriptionId,
-      clerkSubscriptionItemId: subscriptions.clerkSubscriptionItemId,
-    })
+    .select({ stripeSubscriptionId: subscriptions.stripeSubscriptionId })
     .from(subscriptions)
     .where(eq(subscriptions.userId, userId))
     .limit(1);
@@ -349,11 +144,12 @@ async function getSubscriptionRow(
 }
 
 /**
- * True when a row already exists recording a *different* Clerk ID (subscription
- * or item, depending on the caller) than the one this webhook event is about —
- * i.e. this event is stale/out-of-order relative to a newer subscription
- * already recorded. No existing row, or a row with no ID recorded yet on that
- * field, is never considered stale (nothing to be stale relative to).
+ * True when a row already exists recording a *different* Stripe subscription
+ * ID than the one this webhook event is about — i.e. this event is stale/
+ * out-of-order relative to a newer subscription already recorded (e.g. the
+ * user canceled and resubscribed, and a delayed event for the old, superseded
+ * subscription arrives after the new one was already synced). No existing
+ * row, or a row with no ID recorded yet, is never considered stale.
  */
 function isStaleEvent(
   recordedId: string | null | undefined,
@@ -363,4 +159,126 @@ function isStaleEvent(
     return false;
   }
   return recordedId !== incomingId;
+}
+
+/**
+ * Upserts the local `subscriptions` row from a `customer.subscription.created`
+ * / `customer.subscription.updated` webhook event.
+ *
+ * Requires `subscription.metadata.userId`, set by createCheckoutSession (see
+ * server/utils/stripe.ts) via `subscription_data.metadata` at checkout time —
+ * this is the sync key, so no separate Stripe-customer-ID lookup is needed to
+ * attribute the event back to a user. No-ops (rather than throwing) when it's
+ * missing or the subscription's price doesn't map to a known plan, so an
+ * unrecognized payload doesn't fail webhook delivery — Stripe retries on
+ * non-2xx, and there is nothing actionable to retry here.
+ */
+export async function upsertSubscriptionFromStripeSubscription(
+  subscription: Stripe.Subscription,
+): Promise<void> {
+  const userId = subscription.metadata?.userId;
+  if (!userId) {
+    return;
+  }
+
+  const item = subscription.items.data[0];
+  const mapped = mapPriceIdToPlan(item?.price?.id);
+  if (!item || !mapped) {
+    // No item, or a Price ID this app doesn't map to a known tier/cycle
+    // combination. Nothing to sync.
+    return;
+  }
+
+  const database = getDb();
+  const existing = await getSubscriptionIdRow(database, userId);
+  if (isStaleEvent(existing?.stripeSubscriptionId, subscription.id)) {
+    return;
+  }
+
+  const customerId =
+    typeof subscription.customer === "string"
+      ? subscription.customer
+      : subscription.customer.id;
+
+  const values = {
+    userId,
+    plan: mapped.plan,
+    status: mapStripeSubscriptionStatus(subscription.status),
+    billingCycle: mapped.cycle,
+    trialEndsAt: subscription.trial_end
+      ? new Date(subscription.trial_end * 1000)
+      : null,
+    currentPeriodEnd: item.current_period_end
+      ? new Date(item.current_period_end * 1000)
+      : null,
+    cancelAtPeriodEnd: subscription.cancel_at_period_end,
+    stripeCustomerId: customerId,
+    stripeSubscriptionId: subscription.id,
+  };
+
+  await database
+    .insert(subscriptions)
+    .values(values)
+    .onConflictDoUpdate({ target: subscriptions.userId, set: values });
+}
+
+/**
+ * Marks the user's subscription row canceled from a
+ * `customer.subscription.deleted` webhook event — Stripe fires this only once
+ * a subscription has truly ended (either canceled immediately, or naturally
+ * at the end of a period after the customer scheduled a cancel-at-period-end
+ * via the Billing Portal), so no separate "is this really final" check is
+ * needed the way the previous billing provider required.
+ *
+ * Only applies when the incoming subscription ID matches the row's recorded
+ * stripeSubscriptionId (or the row has none recorded). Stripe does not
+ * guarantee webhook delivery order, so an out-of-order "deleted" event for a
+ * since-replaced subscription must not clobber a newer, already-active one —
+ * the same risk already accepted for out-of-order user.updated events in
+ * server/api/webhooks/clerk.post.ts.
+ *
+ * stripeCustomerId is deliberately NOT cleared: it's the enduring identity of
+ * the billing customer (not per-subscription like stripeSubscriptionId), and
+ * is still needed for the Billing Portal and to let a resubscribing user
+ * reuse the same Stripe customer rather than creating a duplicate one.
+ * stripeSubscriptionId IS cleared, for the same reason the previous provider
+ * cleared its equivalent ID on cancellation: so a genuinely new
+ * subscription.created for a resubscribing user (a fresh Stripe subscription
+ * ID) isn't rejected as a stale/out-of-order event by
+ * upsertSubscriptionFromStripeSubscription's isStaleEvent check, which treats
+ * a row with no recorded ID as never stale.
+ */
+export async function markSubscriptionCanceled(
+  subscription: Stripe.Subscription,
+): Promise<void> {
+  const userId = subscription.metadata?.userId;
+  if (!userId) {
+    return;
+  }
+
+  const database = getDb();
+  const existing = await getSubscriptionIdRow(database, userId);
+  if (isStaleEvent(existing?.stripeSubscriptionId, subscription.id)) {
+    return;
+  }
+
+  if (!existing) {
+    // The deletion arrived before subscription.created ever created a row
+    // (Stripe delivery order isn't guaranteed). Nothing to mark canceled yet;
+    // log so this isn't silently swallowed if a subsequent subscription.created
+    // then incorrectly leaves the user "active".
+    console.warn(
+      `markSubscriptionCanceled: no subscriptions row yet for user ${userId}; deletion for subscription ${subscription.id} may have arrived before subscription.created`,
+    );
+    return;
+  }
+
+  await database
+    .update(subscriptions)
+    .set({
+      status: SUBSCRIPTION_STATUS.CANCELED,
+      cancelAtPeriodEnd: false,
+      stripeSubscriptionId: null,
+    })
+    .where(eq(subscriptions.userId, userId));
 }

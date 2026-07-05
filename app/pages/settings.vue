@@ -630,6 +630,14 @@ const billingStatusMessage = computed<string>(() => {
   if (subscription.value.status === "canceled") {
     return `Access ends ${renewalDateLabel.value}.`;
   }
+  // A subscription canceled via the Stripe Billing Portal stays "active"
+  // (still entitled) with cancelAtPeriodEnd set until the period actually
+  // ends and the webhook flips status to canceled — see
+  // server/utils/subscriptions.ts. Surface that scheduled end here instead
+  // of claiming it renews.
+  if (subscription.value.cancelAtPeriodEnd) {
+    return `Access ends ${renewalDateLabel.value}.`;
+  }
   return `Renews ${renewalDateLabel.value} (${billingCycleLabel.value}).`;
 });
 

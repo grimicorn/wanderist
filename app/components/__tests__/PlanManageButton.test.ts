@@ -1,26 +1,38 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mount } from "@vue/test-utils";
 import PlanManageButton from "../PlanManageButton.vue";
 
-const subscriptionDetailsButtonStub = vi.hoisted(() => ({
-  name: "SubscriptionDetailsButton",
-  template: '<div class="subscription-details-button-stub"><slot /></div>',
-}));
-
-vi.mock("@clerk/vue/experimental", () => ({
-  SubscriptionDetailsButton: subscriptionDetailsButtonStub,
-}));
-
 describe("PlanManageButton", () => {
-  it("renders the Clerk SubscriptionDetailsButton with slot content", () => {
+  const originalLocation = window.location;
+
+  beforeEach(() => {
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: { ...originalLocation, href: "" },
+    });
+  });
+
+  afterEach(() => {
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: originalLocation,
+    });
+  });
+
+  it("renders slot content", () => {
     const wrapper = mount(PlanManageButton, {
       slots: { default: "manage subscription" },
     });
 
-    expect(wrapper.findComponent(subscriptionDetailsButtonStub).exists()).toBe(
-      true,
-    );
     expect(wrapper.text()).toContain("manage subscription");
+  });
+
+  it("navigates to /api/billing/portal on click", async () => {
+    const wrapper = mount(PlanManageButton);
+
+    await wrapper.find("button").trigger("click");
+
+    expect(window.location.href).toBe("/api/billing/portal");
   });
 
   it("forwards attrs like class onto the rendered button", () => {

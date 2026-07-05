@@ -55,11 +55,13 @@ export const PLAN = {
   NOMAD: "nomad",
 } as const;
 
-// Collapsed subscription-state vocabulary. Clerk Billing's own status enum is
-// wider ('active' | 'past_due' | 'canceled' | 'ended' | 'abandoned' |
-// 'incomplete'), but plan-limit enforcement only needs to know whether a row
-// is currently entitled to its plan — every non-active/past_due terminal
-// status collapses to CANCELED. See server/utils/subscriptions.ts.
+// Collapsed subscription-state vocabulary. Stripe's own Subscription.status
+// enum is wider ('trialing' | 'active' | 'past_due' | 'canceled' | 'unpaid' |
+// 'incomplete' | 'incomplete_expired' | 'paused'), but plan-limit enforcement
+// only needs to know whether a row is currently entitled to its plan — every
+// non-active/past_due status collapses to CANCELED (trialing collapses to
+// ACTIVE instead — a trialing subscription is already fully entitled). See
+// server/utils/subscriptions.ts.
 export const SUBSCRIPTION_STATUS = {
   ACTIVE: "active",
   PAST_DUE: "past_due",
@@ -481,9 +483,9 @@ export const userPreferences = pgTable("user_preferences", {
 
 // ---------------------------------------------------------------------------
 // subscriptions — 1:1 with users, userId is PK.
-// Synced from Clerk Billing webhook events (see server/api/webhooks/clerk.post.ts
+// Synced from Stripe webhook events (see server/api/webhooks/stripe.post.ts
 // and server/utils/subscriptions.ts). A user with no row here is on the free
-// Drifter plan; there is deliberately no row-per-free-user since Clerk never
+// Drifter plan; there is deliberately no row-per-free-user since Stripe never
 // fires a subscription webhook for the default free tier.
 // ---------------------------------------------------------------------------
 
@@ -496,16 +498,25 @@ export const subscriptions = pgTable("subscriptions", {
     .notNull()
     .default(SUBSCRIPTION_STATUS.ACTIVE),
   billingCycle: billingCycleEnum("billing_cycle"),
-  // Populated via the subscriptionItem.freeTrialEnding webhook event, the one
-  // Clerk Billing event that unambiguously indicates an active trial window
-  // (see server/utils/subscriptions.ts for why other events can't be used for
-  // trial detection).
+  // Populated directly from Stripe's Subscription.trial_end field, which is
+  // set for the lifetime of a trialing subscription (unlike Clerk Billing,
+  // Stripe exposes this on every subscription/webhook payload, not just a
+  // one-time "ending soon" event) — see server/utils/subscriptions.ts.
   trialEndsAt: timestamp("trial_ends_at"),
   currentPeriodEnd: timestamp("current_period_end"),
-  // Clerk-side identifiers, kept so later webhook events for the same
-  // subscription/item can be correlated and out-of-order events detected.
-  clerkSubscriptionId: text("clerk_subscription_id").unique(),
-  clerkSubscriptionItemId: text("clerk_subscription_item_id"),
+  // True while a subscription is scheduled to end at currentPeriodEnd (the
+  // customer canceled via the Billing Portal but is still within their paid
+  // period) — mirrors Stripe's Subscription.cancel_at_period_end. Lets
+  // Settings show "access ends <date>" during that window instead of
+  // continuing to claim the subscription renews.
+  cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),
+  // Stripe identifiers. stripeCustomerId is the enduring identity of the
+  // billing customer and is never cleared (needed for the Billing Portal and
+  // to reuse the same Stripe customer across a cancel/resubscribe cycle).
+  // stripeSubscriptionId correlates webhook events to this row and is
+  // cleared on cancellation — see server/utils/subscriptions.ts for why.
+  stripeCustomerId: text("stripe_customer_id"),
+  stripeSubscriptionId: text("stripe_subscription_id").unique(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .defaultNow()
