@@ -177,6 +177,19 @@ function isStaleEvent(
  * missing or the subscription's price doesn't map to a known plan, so an
  * unrecognized payload doesn't fail webhook delivery — Stripe retries on
  * non-2xx, and there is nothing actionable to retry here.
+ *
+ * Known, accepted race (mirrors the exact tradeoff the previous Clerk Billing
+ * integration accepted for the same reason): markSubscriptionCanceled clears
+ * stripeSubscriptionId on cancellation so a genuine resubscribe isn't
+ * rejected as stale (see its docstring). That means a `subscription.updated`
+ * for the just-canceled subscription, delivered *after* its `.deleted` event
+ * (Stripe does not guarantee delivery order), would no longer be recognized
+ * as stale here and could briefly re-activate the row with a future
+ * `current_period_end`. Closing this fully would require tracking the
+ * canceled subscription's ID separately from the live one (an extra column)
+ * purely to guard a narrow, transient race — not done here; the same
+ * cost/benefit call the original Clerk integration made for its equivalent
+ * out-of-order risk.
  */
 export async function upsertSubscriptionFromStripeSubscription(
   subscription: Stripe.Subscription,
