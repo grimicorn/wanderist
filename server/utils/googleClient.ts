@@ -97,8 +97,7 @@ export async function disconnectGoogleAccount(
     provider: string;
   };
   type ListResponseBody =
-    | ExternalAccountEntry[]
-    | { data: ExternalAccountEntry[] };
+    ExternalAccountEntry[] | { data: ExternalAccountEntry[] };
   const body = (await listResponse.json()) as ListResponseBody;
   const accounts = Array.isArray(body) ? body : body.data;
   const googleAccount = accounts.find(

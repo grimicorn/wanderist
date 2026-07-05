@@ -32,8 +32,7 @@ export async function assertThrows404ViaOwnership(
   mockRequireRouterParam: ReturnType<typeof vi.fn>,
   mockAssertOwnership: ReturnType<typeof vi.mocked<typeof assertOwnership>>,
   handler:
-    | { default?: (event: unknown) => unknown }
-    | ((event: unknown) => unknown),
+    { default?: (event: unknown) => unknown } | ((event: unknown) => unknown),
 ) {
   mockRequireRouterParam.mockReturnValue("e-1");
   const notFoundError = createError({
@@ -56,8 +55,7 @@ export async function assertThrows401ViaOwnership(
   mockRequireRouterParam: ReturnType<typeof vi.fn>,
   mockAssertOwnership: ReturnType<typeof vi.mocked<typeof assertOwnership>>,
   handler:
-    | { default?: (event: unknown) => unknown }
-    | ((event: unknown) => unknown),
+    { default?: (event: unknown) => unknown } | ((event: unknown) => unknown),
 ) {
   mockRequireRouterParam.mockReturnValue("e-1");
   const unauthorizedError = createError({
@@ -107,8 +105,7 @@ export async function assertThrows404WhenNotOwned(
   mockRequireRouterParam: ReturnType<typeof vi.fn>,
   mockLoadOwnedOrThrow: ReturnType<typeof vi.mocked<typeof loadOwnedOrThrow>>,
   handler:
-    | { default?: (event: unknown) => unknown }
-    | ((event: unknown) => unknown),
+    { default?: (event: unknown) => unknown } | ((event: unknown) => unknown),
 ) {
   mockRequireRouterParam.mockReturnValue("e-1");
   const notFoundError = createError({
@@ -132,8 +129,7 @@ export async function assertThrows401WhenUnauthenticated(
   mockRequireRouterParam: ReturnType<typeof vi.fn>,
   mockLoadOwnedOrThrow: ReturnType<typeof vi.mocked<typeof loadOwnedOrThrow>>,
   handler:
-    | { default?: (event: unknown) => unknown }
-    | ((event: unknown) => unknown),
+    { default?: (event: unknown) => unknown } | ((event: unknown) => unknown),
 ) {
   mockRequireRouterParam.mockReturnValue("e-1");
   const unauthorizedError = createError({
