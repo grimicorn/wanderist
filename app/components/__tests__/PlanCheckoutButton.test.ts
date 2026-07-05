@@ -1,29 +1,34 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { ref } from "vue";
 import { mount } from "@vue/test-utils";
 import PlanCheckoutButton from "../PlanCheckoutButton.vue";
 
-let runtimeConfigMock = {
-  public: {
-    stripeWandererMonthlyConfigured: true,
-    stripeWandererYearlyConfigured: false,
-    stripeNomadMonthlyConfigured: false,
-    stripeNomadYearlyConfigured: false,
-  },
-};
+const mockFetchBillingConfig = vi.fn().mockResolvedValue(undefined);
 
-vi.stubGlobal("useRuntimeConfig", () => runtimeConfigMock);
+let configRef = ref({
+  wandererMonthlyConfigured: true,
+  wandererYearlyConfigured: false,
+  nomadMonthlyConfigured: false,
+  nomadYearlyConfigured: false,
+});
+
+vi.mock("~/composables/useBillingConfig", () => ({
+  useBillingConfig: () => ({
+    config: configRef,
+    fetchBillingConfig: mockFetchBillingConfig,
+  }),
+}));
 
 describe("PlanCheckoutButton", () => {
   const originalLocation = window.location;
 
   beforeEach(() => {
-    runtimeConfigMock = {
-      public: {
-        stripeWandererMonthlyConfigured: true,
-        stripeWandererYearlyConfigured: false,
-        stripeNomadMonthlyConfigured: false,
-        stripeNomadYearlyConfigured: false,
-      },
+    vi.clearAllMocks();
+    configRef.value = {
+      wandererMonthlyConfigured: true,
+      wandererYearlyConfigured: false,
+      nomadMonthlyConfigured: false,
+      nomadYearlyConfigured: false,
     };
     // window.location.href is not settable via jsdom by default; stub it so
     // startCheckout's navigation can be observed without actually navigating.
@@ -60,6 +65,14 @@ describe("PlanCheckoutButton", () => {
     const button = wrapper.find("button");
     expect(button.attributes("disabled")).toBeDefined();
     expect(button.attributes("title")).toBe("Checkout is not configured yet");
+  });
+
+  it("fetches billing config on mount", () => {
+    mount(PlanCheckoutButton, {
+      props: { tier: "wanderer", cycle: "monthly" },
+    });
+
+    expect(mockFetchBillingConfig).toHaveBeenCalledTimes(1);
   });
 
   it("navigates to /api/billing/checkout with tier + cycle on click", async () => {

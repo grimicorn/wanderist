@@ -10,7 +10,11 @@
  */
 
 import { ensureUser } from "../../utils/auth";
-import { getStripeCustomerIdForUser } from "../../utils/subscriptions";
+import {
+  getStripeCustomerIdForUser,
+  getSubscriptionForUser,
+} from "../../utils/subscriptions";
+import { PLAN, SUBSCRIPTION_STATUS } from "../../db/schema";
 import {
   createCheckoutSession,
   getPriceId,
@@ -68,6 +72,29 @@ function parseRedirectTo(value: unknown): string | null {
   return value;
 }
 
+// A user whose row already reflects a live paid subscription (active or
+// past_due — past_due still has a real Stripe subscription, just failing
+// payment) must manage it through the Billing Portal instead of starting a
+// second Checkout Session: Stripe would happily create a second subscription
+// on the same customer, silently double-billing them, since a customer can
+// hold more than one active subscription at once.
+function assertNotAlreadySubscribed(subscription: {
+  plan: string;
+  status: string;
+}): void {
+  const alreadySubscribed =
+    subscription.plan !== PLAN.DRIFTER &&
+    subscription.status !== SUBSCRIPTION_STATUS.CANCELED;
+  if (!alreadySubscribed) {
+    return;
+  }
+  throw createError({
+    statusCode: 409,
+    statusMessage:
+      "You already have a subscription — manage it from Settings instead.",
+  });
+}
+
 export default defineEventHandler(async (event) => {
   const userId = await ensureUser(event);
   const query = getQuery(event);
@@ -82,6 +109,9 @@ export default defineEventHandler(async (event) => {
       statusMessage: `Checkout for the ${tier} plan (${cycle}) is not configured`,
     });
   }
+
+  const currentSubscription = await getSubscriptionForUser(userId);
+  assertNotAlreadySubscribed(currentSubscription);
 
   const origin = requireAppOrigin();
   const existingCustomerId = await getStripeCustomerIdForUser(userId);

@@ -18,12 +18,16 @@
  * third-party flow" convention app/composables/useConnections.ts uses for
  * Instagram OAuth.
  *
- * The Stripe Price ID for each tier/cycle is a human-configured value (see
- * nuxt.config.ts / README "Billing" section) that never reaches the client;
- * this component only knows whether one is configured via a public boolean
- * flag, and renders disabled until it is, rather than opening a checkout
- * that would fail at runtime.
+ * The Stripe Price ID for each tier/cycle is a human-configured, server-only
+ * value (see server/utils/stripe.ts / README "Billing" section) that never
+ * reaches the client; this component only knows whether one is configured
+ * via useBillingConfig() (GET /api/billing/config, read fresh per request —
+ * NOT a build-time Nuxt public runtimeConfig value, which wouldn't
+ * reliably reflect a runtime-injected STRIPE_PRICE_* env var), and renders
+ * disabled until it is, rather than opening a checkout that would fail.
  */
+import { useBillingConfig } from "~/composables/useBillingConfig";
+
 type PlanTier = "wanderer" | "nomad";
 type BillingCycleOption = "monthly" | "yearly";
 
@@ -36,9 +40,13 @@ const props = defineProps<{
 
 defineOptions({ inheritAttrs: false });
 
-const config = useRuntimeConfig();
-
 const unconfiguredTitle = "Checkout is not configured yet";
+
+const { config, fetchBillingConfig } = useBillingConfig();
+
+onMounted(() => {
+  fetchBillingConfig();
+});
 
 const configured = computed<boolean>(() => {
   const flagsByTierAndCycle: Record<
@@ -46,12 +54,12 @@ const configured = computed<boolean>(() => {
     Record<BillingCycleOption, boolean>
   > = {
     wanderer: {
-      monthly: config.public.stripeWandererMonthlyConfigured,
-      yearly: config.public.stripeWandererYearlyConfigured,
+      monthly: config.value.wandererMonthlyConfigured,
+      yearly: config.value.wandererYearlyConfigured,
     },
     nomad: {
-      monthly: config.public.stripeNomadMonthlyConfigured,
-      yearly: config.public.stripeNomadYearlyConfigured,
+      monthly: config.value.nomadMonthlyConfigured,
+      yearly: config.value.nomadYearlyConfigured,
     },
   };
   return flagsByTierAndCycle[props.tier][props.cycle];

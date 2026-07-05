@@ -25,23 +25,6 @@ export default defineNuxtConfig({
       sentryDsn: "",
       siteOrigin: "",
       mapboxToken: "",
-      // Whether a Stripe Price ID is configured for each tier/cycle (see
-      // server/utils/stripe.ts and README "Billing" section). The actual
-      // Price IDs stay server-only (STRIPE_PRICE_*); only these booleans are
-      // public, so <PlanCheckoutButton> can render disabled instead of
-      // opening a checkout that would fail at runtime.
-      stripeWandererMonthlyConfigured: Boolean(
-        process.env.STRIPE_PRICE_WANDERER_MONTHLY,
-      ),
-      stripeWandererYearlyConfigured: Boolean(
-        process.env.STRIPE_PRICE_WANDERER_YEARLY,
-      ),
-      stripeNomadMonthlyConfigured: Boolean(
-        process.env.STRIPE_PRICE_NOMAD_MONTHLY,
-      ),
-      stripeNomadYearlyConfigured: Boolean(
-        process.env.STRIPE_PRICE_NOMAD_YEARLY,
-      ),
     },
   },
   css: ["~/assets/css/main.css", "mapbox-gl/dist/mapbox-gl.css"],

@@ -6,6 +6,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const {
   mockEnsureUser,
   mockGetStripeCustomerIdForUser,
+  mockGetSubscriptionForUser,
   mockGetPriceId,
   mockCreateCheckoutSession,
   mockSendRedirect,
@@ -13,6 +14,7 @@ const {
 } = vi.hoisted(() => ({
   mockEnsureUser: vi.fn().mockResolvedValue("user-1"),
   mockGetStripeCustomerIdForUser: vi.fn().mockResolvedValue(null),
+  mockGetSubscriptionForUser: vi.fn(),
   mockGetPriceId: vi.fn(),
   mockCreateCheckoutSession: vi.fn(),
   mockSendRedirect: vi.fn().mockResolvedValue(undefined),
@@ -25,6 +27,7 @@ vi.mock("../../../server/utils/auth", () => ({
 
 vi.mock("../../../server/utils/subscriptions", () => ({
   getStripeCustomerIdForUser: mockGetStripeCustomerIdForUser,
+  getSubscriptionForUser: mockGetSubscriptionForUser,
 }));
 
 vi.mock("../../../server/utils/stripe", () => ({
@@ -54,6 +57,10 @@ describe("GET /api/billing/checkout", () => {
     vi.clearAllMocks();
     mockEnsureUser.mockResolvedValue("user-1");
     mockGetStripeCustomerIdForUser.mockResolvedValue(null);
+    mockGetSubscriptionForUser.mockResolvedValue({
+      plan: "drifter",
+      status: "active",
+    });
     mockGetQuery.mockReturnValue({ tier: "wanderer", cycle: "monthly" });
     mockGetPriceId.mockReturnValue("price_wanderer_monthly");
     mockCreateCheckoutSession.mockResolvedValue({
@@ -156,6 +163,48 @@ describe("GET /api/billing/checkout", () => {
 
     await expect(call()).rejects.toMatchObject({ statusCode: 400 });
     expect(mockCreateCheckoutSession).not.toHaveBeenCalled();
+  });
+
+  it("throws 409 when the user already has an active paid subscription (prevents double-charging)", async () => {
+    mockGetSubscriptionForUser.mockResolvedValue({
+      plan: "wanderer",
+      status: "active",
+    });
+
+    await expect(call()).rejects.toMatchObject({ statusCode: 409 });
+    expect(mockCreateCheckoutSession).not.toHaveBeenCalled();
+  });
+
+  it("throws 409 when the user's paid subscription is past_due", async () => {
+    mockGetSubscriptionForUser.mockResolvedValue({
+      plan: "nomad",
+      status: "past_due",
+    });
+
+    await expect(call()).rejects.toMatchObject({ statusCode: 409 });
+    expect(mockCreateCheckoutSession).not.toHaveBeenCalled();
+  });
+
+  it("allows checkout for a canceled former subscriber", async () => {
+    mockGetSubscriptionForUser.mockResolvedValue({
+      plan: "wanderer",
+      status: "canceled",
+    });
+
+    await call();
+
+    expect(mockCreateCheckoutSession).toHaveBeenCalled();
+  });
+
+  it("allows checkout for a free Drifter user", async () => {
+    mockGetSubscriptionForUser.mockResolvedValue({
+      plan: "drifter",
+      status: "active",
+    });
+
+    await call();
+
+    expect(mockCreateCheckoutSession).toHaveBeenCalled();
   });
 
   it("throws 500 when NUXT_PUBLIC_SITE_ORIGIN is not configured", async () => {
