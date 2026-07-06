@@ -17,17 +17,24 @@ import {
   connectedAccounts,
   userPreferences,
   guides,
+  subscriptions,
   TRIP_STATUS,
   VISIBILITY,
   TRIP_STOP_STATUS,
   CONNECTED_ACCOUNT_PROVIDER,
   DISTANCE_UNIT,
+  PLAN,
+  SUBSCRIPTION_STATUS,
+  BILLING_CYCLE,
   ON_DELETE,
   tripStatusEnum,
   visibilityEnum,
   tripStopStatusEnum,
   connectedAccountProviderEnum,
   distanceUnitEnum,
+  planEnum,
+  subscriptionStatusEnum,
+  billingCycleEnum,
 } from "../server/db/schema";
 
 // ---------------------------------------------------------------------------
@@ -95,6 +102,10 @@ describe("schema table exports", () => {
   it("guides table has correct SQL name", () => {
     expect(guides[Symbol.for("drizzle:Name")]).toBe("guides");
   });
+
+  it("subscriptions table has correct SQL name", () => {
+    expect(subscriptions[Symbol.for("drizzle:Name")]).toBe("subscriptions");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -128,6 +139,23 @@ describe("enum constant exports", () => {
   it("DISTANCE_UNIT covers mi and km", () => {
     expect(DISTANCE_UNIT.MI).toBe("mi");
     expect(DISTANCE_UNIT.KM).toBe("km");
+  });
+
+  it("PLAN covers drifter, wanderer, nomad", () => {
+    expect(PLAN.DRIFTER).toBe("drifter");
+    expect(PLAN.WANDERER).toBe("wanderer");
+    expect(PLAN.NOMAD).toBe("nomad");
+  });
+
+  it("SUBSCRIPTION_STATUS covers active, past_due, canceled", () => {
+    expect(SUBSCRIPTION_STATUS.ACTIVE).toBe("active");
+    expect(SUBSCRIPTION_STATUS.PAST_DUE).toBe("past_due");
+    expect(SUBSCRIPTION_STATUS.CANCELED).toBe("canceled");
+  });
+
+  it("BILLING_CYCLE covers monthly and yearly", () => {
+    expect(BILLING_CYCLE.MONTHLY).toBe("monthly");
+    expect(BILLING_CYCLE.YEARLY).toBe("yearly");
   });
 });
 
@@ -164,6 +192,22 @@ describe("pgEnum values match constant objects", () => {
   it("distanceUnitEnum values match DISTANCE_UNIT", () => {
     expect([...distanceUnitEnum.enumValues].sort()).toEqual(
       Object.values(DISTANCE_UNIT).sort(),
+    );
+  });
+
+  it("planEnum values match PLAN", () => {
+    expect([...planEnum.enumValues].sort()).toEqual(Object.values(PLAN).sort());
+  });
+
+  it("subscriptionStatusEnum values match SUBSCRIPTION_STATUS", () => {
+    expect([...subscriptionStatusEnum.enumValues].sort()).toEqual(
+      Object.values(SUBSCRIPTION_STATUS).sort(),
+    );
+  });
+
+  it("billingCycleEnum values match BILLING_CYCLE", () => {
+    expect([...billingCycleEnum.enumValues].sort()).toEqual(
+      Object.values(BILLING_CYCLE).sort(),
     );
   });
 });
@@ -233,6 +277,18 @@ describe("column presence", () => {
     expect(guides.readTimeMinutes).toBeDefined();
     expect(guides.likeCount).toBeDefined();
     expect(guides.visibility).toBeDefined();
+  });
+
+  it("subscriptions has plan, status, billingCycle, trialEndsAt, currentPeriodEnd, cancelAtPeriodEnd, stripeCustomerId, stripeSubscriptionId", () => {
+    expect(subscriptions.userId).toBeDefined();
+    expect(subscriptions.plan).toBeDefined();
+    expect(subscriptions.status).toBeDefined();
+    expect(subscriptions.billingCycle).toBeDefined();
+    expect(subscriptions.trialEndsAt).toBeDefined();
+    expect(subscriptions.currentPeriodEnd).toBeDefined();
+    expect(subscriptions.cancelAtPeriodEnd).toBeDefined();
+    expect(subscriptions.stripeCustomerId).toBeDefined();
+    expect(subscriptions.stripeSubscriptionId).toBeDefined();
   });
 });
 
@@ -418,6 +474,12 @@ const ON_DELETE_POLICY: ReadonlyArray<{
   {
     label: "guides.userId",
     table: guides,
+    column: "user_id",
+    expected: ON_DELETE.CASCADE,
+  },
+  {
+    label: "subscriptions.userId",
+    table: subscriptions,
     column: "user_id",
     expected: ON_DELETE.CASCADE,
   },

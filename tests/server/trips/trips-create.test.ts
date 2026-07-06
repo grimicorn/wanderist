@@ -65,6 +65,11 @@ vi.mock("../../../server/db/index", () => ({
   getDb: () => ({ insert: mockInsert }),
 }));
 
+const mockAssertActiveTripLimit = vi.fn().mockResolvedValue(undefined);
+vi.mock("../../../server/utils/planLimits", () => ({
+  assertActiveTripLimit: mockAssertActiveTripLimit,
+}));
+
 Object.assign(globalThis, {
   defineEventHandler: (handler: (event: object) => unknown) => handler,
   createError: mockCreateError,
@@ -110,6 +115,39 @@ describe("POST /api/trips", () => {
     ]);
     mockValues.mockReturnValue({ returning: mockReturning });
     mockInsert.mockReturnValue({ values: mockValues });
+    mockAssertActiveTripLimit.mockResolvedValue(undefined);
+  });
+
+  it("propagates a 402 when the plan's active-trip limit has been reached", async () => {
+    mockAssertActiveTripLimit.mockRejectedValue(
+      Object.assign(new Error("Plan limit reached"), { statusCode: 402 }),
+    );
+
+    await expect(
+      (handler as (event: object) => Promise<unknown>)(buildEvent()),
+    ).rejects.toMatchObject({ statusCode: 402 });
+    expect(mockAssertActiveTripLimit).toHaveBeenCalledWith("user-1");
+  });
+
+  it("does not check the active-trip limit when creating a 'past' trip", async () => {
+    mockReadBody.mockResolvedValue({ name: "Old Trip", status: "past" });
+    mockReturning.mockResolvedValue([
+      {
+        id: "new-id",
+        userId: "user-1",
+        name: "Old Trip",
+        status: "past",
+        visibility: "private",
+        startDate: null,
+        endDate: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+    ]);
+
+    await (handler as (event: object) => Promise<unknown>)(buildEvent());
+
+    expect(mockAssertActiveTripLimit).not.toHaveBeenCalled();
   });
 
   it("creates and returns a trip with minimal required fields", async () => {

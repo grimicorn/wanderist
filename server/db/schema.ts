@@ -46,6 +46,33 @@ export const DISTANCE_UNIT = {
   KM: "km",
 } as const;
 
+// Billing plan tiers — mirrors the three tiers advertised on /pricing.
+// DRIFTER is the free tier and never has a row in `subscriptions`; a missing
+// row IS the free tier (see server/utils/subscriptions.ts).
+export const PLAN = {
+  DRIFTER: "drifter",
+  WANDERER: "wanderer",
+  NOMAD: "nomad",
+} as const;
+
+// Collapsed subscription-state vocabulary. Stripe's own Subscription.status
+// enum is wider ('trialing' | 'active' | 'past_due' | 'canceled' | 'unpaid' |
+// 'incomplete' | 'incomplete_expired' | 'paused'), but plan-limit enforcement
+// only needs to know whether a row is currently entitled to its plan — every
+// non-active/past_due status collapses to CANCELED (trialing collapses to
+// ACTIVE instead — a trialing subscription is already fully entitled). See
+// server/utils/subscriptions.ts.
+export const SUBSCRIPTION_STATUS = {
+  ACTIVE: "active",
+  PAST_DUE: "past_due",
+  CANCELED: "canceled",
+} as const;
+
+export const BILLING_CYCLE = {
+  MONTHLY: "monthly",
+  YEARLY: "yearly",
+} as const;
+
 // Referential actions for foreign keys — named so call sites and tests share
 // one source of truth instead of repeating the raw Postgres action strings.
 export const ON_DELETE = {
@@ -78,6 +105,23 @@ export const connectedAccountProviderEnum = pgEnum(
 export const distanceUnitEnum = pgEnum("distance_unit", [
   DISTANCE_UNIT.MI,
   DISTANCE_UNIT.KM,
+]);
+
+export const planEnum = pgEnum("plan", [
+  PLAN.DRIFTER,
+  PLAN.WANDERER,
+  PLAN.NOMAD,
+]);
+
+export const subscriptionStatusEnum = pgEnum("subscription_status", [
+  SUBSCRIPTION_STATUS.ACTIVE,
+  SUBSCRIPTION_STATUS.PAST_DUE,
+  SUBSCRIPTION_STATUS.CANCELED,
+]);
+
+export const billingCycleEnum = pgEnum("billing_cycle", [
+  BILLING_CYCLE.MONTHLY,
+  BILLING_CYCLE.YEARLY,
 ]);
 
 // ---------------------------------------------------------------------------
@@ -435,4 +479,47 @@ export const userPreferences = pgTable("user_preferences", {
   handle: text("handle").unique(),
   homeBase: text("home_base"),
   bio: text("bio"),
+});
+
+// ---------------------------------------------------------------------------
+// subscriptions — 1:1 with users, userId is PK.
+// Synced from Stripe webhook events (see server/api/webhooks/stripe.post.ts
+// and server/utils/subscriptions.ts). A user with no row here is on the free
+// Drifter plan; there is deliberately no row-per-free-user since Stripe never
+// fires a subscription webhook for the default free tier.
+// ---------------------------------------------------------------------------
+
+export const subscriptions = pgTable("subscriptions", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: ON_DELETE.CASCADE }),
+  plan: planEnum("plan").notNull().default(PLAN.DRIFTER),
+  status: subscriptionStatusEnum("status")
+    .notNull()
+    .default(SUBSCRIPTION_STATUS.ACTIVE),
+  billingCycle: billingCycleEnum("billing_cycle"),
+  // Populated directly from Stripe's Subscription.trial_end field, which is
+  // set for the lifetime of a trialing subscription (unlike Clerk Billing,
+  // Stripe exposes this on every subscription/webhook payload, not just a
+  // one-time "ending soon" event) — see server/utils/subscriptions.ts.
+  trialEndsAt: timestamp("trial_ends_at"),
+  currentPeriodEnd: timestamp("current_period_end"),
+  // True while a subscription is scheduled to end at currentPeriodEnd (the
+  // customer canceled via the Billing Portal but is still within their paid
+  // period) — mirrors Stripe's Subscription.cancel_at_period_end. Lets
+  // Settings show "access ends <date>" during that window instead of
+  // continuing to claim the subscription renews.
+  cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),
+  // Stripe identifiers. stripeCustomerId is the enduring identity of the
+  // billing customer and is never cleared (needed for the Billing Portal and
+  // to reuse the same Stripe customer across a cancel/resubscribe cycle).
+  // stripeSubscriptionId correlates webhook events to this row and is
+  // cleared on cancellation — see server/utils/subscriptions.ts for why.
+  stripeCustomerId: text("stripe_customer_id"),
+  stripeSubscriptionId: text("stripe_subscription_id").unique(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at")
+    .defaultNow()
+    .notNull()
+    .$onUpdate(() => new Date()),
 });

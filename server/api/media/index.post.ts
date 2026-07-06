@@ -2,6 +2,7 @@ import { getDb } from "../../db/index";
 import { media } from "../../db/schema";
 import { ensureUser } from "../../utils/auth";
 import { putMediaBlob, removeMediaBlob } from "../../utils/mediaStore";
+import { assertPhotoLimit } from "../../utils/planLimits";
 
 // 10 MB expressed in bytes.
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
@@ -36,6 +37,7 @@ function assertFileSizeAllowed(byteLength: number): void {
 
 export default defineEventHandler(async (event) => {
   const userId = await ensureUser(event);
+  await assertPhotoLimit(userId);
 
   // Strip any parameters (e.g. "image/jpeg; charset=binary" → "image/jpeg").
   const contentType = (getHeader(event, "content-type") ?? "")

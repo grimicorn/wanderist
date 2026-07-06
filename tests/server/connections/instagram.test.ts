@@ -40,6 +40,7 @@ const {
   mockGetQuery,
   mockReadBody,
   mockSetResponseStatus,
+  mockAssertInstagramSyncAllowed,
 } = vi.hoisted(() => {
   const mockDbInsertOnConflict = vi.fn().mockResolvedValue(undefined);
   const mockDbInsertValues = vi.fn(() => ({
@@ -110,6 +111,7 @@ const {
     mockGetQuery: vi.fn().mockReturnValue({}),
     mockReadBody: vi.fn().mockResolvedValue({}),
     mockSetResponseStatus: vi.fn(),
+    mockAssertInstagramSyncAllowed: vi.fn().mockResolvedValue(undefined),
   };
 });
 
@@ -144,6 +146,10 @@ vi.mock("../../../server/utils/instagramClient", () => ({
 vi.mock("../../../server/utils/tokenCrypto", () => ({
   encryptToken: mockEncryptToken,
   decryptToken: mockDecryptToken,
+}));
+
+vi.mock("../../../server/utils/planLimits", () => ({
+  assertInstagramSyncAllowed: mockAssertInstagramSyncAllowed,
 }));
 
 vi.mock("../../../server/utils/mediaStore", () => ({
@@ -205,8 +211,21 @@ describe("GET /api/connections/instagram/start", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockRequireUser.mockReturnValue("user-1");
+    mockAssertInstagramSyncAllowed.mockResolvedValue(undefined);
     process.env.INSTAGRAM_CLIENT_ID = "test-client-id";
     process.env.NUXT_PUBLIC_SITE_ORIGIN = "https://wanderist.app";
+  });
+
+  it("propagates a 402 when the plan doesn't allow Instagram sync", async () => {
+    mockAssertInstagramSyncAllowed.mockRejectedValue(
+      Object.assign(new Error("Plan limit reached"), { statusCode: 402 }),
+    );
+
+    await expect(call(startHandler, makeEvent())).rejects.toMatchObject({
+      statusCode: 402,
+    });
+    expect(mockAssertInstagramSyncAllowed).toHaveBeenCalledWith("user-1");
+    expect(mockSendRedirect).not.toHaveBeenCalled();
   });
 
   it("sets the state cookie and redirects to Instagram OAuth", async () => {
@@ -490,6 +509,19 @@ describe("POST /api/connections/instagram/import", () => {
     mockDecryptToken.mockReturnValue("long-token");
     mockFetchInstagramMedia.mockResolvedValue({ data: [] });
     mockFilterGeotaggedMedia.mockReturnValue([]);
+    mockAssertInstagramSyncAllowed.mockResolvedValue(undefined);
+  });
+
+  it("propagates a 402 when the plan doesn't allow Instagram sync", async () => {
+    mockAssertInstagramSyncAllowed.mockRejectedValue(
+      Object.assign(new Error("Plan limit reached"), { statusCode: 402 }),
+    );
+
+    await expect(call(importHandler, makeEvent())).rejects.toMatchObject({
+      statusCode: 402,
+    });
+    expect(mockAssertInstagramSyncAllowed).toHaveBeenCalledWith("user-1");
+    expect(mockFetchInstagramMedia).not.toHaveBeenCalled();
   });
 
   it("returns { imported: 0, skipped: 0, errors: [] } when no geotagged photos exist", async () => {

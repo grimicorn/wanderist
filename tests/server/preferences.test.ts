@@ -38,6 +38,21 @@ vi.mock("../../server/utils/db-helpers", async (importOriginal) => {
   return { ...original };
 });
 
+const mockAssertMapStyleAllowed = vi.fn().mockResolvedValue(undefined);
+const mockAssertPublicProfileAllowed = vi.fn().mockResolvedValue(undefined);
+vi.mock("../../server/utils/planLimits", async (importOriginal) => {
+  // Re-export the real MAP_STYLES (preferences.patch.ts imports it as its
+  // single source of truth for valid style values) but mock the plan-gating
+  // functions, which have their own dedicated tests in plan-limits.test.ts.
+  const original =
+    await importOriginal<typeof import("../../server/utils/planLimits")>();
+  return {
+    MAP_STYLES: original.MAP_STYLES,
+    assertMapStyleAllowed: mockAssertMapStyleAllowed,
+    assertPublicProfileAllowed: mockAssertPublicProfileAllowed,
+  };
+});
+
 import { ensureUser } from "../../server/utils/auth";
 import { getDb } from "../../server/db/index";
 
@@ -211,6 +226,56 @@ const updatedRow = {
 describe("PATCH /api/preferences", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockAssertMapStyleAllowed.mockResolvedValue(undefined);
+    mockAssertPublicProfileAllowed.mockResolvedValue(undefined);
+  });
+
+  it("propagates a 402 when the plan doesn't allow the requested map style", async () => {
+    mockEnsureUser.mockResolvedValue("user-1");
+    mockReadBody.mockResolvedValue({ defaultMapStyle: "satellite" });
+    mockGetDb.mockReturnValue(
+      makeFullDb([updatedRow]) as unknown as ReturnType<typeof getDb>,
+    );
+    mockAssertMapStyleAllowed.mockRejectedValue(
+      Object.assign(new Error("Plan limit reached"), { statusCode: 402 }),
+    );
+
+    await expect(
+      (patchPreferences as (e: unknown) => unknown)({}),
+    ).rejects.toMatchObject({ statusCode: 402 });
+    expect(mockAssertMapStyleAllowed).toHaveBeenCalledWith(
+      "user-1",
+      "satellite",
+    );
+  });
+
+  it("propagates a 402 when the plan doesn't allow a public profile", async () => {
+    mockEnsureUser.mockResolvedValue("user-1");
+    mockReadBody.mockResolvedValue({ publicProfile: true });
+    mockGetDb.mockReturnValue(
+      makeFullDb([updatedRow]) as unknown as ReturnType<typeof getDb>,
+    );
+    mockAssertPublicProfileAllowed.mockRejectedValue(
+      Object.assign(new Error("Plan limit reached"), { statusCode: 402 }),
+    );
+
+    await expect(
+      (patchPreferences as (e: unknown) => unknown)({}),
+    ).rejects.toMatchObject({ statusCode: 402 });
+    expect(mockAssertPublicProfileAllowed).toHaveBeenCalledWith("user-1", true);
+  });
+
+  it("does not check the public-profile gate when the field isn't in the patch", async () => {
+    mockEnsureUser.mockResolvedValue("user-1");
+    mockReadBody.mockResolvedValue({ distanceUnit: "km" });
+    mockGetDb.mockReturnValue(
+      makeFullDb([updatedRow]) as unknown as ReturnType<typeof getDb>,
+    );
+
+    await (patchPreferences as (e: unknown) => unknown)({});
+
+    expect(mockAssertPublicProfileAllowed).not.toHaveBeenCalled();
+    expect(mockAssertMapStyleAllowed).not.toHaveBeenCalled();
   });
 
   it("persists valid preferences and returns the updated row", async () => {

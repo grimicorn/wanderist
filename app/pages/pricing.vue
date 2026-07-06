@@ -55,7 +55,7 @@
               </div>
               <div class="thd__cta">
                 <NuxtLink
-                  to="/login"
+                  :to="freeTierCtaTarget"
                   class="btn btn--outline btn--sm btn--block"
                   >start</NuxtLink
                 >
@@ -67,7 +67,15 @@
                 {{ wandererPrice }}<span class="thd__per">{{ perLabel }}</span>
               </div>
               <div class="thd__cta">
+                <PlanCheckoutButton
+                  v-if="isSignedIn"
+                  tier="wanderer"
+                  :cycle="cycle"
+                  class="btn btn--primary btn--sm btn--block"
+                  >free trial</PlanCheckoutButton
+                >
                 <NuxtLink
+                  v-else
                   to="/login"
                   class="btn btn--primary btn--sm btn--block"
                   >free trial</NuxtLink
@@ -80,7 +88,15 @@
                 {{ nomadPrice }}<span class="thd__per">{{ perLabel }}</span>
               </div>
               <div class="thd__cta">
+                <PlanCheckoutButton
+                  v-if="isSignedIn"
+                  tier="nomad"
+                  :cycle="cycle"
+                  class="btn btn--outline btn--sm btn--block"
+                  >free trial</PlanCheckoutButton
+                >
                 <NuxtLink
+                  v-else
                   to="/login"
                   class="btn btn--outline btn--sm btn--block"
                   >free trial</NuxtLink
@@ -188,17 +204,31 @@
           <tr class="tfoot-cta">
             <td />
             <td>
-              <NuxtLink to="/login" class="btn btn--outline btn--sm"
+              <NuxtLink :to="freeTierCtaTarget" class="btn btn--outline btn--sm"
                 >get started</NuxtLink
               >
             </td>
             <td class="pop">
-              <NuxtLink to="/login" class="btn btn--primary btn--sm"
+              <PlanCheckoutButton
+                v-if="isSignedIn"
+                tier="wanderer"
+                :cycle="cycle"
+                class="btn btn--primary btn--sm"
+                >start free trial</PlanCheckoutButton
+              >
+              <NuxtLink v-else to="/login" class="btn btn--primary btn--sm"
                 >start free trial</NuxtLink
               >
             </td>
             <td>
-              <NuxtLink to="/login" class="btn btn--outline btn--sm"
+              <PlanCheckoutButton
+                v-if="isSignedIn"
+                tier="nomad"
+                :cycle="cycle"
+                class="btn btn--outline btn--sm"
+                >start free trial</PlanCheckoutButton
+              >
+              <NuxtLink v-else to="/login" class="btn btn--outline btn--sm"
                 >start free trial</NuxtLink
               >
             </td>
@@ -213,6 +243,14 @@
 /* eslint-disable vue/one-component-per-file */
 useHead({ title: "Wanderist — Compare plans" });
 useScrollReveal();
+
+const { isSignedIn } = useClerkAuth();
+
+// Signed-in visitors already have an account — "start"/"get started" on the
+// free Drifter tier sends them straight into the app rather than back to login.
+const freeTierCtaTarget = computed(() =>
+  isSignedIn.value ? "/home" : "/login",
+);
 
 const cycle = ref<"monthly" | "yearly">("monthly");
 

@@ -106,6 +106,36 @@ To configure the webhook in the Clerk Dashboard:
 3. Subscribe to the `user.created`, `user.updated`, and `user.deleted` events.
 4. Copy the **Signing Secret** (starts with `whsec_`) and set it as `NUXT_CLERK_WEBHOOK_SECRET` in your environment.
 
+## Billing
+
+Wanderist uses **[Stripe](https://stripe.com)** directly (Checkout + the Billing Portal) to sell the Wanderer and Nomad plans advertised on `/pricing` and the `/` pricing teaser, kept consistent with how billing is already set up on other projects in this account rather than going through Clerk Billing.
+
+### Dashboard setup (required before checkout works)
+
+1. Go to **Stripe Dashboard → Product catalog** and create two products, each with a monthly and a yearly recurring Price matching `/pricing`:
+   - **Wanderer** — $8/mo, $6/mo billed yearly.
+   - **Nomad** — $16/mo, $12/mo billed yearly.
+2. Copy each Price's ID (`price_...`) into `STRIPE_PRICE_WANDERER_MONTHLY`, `STRIPE_PRICE_WANDERER_YEARLY`, `STRIPE_PRICE_NOMAD_MONTHLY`, `STRIPE_PRICE_NOMAD_YEARLY`. These are dashboard-generated and cannot be guessed or hardcoded — until they're set, the matching checkout button on `/pricing` and `/` renders disabled instead of opening a broken checkout.
+3. Copy your **Secret key** (Developers → API keys) into `STRIPE_SECRET_KEY`. Use a test-mode key for local/staging.
+4. Go to **Developers → Webhooks → Add endpoint**, set the URL to `https://<your-domain>/api/webhooks/stripe`, and subscribe to: `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `checkout.session.completed`. Copy the endpoint's **Signing secret** into `STRIPE_WEBHOOK_SECRET`.
+5. Go to **Settings → Billing → Customer portal** and enable it (the default configuration works — customers need to be able to cancel and update their payment method).
+
+### How it works
+
+- The `subscriptions` table (`server/db/schema.ts`) holds the current plan, status, billing cycle, trial/renewal dates, and Stripe customer/subscription IDs for each user. A user with no row is on the free Drifter plan by definition — Stripe never sends a subscription webhook for the implicit free tier.
+- `<PlanCheckoutButton>` (`app/components/PlanCheckoutButton.vue`) and `<PlanManageButton>` (`app/components/PlanManageButton.vue`) are plain buttons that navigate the browser to `GET /api/billing/checkout` / `GET /api/billing/portal`, which create a Stripe Checkout Session / Billing Portal session server-side and redirect there — the same "redirect to a hosted third-party flow" pattern already used for Instagram OAuth (`server/api/connections/instagram/start.get.ts`). Signed-out visitors on `/pricing` and `/` still see a plain `/login` link instead of the checkout button. `checkout.get.ts` also rejects (`409`) a request from a user who already holds a live paid subscription, so a repeat click can't start a second Stripe subscription on the same customer.
+- `<PlanCheckoutButton>` renders disabled until `GET /api/billing/config` (via `app/composables/useBillingConfig.ts`) confirms a Price ID is configured for that tier/cycle. This is a real per-request server call, not a build-time Nuxt public runtimeConfig value — `STRIPE_PRICE_*` are deliberately server-only env vars, so there's no `NUXT_PUBLIC_*`-named counterpart Nitro could use to refresh a baked-in config value at runtime.
+- `server/api/webhooks/stripe.post.ts` verifies the `Stripe-Signature` header and syncs the `subscriptions` row from `customer.subscription.created` / `.updated` (upsert) and `customer.subscription.deleted` (mark canceled). `checkout.session.completed` is acknowledged but not separately handled — Stripe recommends syncing subscription state from `customer.subscription.*` events, which carry the full Subscription object and fire around the same time.
+- `server/utils/stripe.ts` isolates every Stripe SDK call (client construction, Checkout/Portal session creation, webhook verification, Price ID ↔ plan/cycle mapping) behind one boundary so it's mockable in tests. `server/utils/subscriptions.ts` isolates the DB read/write side (mapping a Stripe Subscription onto the `subscriptions` row, plan-limit lookups) — the same split Clerk's own SDK access uses (`server/utils/clerk.ts`).
+- `server/utils/planLimits.ts` centralizes the advertised `/pricing` limits (places, active trips, photo storage, map styles, Instagram sync, public traveler profile) and is wired into the relevant API routes (`POST /api/places`, `POST /api/trips`, `POST /api/media`, the Instagram connection routes, and `PATCH /api/preferences`). A request that would exceed the current plan's limit gets a `402 Payment Required` with a message naming the limit and plan. This layer is provider-agnostic and was unaffected by the Clerk Billing → Stripe switch.
+- `GET /api/billing/subscription` (used by `app/composables/useBilling.ts`) returns the current user's plan/status/trial/renewal info for the Settings page.
+
+### Product decisions
+
+- **Cancellation timing**: canceling via the Billing Portal defaults to Stripe's own "cancel at period end" behavior — the subscription stays `active` (with `cancelAtPeriodEnd` set) for the rest of the paid period, and `customer.subscription.deleted` only fires once it actually ends, at which point access is revoked. This is a safer, more accurate default than the previous Clerk Billing integration could offer (Clerk's webhook payloads couldn't distinguish "scheduled to cancel" from "revoked now").
+- **Trial detection**: Stripe's Subscription object exposes `trial_end` directly on every `customer.subscription.*` event for the life of the trial, so `trialEndsAt` is populated from day one of a trial — an improvement over the Clerk Billing integration, which could only detect a trial 3 days before it ended.
+- **Plan-limit enforcement**: unchanged — `getEffectivePlan()` still collapses any non-`active` status to the free Drifter plan (no grace period for `past_due`), the same conservative default as before.
+
 ## Connected accounts
 
 ### Instagram (photo import)

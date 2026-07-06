@@ -35,6 +35,7 @@ import {
   type InstagramMediaItem,
 } from "../../../utils/instagramClient";
 import { decryptToken } from "../../../utils/tokenCrypto";
+import { assertInstagramSyncAllowed } from "../../../utils/planLimits";
 
 type DbClient = ReturnType<typeof getDb>;
 
@@ -193,6 +194,12 @@ async function importSinglePhoto(
 
 export default defineEventHandler(async (event) => {
   const userId = await ensureUser(event);
+  // No separate per-item photo-storage cap here: Instagram sync itself is
+  // gated to Wanderer/Nomad (see assertInstagramSyncAllowed), and both of
+  // those plans already have unlimited photo storage (see PLAN_LIMITS), so a
+  // user who reaches this handler can never be photo-limited in practice.
+  await assertInstagramSyncAllowed(userId);
+
   const database = getDb();
 
   const connectionRows = await database

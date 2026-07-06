@@ -8,6 +8,7 @@
 
 import { requireUser } from "../../../utils/auth";
 import { buildInstagramAuthUrl } from "../../../utils/instagramClient";
+import { assertInstagramSyncAllowed } from "../../../utils/planLimits";
 
 const STATE_COOKIE_NAME = "ig_oauth_state";
 const STATE_COOKIE_MAX_AGE_SECONDS = 600;
@@ -38,7 +39,8 @@ function readInstagramConfig(): { clientId: string; redirectUri: string } {
 }
 
 export default defineEventHandler(async (event) => {
-  requireUser(event);
+  const userId = requireUser(event);
+  await assertInstagramSyncAllowed(userId);
 
   const { clientId, redirectUri } = readInstagramConfig();
   const state = crypto.randomUUID();

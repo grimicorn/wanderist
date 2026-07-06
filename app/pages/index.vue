@@ -462,7 +462,9 @@
               <li><AppIcon name="check" :size="15" /> Personal world map</li>
               <li><AppIcon name="check" :size="15" /> Manual photo upload</li>
             </ul>
-            <NuxtLink class="btn btn--outline btn--block" to="/login"
+            <NuxtLink
+              class="btn btn--outline btn--block"
+              :to="freeTierCtaTarget"
               >start free</NuxtLink
             >
           </div>
@@ -484,7 +486,14 @@
               </li>
               <li><AppIcon name="check" :size="15" /> Discover hidden spots</li>
             </ul>
-            <NuxtLink class="btn btn--primary btn--block" to="/login"
+            <PlanCheckoutButton
+              v-if="isSignedIn"
+              tier="wanderer"
+              cycle="monthly"
+              class="btn btn--primary btn--block"
+              >start free trial</PlanCheckoutButton
+            >
+            <NuxtLink v-else class="btn btn--primary btn--block" to="/login"
               >start free trial</NuxtLink
             >
           </div>
@@ -502,7 +511,14 @@
               </li>
               <li><AppIcon name="check" :size="15" /> Priority support</li>
             </ul>
-            <NuxtLink class="btn btn--outline btn--block" to="/login"
+            <PlanCheckoutButton
+              v-if="isSignedIn"
+              tier="nomad"
+              cycle="monthly"
+              class="btn btn--outline btn--block"
+              >start free trial</PlanCheckoutButton
+            >
+            <NuxtLink v-else class="btn btn--outline btn--block" to="/login"
               >start free trial</NuxtLink
             >
           </div>
@@ -604,6 +620,14 @@
 <script setup lang="ts">
 useHead({ title: "Wanderist — Track every place you wander" });
 useScrollReveal();
+
+const { isSignedIn } = useClerkAuth();
+
+// Signed-in visitors already have an account — "start free" on the Drifter
+// tier sends them straight into the app rather than back to login.
+const freeTierCtaTarget = computed(() =>
+  isSignedIn.value ? "/home" : "/login",
+);
 
 const email = ref("");
 const navStuck = ref(false);

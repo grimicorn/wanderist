@@ -301,10 +301,41 @@
             </div>
           </section>
 
+          <!-- Plan & billing -->
+          <section id="billing" class="sect">
+            <div class="sect__head">
+              <div class="label">// 04 — plan &amp; billing</div>
+              <h3 class="display" style="margin-top: 8px">
+                Plan &amp; billing
+              </h3>
+              <p>Your current tier, renewal date, and trial status.</p>
+            </div>
+
+            <div v-if="billingLoadError" style="margin-bottom: 12px">
+              <AppAlert intent="error" :title="billingLoadError" />
+            </div>
+
+            <div class="opt-row">
+              <div class="lbl">
+                <b>{{ planDisplayName }} plan</b>
+                <p>{{ billingStatusMessage }}</p>
+              </div>
+              <PlanManageButton
+                v-if="subscription.plan !== 'drifter'"
+                class="btn btn--outline btn--sm"
+              >
+                manage subscription
+              </PlanManageButton>
+              <NuxtLink v-else class="btn btn--primary btn--sm" to="/pricing"
+                >view plans</NuxtLink
+              >
+            </div>
+          </section>
+
           <!-- Prefs -->
           <section id="prefs" class="sect">
             <div class="sect__head">
-              <div class="label">// 04 — preferences</div>
+              <div class="label">// 05 — preferences</div>
               <h3 class="display" style="margin-top: 8px">Units &amp; map</h3>
               <p>How distances and your map look across the app.</p>
             </div>
@@ -364,7 +395,7 @@
           <!-- Privacy -->
           <section id="privacy" class="sect">
             <div class="sect__head">
-              <div class="label">// 05 — privacy</div>
+              <div class="label">// 06 — privacy</div>
               <h3 class="display" style="margin-top: 8px">Privacy</h3>
               <p>Decide what's public and how precise your locations are.</p>
             </div>
@@ -497,6 +528,7 @@ import type { Ref } from "vue";
 import { usePreferences } from "~/composables/usePreferences";
 import { useConnections } from "~/composables/useConnections";
 import { useAccountActions } from "~/composables/useAccountActions";
+import { useBilling } from "~/composables/useBilling";
 
 definePageMeta({ layout: "app", middleware: "auth" });
 useHead({ title: "Wanderist — Settings" });
@@ -505,6 +537,7 @@ const sections = [
   { id: "profile", label: "Profile" },
   { id: "account", label: "Email & password" },
   { id: "connections", label: "Connections" },
+  { id: "billing", label: "Plan & billing" },
   { id: "prefs", label: "Units & map" },
   { id: "privacy", label: "Privacy" },
   { id: "danger", label: "Danger zone" },
@@ -526,6 +559,87 @@ const {
   disconnectGoogle,
   importInstagramPhotos,
 } = useConnections();
+
+const {
+  subscription,
+  loadError: billingLoadError,
+  fetchSubscription,
+} = useBilling();
+
+const PLAN_DISPLAY_NAMES: Record<string, string> = {
+  drifter: "Drifter",
+  wanderer: "Wanderer",
+  nomad: "Nomad",
+};
+
+const BILLING_CYCLE_LABELS: Record<string, string> = {
+  monthly: "monthly",
+  yearly: "yearly",
+};
+
+const planDisplayName = computed(
+  () => PLAN_DISPLAY_NAMES[subscription.value.plan] ?? subscription.value.plan,
+);
+
+const billingCycleLabel = computed(
+  () => BILLING_CYCLE_LABELS[subscription.value.billingCycle ?? ""] ?? "",
+);
+
+function formatBillingDate(isoDate: string | null): string | null {
+  if (!isoDate) {
+    return null;
+  }
+  return new Date(isoDate).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+// Only shown while the trial end date is still in the future. Once a trial
+// converts to a paid subscription (or lapses), trialEndsAt on the row isn't
+// necessarily cleared — see server/utils/subscriptions.ts — so a stale past
+// date must fall through to the renewal-date message below rather than
+// showing "Trial ends" forever.
+const trialEndsAtLabel = computed(() => {
+  const trialEndsAt = subscription.value.trialEndsAt;
+  if (!trialEndsAt || new Date(trialEndsAt) <= new Date()) {
+    return null;
+  }
+  return formatBillingDate(trialEndsAt);
+});
+
+const renewalDateLabel = computed(() =>
+  formatBillingDate(subscription.value.currentPeriodEnd),
+);
+
+// Single source of truth for the plan-status line so the wording always
+// matches the real subscription status — a canceled or past_due row must
+// never render as if it were still renewing (currentPeriodEnd on the row
+// isn't cleared just because status changed; see server/utils/subscriptions.ts).
+const billingStatusMessage = computed<string>(() => {
+  if (trialEndsAtLabel.value) {
+    return `Trial ends ${trialEndsAtLabel.value}.`;
+  }
+  if (!renewalDateLabel.value) {
+    return "Free forever — upgrade for unlimited places, trips and photo storage.";
+  }
+  if (subscription.value.status === "past_due") {
+    return `Payment issue — access ends ${renewalDateLabel.value} unless resolved.`;
+  }
+  if (subscription.value.status === "canceled") {
+    return `Access ends ${renewalDateLabel.value}.`;
+  }
+  // A subscription canceled via the Stripe Billing Portal stays "active"
+  // (still entitled) with cancelAtPeriodEnd set until the period actually
+  // ends and the webhook flips status to canceled — see
+  // server/utils/subscriptions.ts. Surface that scheduled end here instead
+  // of claiming it renews.
+  if (subscription.value.cancelAtPeriodEnd) {
+    return `Access ends ${renewalDateLabel.value}.`;
+  }
+  return `Renews ${renewalDateLabel.value} (${billingCycleLabel.value}).`;
+});
 
 // Local editable copies — populated once preferences load.
 const profile = reactive({
@@ -618,6 +732,7 @@ onMounted(async () => {
   hasPopulatedFromServer.value = true;
 
   await fetchConnections();
+  await fetchSubscription();
 });
 
 function handleConnectInstagram(): void {
