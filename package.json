@@ -58,7 +58,7 @@
     "eslint": "^10.6.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-vue": "^10.9.2",
-    "fallow": "^2.104.0",
+    "fallow": "^3.3.0",
     "globals": "^17.7.0",
     "happy-dom": "^20.10.6",
     "husky": "^9.1.7",
