@@ -17,6 +17,13 @@ const { useFollows } = await import("../useFollows");
 describe("useFollows", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Error-path tests exercise the catch block, which logs via console.error.
+    // Silence it so the expected log doesn't pollute test output.
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it("initializes followingIds as an empty Set", () => {
@@ -52,6 +59,7 @@ describe("useFollows", () => {
 
     await expect(fetchFollowing()).resolves.toBeUndefined();
     expect(error.value).toBeTruthy();
+    expect(console.error).toHaveBeenCalled();
   });
 
   it("isFollowing returns true for an ID that is in followingIds", async () => {

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { ref } from "vue";
 import type { TrendingPlace } from "../useDiscover";
 
@@ -14,6 +14,13 @@ import { useDiscover } from "../useDiscover";
 describe("useDiscover", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Error-path tests exercise the catch block, which logs via console.error.
+    // Silence it so the expected log doesn't pollute test output.
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it("initialises with empty arrays and no error", () => {

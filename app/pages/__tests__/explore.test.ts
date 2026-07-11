@@ -20,6 +20,13 @@ const topbarStub = {
   props: ["title", "crumb"],
 };
 const linkStub = { template: "<a><slot /></a>", props: ["to"] };
+// explore.vue renders <AppAlert> in error branches (discoverError, followError).
+// Stub it globally so error-path tests don't emit "Failed to resolve component"
+// warnings when those branches render.
+const alertStub = {
+  template: '<div class="alert-stub" :data-message="message" />',
+  props: ["intent", "message", "dismissible"],
+};
 
 // ---------------------------------------------------------------------------
 // Follow system mocks
@@ -207,6 +214,7 @@ const globalConfig = {
       AppIcon: iconStub,
       AppTopbar: topbarStub,
       NuxtLink: linkStub,
+      AppAlert: alertStub,
     },
   },
 };
@@ -374,10 +382,7 @@ describe("Explore page (/explore)", () => {
           AppIcon: iconStub,
           AppTopbar: topbarStub,
           NuxtLink: linkStub,
-          AppAlert: {
-            template: '<div class="alert-stub" :data-message="message" />',
-            props: ["intent", "message", "dismissible"],
-          },
+          AppAlert: alertStub,
         },
       },
     });
@@ -638,10 +643,7 @@ describe("Explore page (/explore)", () => {
           AppIcon: iconStub,
           AppTopbar: topbarStub,
           NuxtLink: linkStub,
-          AppAlert: {
-            template: '<div class="alert-stub" :data-message="message" />',
-            props: ["intent", "message", "dismissible"],
-          },
+          AppAlert: alertStub,
         },
       },
     });

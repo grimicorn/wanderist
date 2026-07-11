@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // Stub useRuntimeConfig before importing the composable
 vi.stubGlobal("useRuntimeConfig", () => ({
@@ -75,6 +75,14 @@ describe("useMapbox", () => {
     createdMarkers.length = 0;
     const { cancelDropPin } = useMapbox();
     cancelDropPin();
+
+    // Error-path tests exercise the catch block, which logs via console.error.
+    // Silence it so the expected log doesn't pollute test output.
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   describe("hasToken", () => {
@@ -120,7 +128,9 @@ describe("useMapbox", () => {
       vi.stubGlobal("useRuntimeConfig", () => ({
         public: { mapboxToken: "pk.test.token" },
       }));
-      vi.spyOn(mockMapboxGl, "Map").mockImplementationOnce(() => {
+      // Use a function expression (not an arrow) so vitest recognizes this as a
+      // constructor mock — Map is invoked with `new`.
+      vi.spyOn(mockMapboxGl, "Map").mockImplementationOnce(function () {
         throw new Error("WebGL not supported");
       });
       const { initMap } = useMapbox();

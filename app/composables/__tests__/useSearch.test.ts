@@ -46,10 +46,18 @@ async function searchAndFlush(
 describe("useSearch", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Error-path tests exercise the catch block, which logs via console.error.
+    // Silence it so the expected log doesn't pollute test output. console.warn
+    // is silenced too: useSearch registers onScopeDispose, and calling the
+    // composable directly (outside a component) makes Vue warn about the
+    // missing effect scope on every instantiation.
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
   });
 
   afterEach(() => {
     vi.clearAllTimers();
+    vi.restoreAllMocks();
   });
 
   it("initializes with empty results and no loading or error state", () => {

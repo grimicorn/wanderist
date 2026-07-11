@@ -4,7 +4,7 @@
  * Svix verification and DB calls are isolated behind seams so no network or
  * database access is needed.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // ---------------------------------------------------------------------------
 // Hoist all mock functions so they are available inside vi.mock() factories,
@@ -140,6 +140,16 @@ function resetDbMocks() {
 // ---------------------------------------------------------------------------
 // clerk webhook handler tests
 // ---------------------------------------------------------------------------
+
+// Error-path tests exercise the handler's catch blocks, which log via
+// console.error. Silence it so the expected logs don't pollute test output.
+beforeEach(() => {
+  vi.spyOn(console, "error").mockImplementation(() => {});
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe("clerk webhook handler", () => {
   beforeEach(() => {
