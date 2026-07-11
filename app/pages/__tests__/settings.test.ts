@@ -246,14 +246,19 @@ describe("Settings page (/settings)", () => {
 
   it("shows the trial-ends message when a trial is active", async () => {
     const { useBilling } = await import("~/composables/useBilling");
+    // Trial must end in the future for it to count as active, so derive the
+    // date from now rather than hardcoding one that silently expires.
+    const trialEndsAt = new Date(
+      Date.now() + 30 * 24 * 60 * 60 * 1000,
+    ).toISOString();
     vi.mocked(useBilling).mockReturnValueOnce(
       makeBillingMock({
         subscription: {
           plan: "nomad",
           status: "active",
           billingCycle: "yearly",
-          trialEndsAt: "2026-07-10T00:00:00.000Z",
-          currentPeriodEnd: "2026-07-10T00:00:00.000Z",
+          trialEndsAt,
+          currentPeriodEnd: trialEndsAt,
           cancelAtPeriodEnd: false,
         },
       }),

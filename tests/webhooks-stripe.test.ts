@@ -4,7 +4,7 @@
  * tests/server/subscriptions-util.test.ts; here we only verify the handler
  * verifies the signature and routes each event type to the right function.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const {
   mockConstructStripeEvent,
@@ -56,6 +56,17 @@ const SUBSCRIPTION_OBJECT = {
   status: "active",
   metadata: { userId: "user-1" },
 };
+
+// The signature-verification-failure test exercises the handler's catch block,
+// which logs via console.error. Silence it so the expected log doesn't pollute
+// test output.
+beforeEach(() => {
+  vi.spyOn(console, "error").mockImplementation(() => {});
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe("stripe webhook handler", () => {
   beforeEach(() => {
