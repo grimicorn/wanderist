@@ -1,3 +1,11 @@
 [build]
   command = "npx nuxt prepare && npm run test:ci && npm run build"
   publish = "dist"
+
+# Scheduled function: purges users whose soft-delete grace period has
+# elapsed. See netlify/functions/purge-deleted-accounts.mts and
+# server/utils/purgeAccounts.ts. Runs daily at 03:00 UTC — grace period is
+# tracked in whole days (DELETE_GRACE_PERIOD_DAYS, server/utils/accountLifecycle.ts),
+# so daily granularity is sufficient.
+[functions."purge-deleted-accounts"]
+  schedule = "0 3 * * *"

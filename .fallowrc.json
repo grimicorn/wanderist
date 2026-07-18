@@ -4,7 +4,8 @@
     "server/db/index.ts",
     "sentry.client.config.ts",
     "sentry.server.config.ts",
-    "app/stores/**"
+    "app/stores/**",
+    "netlify/functions/**"
   ],
   "ignoreDependencies": [
     "@clerk/testing",

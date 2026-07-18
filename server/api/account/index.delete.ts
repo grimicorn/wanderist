@@ -3,15 +3,7 @@ import { requireUser } from "../../utils/auth";
 import { getDb } from "../../db/index";
 import { users } from "../../db/schema";
 import { clerkDeleteUser } from "../../utils/clerkAccount";
-
-// Grace period before the row and all FK children are permanently purged.
-const DELETE_GRACE_PERIOD_DAYS = 14;
-
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
-
-function gracePeriodEndsAt(now: Date): Date {
-  return new Date(now.getTime() + DELETE_GRACE_PERIOD_DAYS * MS_PER_DAY);
-}
+import { gracePeriodEndsAt } from "../../utils/accountLifecycle";
 
 export default defineEventHandler(async (event) => {
   const userId = requireUser(event);
