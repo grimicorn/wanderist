@@ -9,12 +9,31 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { DELETE_GRACE_PERIOD_DAYS } from "../../server/utils/accountLifecycle";
-import {
-  isPurgeable,
-  purgeExpiredDeletedAccounts,
-} from "../../server/utils/purgeAccounts";
+import { users } from "../../server/db/schema";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+// Spy on drizzle-orm's `lt` (kept real via importOriginal) so the DB
+// orchestration tests below can assert on the actual cutoff Date pushed into
+// the SQL WHERE clause — not just that *some* where() call happened. This is
+// what catches an off-by-one in purgeCutoff (server/utils/purgeAccounts.ts)
+// that isPurgeable's own boundary tests wouldn't, since isPurgeable and the
+// SQL filter share that one function but are otherwise independent call sites.
+const { mockLt } = vi.hoisted(() => ({ mockLt: vi.fn() }));
+
+vi.mock("drizzle-orm", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("drizzle-orm")>();
+  return {
+    ...actual,
+    lt: (...args: Parameters<typeof actual.lt>) => {
+      mockLt(...args);
+      return actual.lt(...args);
+    },
+  };
+});
+
+const { isPurgeable, purgeExpiredDeletedAccounts } =
+  await import("../../server/utils/purgeAccounts");
 
 // ---------------------------------------------------------------------------
 // isPurgeable — pure predicate, no DB involved
@@ -89,12 +108,16 @@ describe("purgeExpiredDeletedAccounts", () => {
     expect(result).toEqual({ purgedUserIds: [], purgedCount: 0 });
   });
 
-  it("scopes the delete to a single WHERE call built from the provided `now`", async () => {
+  it("filters on the exact cutoff derived from `now` and DELETE_GRACE_PERIOD_DAYS", async () => {
     mockDeleteReturning.mockResolvedValue([]);
     const now = new Date("2026-08-01T00:00:00.000Z");
+    const expectedCutoff = new Date(
+      now.getTime() - DELETE_GRACE_PERIOD_DAYS * MS_PER_DAY,
+    );
 
     await purgeExpiredDeletedAccounts(mockDb, now);
 
-    expect(mockDeleteWhere).toHaveBeenCalledTimes(1);
+    expect(mockLt).toHaveBeenCalledTimes(1);
+    expect(mockLt).toHaveBeenCalledWith(users.deletedAt, expectedCutoff);
   });
 });

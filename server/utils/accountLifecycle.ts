@@ -3,7 +3,7 @@
  *
  * DELETE /api/account (server/api/account/index.delete.ts) stamps
  * `users.deletedAt` and reports `gracePeriodEndsAt` back to the client.
- * netlify/functions/purge-deleted-accounts.ts hard-deletes any row whose
+ * netlify/functions/purge-deleted-accounts.mts hard-deletes any row whose
  * grace period has elapsed (FK CASCADE removes the child rows). Both sides
  * must agree on the same grace period, so it lives here as the single
  * source of truth rather than being duplicated in each file.

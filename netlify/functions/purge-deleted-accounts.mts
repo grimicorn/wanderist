@@ -20,6 +20,16 @@
  * directly-invokable HTTP endpoint — they can only be triggered by
  * Netlify's own scheduler (or a project member via the CLI/API), so no
  * additional secret/auth check is added here.
+ *
+ * Observability note: this file runs outside the Nitro bundle, so it does
+ * not get the @sentry/nuxt server instrumentation configured in
+ * sentry.server.config.ts. A failed run currently surfaces only as a 500 in
+ * this function's Netlify invocation log (and, separately, in Netlify's own
+ * scheduled-function run history) — there is no active alert on it. Wiring
+ * this function into Sentry directly (a separate @sentry/node init, since
+ * it isn't bundled by Nitro) is worth doing before this job is depended on
+ * for compliance-grade deletion SLAs, but is out of scope for this change;
+ * flagged here rather than silently left out.
  */
 import { createDb } from "../../server/db/index";
 import { purgeExpiredDeletedAccounts } from "../../server/utils/purgeAccounts";

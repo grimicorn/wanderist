@@ -2,18 +2,14 @@
  * Purge logic for soft-deleted users whose grace period has elapsed.
  *
  * Isolated from both the Nitro request context and the Netlify Functions
- * runtime that invokes it (netlify/functions/purge-deleted-accounts.ts) so
+ * runtime that invokes it (netlify/functions/purge-deleted-accounts.mts) so
  * it can be unit tested with a plain mocked `db` object — no getDb()/
  * useRuntimeConfig() call inside this module, and no network access.
  */
 import { and, isNotNull, lt } from "drizzle-orm";
 import type { createDb } from "../db/index";
 import { users } from "../db/schema";
-import {
-  DELETE_GRACE_PERIOD_DAYS,
-  MS_PER_DAY,
-  gracePeriodEndsAt,
-} from "./accountLifecycle";
+import { DELETE_GRACE_PERIOD_DAYS, MS_PER_DAY } from "./accountLifecycle";
 
 export type PurgeDb = ReturnType<typeof createDb>;
 
@@ -23,28 +19,27 @@ export interface PurgeResult {
 }
 
 /**
+ * The instant before which a row's `deletedAt` makes it purgeable, relative
+ * to `now`. Both isPurgeable and the SQL query below derive from this single
+ * function so the predicate that's unit tested (isPurgeable) and the
+ * predicate that actually runs against the database (the `lt()` filter
+ * built from this cutoff) can never drift apart.
+ */
+function purgeCutoff(now: Date): Date {
+  return new Date(now.getTime() - DELETE_GRACE_PERIOD_DAYS * MS_PER_DAY);
+}
+
+/**
  * The business rule this job enforces, extracted as a pure, directly
- * testable predicate: a row is purgeable once its grace period (from
- * gracePeriodEndsAt — the same calculation DELETE /api/account reports to
- * the client as `gracePeriodEndsAt`) has elapsed. A never-deleted row
- * (`deletedAt` null) is never purgeable.
+ * testable predicate: a row is purgeable once more than
+ * DELETE_GRACE_PERIOD_DAYS have passed since `deletedAt`. A never-deleted
+ * row (`deletedAt` null) is never purgeable.
  */
 export function isPurgeable(deletedAt: Date | null, now: Date): boolean {
   if (!deletedAt) {
     return false;
   }
-  return gracePeriodEndsAt(deletedAt) < now;
-}
-
-/**
- * The instant before which a row's `deletedAt` makes it purgeable, relative
- * to `now`. Equivalent to isPurgeable's threshold, expressed the other way
- * round (as a Date to compare `deletedAt` against) so it can be pushed down
- * into the SQL `WHERE` clause below instead of fetching every soft-deleted
- * row and filtering in JS.
- */
-function purgeCutoff(now: Date): Date {
-  return new Date(now.getTime() - DELETE_GRACE_PERIOD_DAYS * MS_PER_DAY);
+  return deletedAt < purgeCutoff(now);
 }
 
 /**
