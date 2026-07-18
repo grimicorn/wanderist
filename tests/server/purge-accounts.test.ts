@@ -8,10 +8,11 @@
  * tests/server/subscriptions-util.test.ts.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { DELETE_GRACE_PERIOD_DAYS } from "../../server/utils/accountLifecycle";
+import {
+  DELETE_GRACE_PERIOD_DAYS,
+  MS_PER_DAY,
+} from "../../server/utils/accountLifecycle";
 import { users } from "../../server/db/schema";
-
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 // Spy on drizzle-orm's `lt` (kept real via importOriginal) so the DB
 // orchestration tests below can assert on the actual cutoff Date pushed into
