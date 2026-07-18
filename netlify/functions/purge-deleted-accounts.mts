@@ -23,13 +23,14 @@
  *
  * Observability note: this file runs outside the Nitro bundle, so it does
  * not get the @sentry/nuxt server instrumentation configured in
- * sentry.server.config.ts. A failed run currently surfaces only as a 500 in
- * this function's Netlify invocation log (and, separately, in Netlify's own
- * scheduled-function run history) — there is no active alert on it. Wiring
- * this function into Sentry directly (a separate @sentry/node init, since
- * it isn't bundled by Nitro) is worth doing before this job is depended on
- * for compliance-grade deletion SLAs, but is out of scope for this change;
- * flagged here rather than silently left out.
+ * sentry.server.config.ts. A failed run is logged and then re-thrown (see
+ * below) so Netlify's scheduled-function run history records it as a
+ * failed invocation, rather than silently returning 200/500 with nothing
+ * to consume the status — but there is no active alert wired to that
+ * failure yet. Wiring this function into Sentry directly (a separate
+ * @sentry/node init, since it isn't bundled by Nitro) is worth doing before
+ * this job is depended on for compliance-grade deletion SLAs, but is out of
+ * scope for this change; flagged here rather than silently left out.
  */
 import { createDb } from "../../server/db/index";
 import { purgeExpiredDeletedAccounts } from "../../server/utils/purgeAccounts";
@@ -49,10 +50,12 @@ export const handler = async () => {
       body: JSON.stringify(result),
     };
   } catch (error) {
+    // Re-throw (after logging) rather than returning a 500: there is no HTTP
+    // caller reading this response, and only an uncaught exception marks the
+    // scheduled invocation as failed in Netlify's run history. Swallowing it
+    // into a returned status would let a persistently failing purge run
+    // "successfully" every night while never purging anything.
     console.error("purge-deleted-accounts: purge run failed", error);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ ok: false }),
-    };
+    throw error;
   }
 };

@@ -13,7 +13,9 @@ let cachedDb: ReturnType<typeof drizzle> | null = null;
  * process.env directly instead.
  */
 export function createDb(databaseUrl: string) {
-  if (!databaseUrl) throw new Error("Missing DATABASE_URL");
+  if (!databaseUrl) {
+    throw new Error("Missing DATABASE_URL");
+  }
   const sql = neon(databaseUrl);
   return drizzle(sql, { schema });
 }

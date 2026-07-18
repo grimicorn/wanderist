@@ -53,16 +53,14 @@ describe("purge-deleted-accounts scheduled function", () => {
     });
   });
 
-  it("returns 500 and does not throw when the purge run fails", async () => {
+  it("logs and re-throws when the purge run fails, so Netlify records the invocation as failed", async () => {
     const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     mockPurgeExpiredDeletedAccounts.mockRejectedValue(
       new Error("DB unreachable"),
     );
 
-    const response = await handler();
+    await expect(handler()).rejects.toThrow("DB unreachable");
 
-    expect(response.statusCode).toBe(500);
-    expect(JSON.parse(response.body)).toEqual({ ok: false });
     expect(consoleSpy).toHaveBeenCalled();
     consoleSpy.mockRestore();
   });
