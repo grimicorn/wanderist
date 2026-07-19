@@ -154,6 +154,57 @@ describe("useNotifications", () => {
     expect(error.value).toBeTruthy();
   });
 
+  it("markRead calls POST /api/notifications/:id/read and marks only that notification isRead", async () => {
+    mockApiFetch
+      .mockResolvedValueOnce({
+        notifications: [
+          {
+            id: "n-1",
+            type: "like",
+            tone: "accent",
+            body: "Liked",
+            isRead: false,
+            createdAt: "2024-06-01T10:00:00Z",
+          },
+          {
+            id: "n-2",
+            type: "comment",
+            tone: "accent",
+            body: "Comment",
+            isRead: false,
+            createdAt: "2024-06-01T09:00:00Z",
+          },
+        ],
+      })
+      .mockResolvedValueOnce({ ok: true });
+
+    const { notifications, fetchNotifications, markRead } = useNotifications();
+    await fetchNotifications();
+
+    await markRead("n-1");
+
+    expect(mockApiFetch).toHaveBeenCalledWith("/api/notifications/n-1/read", {
+      method: "POST",
+    });
+    expect(
+      notifications.value.find((notification) => notification.id === "n-1")
+        ?.isRead,
+    ).toBe(true);
+    expect(
+      notifications.value.find((notification) => notification.id === "n-2")
+        ?.isRead,
+    ).toBe(false);
+  });
+
+  it("markRead sets error state when the API call fails", async () => {
+    mockApiFetch.mockRejectedValue(new Error("Server error"));
+
+    const { error, markRead } = useNotifications();
+
+    await expect(markRead("n-1")).resolves.toBeUndefined();
+    expect(error.value).toBeTruthy();
+  });
+
   it("isLoading is false initially", () => {
     const { isLoading } = useNotifications();
     expect(isLoading.value).toBe(false);
