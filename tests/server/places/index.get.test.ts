@@ -18,6 +18,7 @@ vi.mock("drizzle-orm", async (importOriginal) => {
     ...original,
     eq: vi.fn(original.eq),
     and: vi.fn(original.and),
+    desc: vi.fn(original.desc),
   };
 });
 
@@ -31,10 +32,18 @@ const mockGetQuery = vi.mocked(
 );
 
 function makeDbWithRows(rows: Record<string, unknown>[]) {
-  const whereMock = vi.fn().mockResolvedValue(rows);
+  const offsetMock = vi.fn().mockResolvedValue(rows);
+  const limitMock = vi.fn().mockReturnValue({ offset: offsetMock });
+  const orderByMock = vi.fn().mockReturnValue({ limit: limitMock });
+  const whereMock = vi.fn().mockReturnValue({ orderBy: orderByMock });
   const fromMock = vi.fn().mockReturnValue({ where: whereMock });
   const selectMock = vi.fn().mockReturnValue({ from: fromMock });
-  return { select: selectMock, _where: whereMock };
+  return {
+    select: selectMock,
+    _where: whereMock,
+    _limit: limitMock,
+    _offset: offsetMock,
+  };
 }
 
 const handler = await import("../../../server/api/places/index.get");
@@ -57,7 +66,11 @@ describe("GET /api/places", () => {
     const defaultHandler = "default" in handler ? handler.default : handler;
     const result = await (defaultHandler as (event: unknown) => unknown)({});
 
-    expect(result).toEqual(expectedPlaces);
+    expect(result).toEqual({
+      places: expectedPlaces,
+      page: 1,
+      hasMore: false,
+    });
   });
 
   it("throws 401 when not authenticated", async () => {
@@ -98,5 +111,85 @@ describe("GET /api/places", () => {
     await (defaultHandler as (event: unknown) => unknown)({});
 
     expect(mockDb.select).toHaveBeenCalledTimes(1);
+  });
+
+  it("defaults to page 1 and offset 0 when no page specified", async () => {
+    mockRequireUser.mockReturnValue("user-1");
+    const mockDb = makeDbWithRows([]);
+    mockGetDb.mockReturnValue(mockDb as unknown as ReturnType<typeof getDb>);
+
+    const defaultHandler = "default" in handler ? handler.default : handler;
+    const result = (await (defaultHandler as (event: unknown) => unknown)(
+      {},
+    )) as { page: number };
+
+    expect(result.page).toBe(1);
+    expect(mockDb._offset).toHaveBeenCalledWith(0);
+    expect(mockDb._limit).toHaveBeenCalledWith(20);
+  });
+
+  it("returns PAGE_SIZE rows with correct metadata on the first page", async () => {
+    const fullPage = Array.from({ length: 20 }, (_, index) => ({
+      id: `p-${index}`,
+      userId: "user-1",
+      name: `Place ${index}`,
+    }));
+    mockRequireUser.mockReturnValue("user-1");
+    const mockDb = makeDbWithRows(fullPage);
+    mockGetDb.mockReturnValue(mockDb as unknown as ReturnType<typeof getDb>);
+
+    const defaultHandler = "default" in handler ? handler.default : handler;
+    const result = (await (defaultHandler as (event: unknown) => unknown)(
+      {},
+    )) as { places: unknown[]; page: number; hasMore: boolean };
+
+    expect(result.places).toHaveLength(20);
+    expect(result.page).toBe(1);
+    expect(result.hasMore).toBe(true);
+  });
+
+  it("reports hasMore: false when the page is short", async () => {
+    const shortPage = [{ id: "p-1", userId: "user-1", name: "Tokyo" }];
+    mockRequireUser.mockReturnValue("user-1");
+    const mockDb = makeDbWithRows(shortPage);
+    mockGetDb.mockReturnValue(mockDb as unknown as ReturnType<typeof getDb>);
+
+    const defaultHandler = "default" in handler ? handler.default : handler;
+    const result = (await (defaultHandler as (event: unknown) => unknown)(
+      {},
+    )) as { hasMore: boolean };
+
+    expect(result.hasMore).toBe(false);
+  });
+
+  it("applies the correct offset for page 2", async () => {
+    mockRequireUser.mockReturnValue("user-1");
+    mockGetQuery.mockReturnValue({ page: "2" });
+    const mockDb = makeDbWithRows([]);
+    mockGetDb.mockReturnValue(mockDb as unknown as ReturnType<typeof getDb>);
+
+    const defaultHandler = "default" in handler ? handler.default : handler;
+    const result = (await (defaultHandler as (event: unknown) => unknown)(
+      {},
+    )) as { page: number };
+
+    expect(result.page).toBe(2);
+    expect(mockDb._offset).toHaveBeenCalledWith(20);
+    expect(mockDb._limit).toHaveBeenCalledWith(20);
+  });
+
+  it("falls back to page 1 for an invalid page param", async () => {
+    mockRequireUser.mockReturnValue("user-1");
+    mockGetQuery.mockReturnValue({ page: "not-a-number" });
+    const mockDb = makeDbWithRows([]);
+    mockGetDb.mockReturnValue(mockDb as unknown as ReturnType<typeof getDb>);
+
+    const defaultHandler = "default" in handler ? handler.default : handler;
+    const result = (await (defaultHandler as (event: unknown) => unknown)(
+      {},
+    )) as { page: number };
+
+    expect(result.page).toBe(1);
+    expect(mockDb._offset).toHaveBeenCalledWith(0);
   });
 });
