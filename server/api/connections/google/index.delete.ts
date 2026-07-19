@@ -40,7 +40,8 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  const secretKey = process.env.NUXT_CLERK_SECRET_KEY ?? "";
+  const secretKey =
+    process.env.NUXT_CLERK_SECRET_KEY || useRuntimeConfig().clerkSecretKey;
   if (!secretKey) {
     throw createError({
       statusCode: 500,

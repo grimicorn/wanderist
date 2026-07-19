@@ -17,13 +17,37 @@ npm install
 
 ## Environment variables
 
-Copy `.env.example` to `.env` and fill in the values:
+Secrets are managed with [dotenvx](https://dotenvx.com): the `.env*` files are
+committed **encrypted**, and one private key per environment (held off-repo in
+`.env.keys`) decrypts them. `.env.example` documents every variable and where to
+obtain it.
 
-```bash
-cp .env.example .env
-```
+| File              | Environment                    | Decrypted by                    |
+| ----------------- | ------------------------------ | ------------------------------- |
+| `.env`            | local dev                      | `DOTENV_PRIVATE_KEY`            |
+| `.env.dev`        | Netlify branch/preview deploys | `DOTENV_PRIVATE_KEY_DEV`        |
+| `.env.e2e`        | e2e tests (local + CI)         | `DOTENV_PRIVATE_KEY_E2E`        |
+| `.env.production` | Netlify production             | `DOTENV_PRIVATE_KEY_PRODUCTION` |
 
-See `.env.example` for descriptions of each variable and where to obtain them.
+`.env.keys` holds all the private keys and is gitignored — **back it up to your
+password manager**; losing it makes the encrypted files unrecoverable. To run a
+command with a file's secrets injected, the npm scripts wrap it in
+`dotenvx run -f <file> --` (e.g. `npm run dev` uses `.env`, `npm run e2e` uses
+`.env.e2e`). Change a value with `npx dotenvx set KEY value -f <file>`.
+
+Server-side secrets are read as `process.env.X || useRuntimeConfig().x`: at
+build time dotenvx injects them into `process.env`, Nuxt bakes them into the
+server bundle via `runtimeConfig`, and the deployed function reads them from
+there — so they do **not** need to be set in Netlify's runtime env. The only
+variables Netlify needs are the `DOTENV_PRIVATE_KEY_*` keys.
+
+`NUXT_PUBLIC_SENTRY_DSN` is a special case: `sentry.server.config.ts` runs
+before `useRuntimeConfig()` exists, so per Sentry's docs it can only read the
+DSN from `process.env` — which dotenvx does not populate in a deployed function.
+Because the DSN is public (non-secret), `nuxt.config.ts` inlines it as a build-
+time literal via `nitro.replace`, so each environment's build bakes its own DSN
+and no Netlify runtime variable is needed. The client reads the baked
+`runtimeConfig.public.sentryDsn` and needs no replacement.
 
 ## Database
 
@@ -58,9 +82,9 @@ npm run db:studio
 Migrations are generated and committed locally, then applied automatically by CI — never generated at deploy time.
 
 - **Deploy previews / e2e:** each spec run creates an ephemeral Neon branch (copy-on-write from production, so it starts with production's schema), then applies any pending committed migrations to it before the tests run. The migrate step uses the branch's **direct** (non-pooler) connection; the app under test uses the pooled one.
-- **Production:** the `migrate-production` job in `.github/workflows/ci.yml` runs on every push to `main`, after the `ci` job passes, and applies committed migrations to the production database. Running it as its own job — rather than inside the Netlify build — makes a failed migration fail loudly instead of half-deploying.
+- **Production:** the `migrate-production` job in `.github/workflows/ci.yml` runs on every push to `main`, after the `ci` job passes. It runs `npm run db:migrate:production` (`dotenvx run -f .env.production -- drizzle-kit migrate`), decrypting `.env.production` with the `DOTENV_PRIVATE_KEY_PRODUCTION` repository secret. Running it as its own job — rather than inside the Netlify build — makes a failed migration fail loudly instead of half-deploying.
 
-Migrations must use a **direct** Neon connection, not the pooled one the running app uses. Set a repository secret `DATABASE_URL_UNPOOLED` (Settings → Secrets and variables → Actions) to the production Neon **direct** connection string (the host without `-pooler`). Add a new migration to production by committing the generated SQL and merging to `main`.
+Migrations must use a **direct** Neon connection, not the pooled one the running app uses. `.env.production` holds `DATABASE_URL_UNPOOLED` (the production Neon host without `-pooler`), and `drizzle.config.ts` prefers it over the pooled `DATABASE_URL`. Add a new migration to production by committing the generated SQL and merging to `main`.
 
 ## Map (Mapbox GL)
 

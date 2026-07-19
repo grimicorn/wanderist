@@ -39,7 +39,9 @@ interface ClerkWebhookEvent {
 }
 
 function getWebhookSecret(): string {
-  const secret = process.env.NUXT_CLERK_WEBHOOK_SECRET;
+  const secret =
+    process.env.NUXT_CLERK_WEBHOOK_SECRET ||
+    useRuntimeConfig().clerkWebhookSecret;
   if (!secret) {
     throw createError({
       statusCode: 500,
