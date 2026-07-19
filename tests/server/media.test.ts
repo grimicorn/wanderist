@@ -17,6 +17,9 @@ const {
   mockPutMediaBlob,
   mockGetMediaBlob,
   mockRemoveMediaBlob,
+  mockToThumbnailKey,
+  mockProbeImageDimensions,
+  mockGenerateThumbnail,
   mockDbInsertValues,
   mockDbInsertReturning,
   mockDbSelectFrom,
@@ -58,6 +61,11 @@ const {
     mockPutMediaBlob: vi.fn().mockResolvedValue(undefined),
     mockGetMediaBlob: vi.fn(),
     mockRemoveMediaBlob: vi.fn().mockResolvedValue(undefined),
+    // Mirrors the real implementation's suffix convention so route tests can
+    // assert on the derived key without re-mocking it per test.
+    mockToThumbnailKey: vi.fn((storageKey: string) => `${storageKey}-thumb`),
+    mockProbeImageDimensions: vi.fn(),
+    mockGenerateThumbnail: vi.fn(),
     mockDbInsertValues,
     mockDbInsertReturning,
     mockDbSelectFrom,
@@ -86,6 +94,12 @@ vi.mock("../../server/utils/mediaStore", () => ({
   putMediaBlob: mockPutMediaBlob,
   getMediaBlob: mockGetMediaBlob,
   removeMediaBlob: mockRemoveMediaBlob,
+  toThumbnailKey: mockToThumbnailKey,
+}));
+
+vi.mock("../../server/utils/imageProcessing", () => ({
+  probeImageDimensions: mockProbeImageDimensions,
+  generateThumbnail: mockGenerateThumbnail,
 }));
 
 vi.mock("../../server/db/index", () => ({
@@ -120,6 +134,8 @@ const { default: postHandler } =
 const { default: deleteHandler } =
   await import("../../server/api/media/[id].delete");
 const { default: getHandler } = await import("../../server/api/media/[id].get");
+const { default: thumbnailGetHandler } =
+  await import("../../server/api/media/[id]/thumbnail.get");
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -171,6 +187,15 @@ describe("POST /api/media", () => {
     mockReadRawBody.mockResolvedValue(sampleBuffer);
     resetDbMocks();
     mockAssertPhotoLimit.mockResolvedValue(undefined);
+    // Reset to the default resolved behavior in case a previous test in this
+    // file overrode it with mockImplementation (vi.clearAllMocks() clears
+    // call history but not a previously assigned implementation).
+    mockPutMediaBlob.mockReset().mockResolvedValue(undefined);
+    mockToThumbnailKey.mockImplementation(
+      (storageKey: string) => `${storageKey}-thumb`,
+    );
+    mockProbeImageDimensions.mockResolvedValue({ width: 800, height: 600 });
+    mockGenerateThumbnail.mockResolvedValue(Buffer.from("thumb-bytes"));
   });
 
   it("propagates a 402 when the plan's photo-storage limit has been reached", async () => {
@@ -185,16 +210,22 @@ describe("POST /api/media", () => {
     expect(mockPutMediaBlob).not.toHaveBeenCalled();
   });
 
-  it("returns 201 with id and url on success", async () => {
+  it("returns 201 with id, url, dimensions, and thumbnailUrl on success", async () => {
     const result = (await callHandler(postHandler, buildEvent())) as {
       id: string;
       url: string;
+      width: number | null;
+      height: number | null;
+      thumbnailUrl: string | null;
     };
 
     // The DB insert returns media-123 but the URL uses the UUID generated
     // before the insert. Assert structural shape rather than exact values.
     expect(result.id).toBe("media-123");
     expect(result.url).toMatch(/\/api\/media\//);
+    expect(result.width).toBe(800);
+    expect(result.height).toBe(600);
+    expect(result.thumbnailUrl).toMatch(/\/api\/media\/.+\/thumbnail/);
     expect(mockSetResponseStatus).toHaveBeenCalledWith(expect.anything(), 201);
   });
 
@@ -206,6 +237,80 @@ describe("POST /api/media", () => {
       expect.any(Buffer),
       "image/jpeg",
     );
+  });
+
+  it("probes dimensions and passes width/height through to the DB insert", async () => {
+    mockProbeImageDimensions.mockResolvedValue({ width: 1024, height: 768 });
+
+    await callHandler(postHandler, buildEvent());
+
+    expect(mockProbeImageDimensions).toHaveBeenCalledWith(expect.any(Buffer));
+    expect(mockDbInsertValues).toHaveBeenCalledWith(
+      expect.objectContaining({ width: 1024, height: 768 }),
+    );
+  });
+
+  it("stores the thumbnail under the derived key alongside the original", async () => {
+    await callHandler(postHandler, buildEvent());
+
+    expect(mockGenerateThumbnail).toHaveBeenCalledWith(expect.any(Buffer));
+    expect(mockPutMediaBlob).toHaveBeenCalledWith(
+      expect.stringMatching(/^user-1\/.+-thumb$/),
+      Buffer.from("thumb-bytes"),
+      "image/jpeg",
+    );
+  });
+
+  it("stores null width/height and skips the thumbnail blob when probing/generation fails", async () => {
+    mockProbeImageDimensions.mockResolvedValue(null);
+    mockGenerateThumbnail.mockResolvedValue(null);
+
+    const result = (await callHandler(postHandler, buildEvent())) as {
+      width: number | null;
+      height: number | null;
+      thumbnailUrl: string | null;
+    };
+
+    expect(result.width).toBeNull();
+    expect(result.height).toBeNull();
+    expect(result.thumbnailUrl).toBeNull();
+    expect(mockDbInsertValues).toHaveBeenCalledWith(
+      expect.objectContaining({ width: null, height: null }),
+    );
+    // Only the original blob is written; no thumbnail key is put.
+    expect(mockPutMediaBlob).toHaveBeenCalledTimes(1);
+  });
+
+  it("degrades to no thumbnail (still 201, width/height still populated) when storing the thumbnail blob fails", async () => {
+    mockPutMediaBlob.mockImplementation((key: string) => {
+      if (key.endsWith("-thumb")) {
+        return Promise.reject(new Error("Blob store unavailable"));
+      }
+      return Promise.resolve(undefined);
+    });
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const result = (await callHandler(postHandler, buildEvent())) as {
+      width: number | null;
+      height: number | null;
+      thumbnailUrl: string | null;
+    };
+
+    // The upload itself still succeeds: the original was already stored
+    // before the thumbnail store was attempted, and probing is independent.
+    expect(mockSetResponseStatus).toHaveBeenCalledWith(expect.anything(), 201);
+    expect(result.width).toBe(800);
+    expect(result.height).toBe(600);
+    expect(result.thumbnailUrl).toBeNull();
+    expect(consoleSpy).toHaveBeenCalled();
+    // Insert is not told about a thumbnail that failed to persist, and no
+    // cleanup of the (successfully stored) original is triggered.
+    expect(mockDbInsertValues).toHaveBeenCalledWith(
+      expect.objectContaining({ width: 800, height: 600 }),
+    );
+    expect(mockRemoveMediaBlob).not.toHaveBeenCalled();
+
+    consoleSpy.mockRestore();
   });
 
   it("throws 415 for a disallowed content type", async () => {
@@ -283,7 +388,7 @@ describe("POST /api/media", () => {
     );
   });
 
-  it("removes the blob when the DB insert fails to prevent orphaned storage", async () => {
+  it("removes the original and thumbnail blobs when the DB insert fails to prevent orphaned storage", async () => {
     const insertError = new Error("DB error");
     mockDbInsertReturning.mockRejectedValue(insertError);
 
@@ -291,7 +396,26 @@ describe("POST /api/media", () => {
       "DB error",
     );
     expect(mockPutMediaBlob).toHaveBeenCalled();
-    expect(mockRemoveMediaBlob).toHaveBeenCalled();
+    expect(mockRemoveMediaBlob).toHaveBeenCalledWith(
+      expect.stringMatching(/^user-1\//),
+    );
+    expect(mockRemoveMediaBlob).toHaveBeenCalledWith(
+      expect.stringMatching(/^user-1\/.+-thumb$/),
+    );
+  });
+
+  it("removes only the original blob on insert failure when no thumbnail was generated", async () => {
+    mockGenerateThumbnail.mockResolvedValue(null);
+    const insertError = new Error("DB error");
+    mockDbInsertReturning.mockRejectedValue(insertError);
+
+    await expect(callHandler(postHandler, buildEvent())).rejects.toThrow(
+      "DB error",
+    );
+    expect(mockRemoveMediaBlob).toHaveBeenCalledTimes(1);
+    expect(mockRemoveMediaBlob).toHaveBeenCalledWith(
+      expect.stringMatching(/^user-1\//),
+    );
   });
 });
 
@@ -307,12 +431,30 @@ describe("DELETE /api/media/[id]", () => {
     mockDbSelectLimit.mockResolvedValue([{ url: "user-1/media-123" }]);
   });
 
-  it("deletes the blob and the database row on success", async () => {
+  it("deletes the original blob, the thumbnail blob, and the database row on success", async () => {
     const result = await callHandler(deleteHandler, buildEvent());
 
     expect(mockRemoveMediaBlob).toHaveBeenCalledWith("user-1/media-123");
+    expect(mockRemoveMediaBlob).toHaveBeenCalledWith("user-1/media-123-thumb");
     expect(mockDbDeleteWhere).toHaveBeenCalled();
     expect(result).toEqual({ ok: true });
+  });
+
+  it("still deletes the DB row and returns ok when the thumbnail blob removal fails", async () => {
+    mockRemoveMediaBlob.mockImplementation((key: string) => {
+      if (key.endsWith("-thumb")) {
+        return Promise.reject(new Error("Thumbnail blob missing"));
+      }
+      return Promise.resolve(undefined);
+    });
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const result = await callHandler(deleteHandler, buildEvent());
+
+    expect(result).toEqual({ ok: true });
+    expect(consoleSpy).toHaveBeenCalled();
+
+    consoleSpy.mockRestore();
   });
 
   it("throws 404 when the media row does not exist", async () => {
@@ -437,5 +579,59 @@ describe("GET /api/media/[id]", () => {
     await expect(callHandler(getHandler, buildEvent())).rejects.toMatchObject({
       statusCode: 400,
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/media/[id]/thumbnail
+// ---------------------------------------------------------------------------
+
+describe("GET /api/media/[id]/thumbnail", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetRouterParam.mockReturnValue("media-123");
+    mockDbSelectLimit.mockResolvedValue([
+      { url: "user-1/media-123", contentType: "image/jpeg" },
+    ]);
+    mockGetMediaBlob.mockResolvedValue({
+      data: new ArrayBuffer(8),
+      contentType: "image/jpeg",
+    });
+  });
+
+  it("looks up the blob under the derived thumbnail key and returns it", async () => {
+    const result = await callHandler(thumbnailGetHandler, buildEvent());
+
+    expect(mockGetMediaBlob).toHaveBeenCalledWith("user-1/media-123-thumb");
+    expect(result).toBeInstanceOf(Uint8Array);
+    expect(mockSetResponseHeader).toHaveBeenCalledWith(
+      expect.anything(),
+      "Content-Type",
+      "image/jpeg",
+    );
+  });
+
+  it("throws 404 when the database row does not exist", async () => {
+    mockDbSelectLimit.mockResolvedValue([]);
+
+    await expect(
+      callHandler(thumbnailGetHandler, buildEvent()),
+    ).rejects.toMatchObject({ statusCode: 404 });
+  });
+
+  it("throws 404 when no thumbnail was generated for this media", async () => {
+    mockGetMediaBlob.mockResolvedValue(null);
+
+    await expect(
+      callHandler(thumbnailGetHandler, buildEvent()),
+    ).rejects.toMatchObject({ statusCode: 404 });
+  });
+
+  it("throws 400 when the route param is missing", async () => {
+    mockGetRouterParam.mockReturnValue(undefined);
+
+    await expect(
+      callHandler(thumbnailGetHandler, buildEvent()),
+    ).rejects.toMatchObject({ statusCode: 400 });
   });
 });

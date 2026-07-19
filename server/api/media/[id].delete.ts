@@ -2,7 +2,7 @@ import { eq, and } from "drizzle-orm";
 import { getDb } from "../../db/index";
 import { media } from "../../db/schema";
 import { requireUser } from "../../utils/auth";
-import { removeMediaBlob } from "../../utils/mediaStore";
+import { removeMediaBlob, toThumbnailKey } from "../../utils/mediaStore";
 
 export default defineEventHandler(async (event) => {
   const userId = requireUser(event);
@@ -39,6 +39,17 @@ export default defineEventHandler(async (event) => {
     console.error(
       `media delete: blob removal failed for ${row.url}`,
       blobError,
+    );
+  }
+
+  // The thumbnail may not exist (e.g. generation failed at upload time);
+  // removeMediaBlob deleting a missing key is a no-op, not an error.
+  try {
+    await removeMediaBlob(toThumbnailKey(row.url));
+  } catch (thumbnailBlobError) {
+    console.error(
+      `media delete: thumbnail blob removal failed for ${row.url}`,
+      thumbnailBlobError,
     );
   }
 
