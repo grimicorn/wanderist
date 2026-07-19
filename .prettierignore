@@ -1,0 +1,10 @@
+.nuxt
+.output
+dist
+node_modules
+coverage
+e2e/report
+e2e/artifacts
+
+# dotenvx-managed env files (encrypted values; never reformat)
+.env*
