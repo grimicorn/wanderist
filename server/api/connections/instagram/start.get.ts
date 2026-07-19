@@ -18,8 +18,10 @@ function buildRedirectUri(origin: string): string {
 }
 
 function readInstagramConfig(): { clientId: string; redirectUri: string } {
-  const clientId = process.env.INSTAGRAM_CLIENT_ID ?? "";
-  const appOrigin = process.env.NUXT_PUBLIC_SITE_ORIGIN ?? "";
+  const config = useRuntimeConfig();
+  const clientId = process.env.INSTAGRAM_CLIENT_ID || config.instagramClientId;
+  const appOrigin =
+    process.env.NUXT_PUBLIC_SITE_ORIGIN || config.public.siteOrigin;
 
   if (!clientId) {
     throw createError({

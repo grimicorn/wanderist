@@ -2,18 +2,14 @@
  * GET /api/billing/config
  *
  * Returns which tier/cycle combinations have a Stripe Price ID configured,
- * read fresh from process.env on every request via getPriceId(). Used by
+ * resolved on every request via getPriceId() (a raw STRIPE_PRICE_* env var if
+ * present, else the value baked into server runtimeConfig at build). Used by
  * <PlanCheckoutButton> to decide whether to render disabled.
  *
- * Deliberately NOT exposed as a Nuxt public runtimeConfig boolean (e.g.
- * computed in nuxt.config.ts): those values are baked in once when Nuxt's
- * config runs and only get refreshed at request time by Nitro's own runtime
- * env-override convention, which requires the runtimeConfig key's derived
- * env var name (NUXT_PUBLIC_<KEY>) to match the var an operator actually
- * sets. STRIPE_PRICE_* are deliberately server-only (no NUXT_PUBLIC_ prefix
- * — see README "Billing"), so that convention can't apply here; a real
- * per-request server route is the only way to reflect the runtime
- * environment reliably.
+ * Deliberately kept server-only rather than exposed as a public runtimeConfig
+ * boolean: the Price IDs carry no NUXT_PUBLIC_ prefix (see README "Billing")
+ * and never need to reach the client — only these booleans do. A per-request
+ * server route keeps the resolution in one place.
  */
 
 import { getPriceId } from "../../utils/stripe";
