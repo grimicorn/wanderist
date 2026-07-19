@@ -1,4 +1,4 @@
-import { defineConfig } from "vitest/config";
+import { defineConfig, configDefaults } from "vitest/config";
 import vue from "@vitejs/plugin-vue";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
@@ -31,7 +31,10 @@ export default defineConfig({
   },
   test: {
     environment: "happy-dom",
-    exclude: ["node_modules", "e2e/**"],
+    // Spread configDefaults.exclude (which globs **/node_modules/**) rather than
+    // replacing it — a bare "node_modules" string is not a glob and misses nested
+    // copies like .netlify/plugins/node_modules created during the Netlify build.
+    exclude: [...configDefaults.exclude, "e2e/**", ".netlify/**"],
     setupFiles: ["./vitest.setup.ts"],
     typecheck: {
       tsconfig: "./tsconfig.vitest.json",
