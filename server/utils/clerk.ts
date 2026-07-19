@@ -3,7 +3,8 @@ import { createClerkClient, verifyToken } from "@clerk/backend";
 let cachedClerkClient: ReturnType<typeof createClerkClient> | null = null;
 
 export function requireClerkSecretKey(): string {
-  const secretKey = process.env.NUXT_CLERK_SECRET_KEY;
+  const secretKey =
+    process.env.NUXT_CLERK_SECRET_KEY || useRuntimeConfig().clerkSecretKey;
   if (!secretKey) {
     throw new Error("NUXT_CLERK_SECRET_KEY is not set");
   }

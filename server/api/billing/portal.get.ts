@@ -15,7 +15,8 @@ import { createBillingPortalSession } from "../../utils/stripe";
 const RETURN_PATH = "/settings#billing";
 
 function requireAppOrigin(): string {
-  const origin = process.env.NUXT_PUBLIC_SITE_ORIGIN;
+  const origin =
+    process.env.NUXT_PUBLIC_SITE_ORIGIN || useRuntimeConfig().public.siteOrigin;
   if (!origin) {
     throw createError({
       statusCode: 500,
