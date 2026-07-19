@@ -28,7 +28,8 @@ const DEFAULT_SUCCESS_PATH = "/settings#billing";
 const CANCEL_PATH = "/pricing";
 
 function requireAppOrigin(): string {
-  const origin = process.env.NUXT_PUBLIC_SITE_ORIGIN;
+  const origin =
+    process.env.NUXT_PUBLIC_SITE_ORIGIN || useRuntimeConfig().public.siteOrigin;
   if (!origin) {
     throw createError({
       statusCode: 500,

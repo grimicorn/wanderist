@@ -37,9 +37,12 @@ function readInstagramConfig(): {
   clientSecret: string;
   redirectUri: string;
 } {
-  const clientId = process.env.INSTAGRAM_CLIENT_ID ?? "";
-  const clientSecret = process.env.INSTAGRAM_CLIENT_SECRET ?? "";
-  const appOrigin = process.env.NUXT_PUBLIC_SITE_ORIGIN ?? "";
+  const config = useRuntimeConfig();
+  const clientId = process.env.INSTAGRAM_CLIENT_ID || config.instagramClientId;
+  const clientSecret =
+    process.env.INSTAGRAM_CLIENT_SECRET || config.instagramClientSecret;
+  const appOrigin =
+    process.env.NUXT_PUBLIC_SITE_ORIGIN || config.public.siteOrigin;
 
   if (!clientId || !clientSecret || !appOrigin) {
     throw createError({

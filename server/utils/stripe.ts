@@ -6,7 +6,8 @@ export type BillingCycleOption = "monthly" | "yearly";
 let cachedStripeClient: Stripe | null = null;
 
 export function requireStripeSecretKey(): string {
-  const secretKey = process.env.STRIPE_SECRET_KEY;
+  const secretKey =
+    process.env.STRIPE_SECRET_KEY || useRuntimeConfig().stripeSecretKey;
   if (!secretKey) {
     throw new Error("STRIPE_SECRET_KEY is not set");
   }
@@ -32,21 +33,35 @@ export function getStripeClient(): Stripe {
   return cachedStripeClient;
 }
 
-// Maps this app's plan tier + billing cycle vocabulary to the Stripe Price ID
-// a human configures per-environment after creating the corresponding Price
-// in the Stripe Dashboard (see README "Billing" section). These are
-// deliberately read from process.env directly (like STRIPE_SECRET_KEY above),
-// not public runtimeConfig — the actual Price ID never needs to reach the
-// client; nuxt.config.ts separately exposes only a "configured" boolean per
-// tier/cycle so checkout buttons know whether to render disabled.
-const PRICE_ID_ENV_VAR: Record<PlanTier, Record<BillingCycleOption, string>> = {
+// Maps this app's plan tier + billing cycle vocabulary to where its Stripe
+// Price ID is read from: a raw env var (which still wins if set at runtime) and
+// the runtimeConfig key it bakes into at build time. The Price ID stays
+// server-only (never reaches the client); the /api/billing/config route exposes
+// only a "configured" boolean per tier/cycle so checkout buttons know whether
+// to render disabled.
+const PRICE_ID_SOURCES: Record<
+  PlanTier,
+  Record<BillingCycleOption, { envVar: string; configKey: string }>
+> = {
   wanderer: {
-    monthly: "STRIPE_PRICE_WANDERER_MONTHLY",
-    yearly: "STRIPE_PRICE_WANDERER_YEARLY",
+    monthly: {
+      envVar: "STRIPE_PRICE_WANDERER_MONTHLY",
+      configKey: "stripePriceWandererMonthly",
+    },
+    yearly: {
+      envVar: "STRIPE_PRICE_WANDERER_YEARLY",
+      configKey: "stripePriceWandererYearly",
+    },
   },
   nomad: {
-    monthly: "STRIPE_PRICE_NOMAD_MONTHLY",
-    yearly: "STRIPE_PRICE_NOMAD_YEARLY",
+    monthly: {
+      envVar: "STRIPE_PRICE_NOMAD_MONTHLY",
+      configKey: "stripePriceNomadMonthly",
+    },
+    yearly: {
+      envVar: "STRIPE_PRICE_NOMAD_YEARLY",
+      configKey: "stripePriceNomadYearly",
+    },
   },
 };
 
@@ -55,17 +70,19 @@ export function getPriceId(
   tier: PlanTier,
   cycle: BillingCycleOption,
 ): string | null {
-  return process.env[PRICE_ID_ENV_VAR[tier][cycle]] || null;
+  const { envVar, configKey } = PRICE_ID_SOURCES[tier][cycle];
+  const config = useRuntimeConfig() as unknown as Record<string, string>;
+  return process.env[envVar] || config[configKey] || null;
 }
 
-// Flat list of every tier/cycle combination, derived from PRICE_ID_ENV_VAR so
+// Flat list of every tier/cycle combination, derived from PRICE_ID_SOURCES so
 // it can never drift out of sync with it. Used by mapPriceIdToPlan as a single
 // flat pass instead of a nested loop.
 const ALL_TIER_CYCLES: ReadonlyArray<{
   tier: PlanTier;
   cycle: BillingCycleOption;
-}> = Object.keys(PRICE_ID_ENV_VAR).flatMap((tier) =>
-  Object.keys(PRICE_ID_ENV_VAR[tier as PlanTier]).map((cycle) => ({
+}> = Object.keys(PRICE_ID_SOURCES).flatMap((tier) =>
+  Object.keys(PRICE_ID_SOURCES[tier as PlanTier]).map((cycle) => ({
     tier: tier as PlanTier,
     cycle: cycle as BillingCycleOption,
   })),
@@ -137,7 +154,8 @@ export async function createBillingPortalSession(
 }
 
 export function requireStripeWebhookSecret(): string {
-  const secret = process.env.STRIPE_WEBHOOK_SECRET;
+  const secret =
+    process.env.STRIPE_WEBHOOK_SECRET || useRuntimeConfig().stripeWebhookSecret;
   if (!secret) {
     throw new Error("STRIPE_WEBHOOK_SECRET is not set");
   }
