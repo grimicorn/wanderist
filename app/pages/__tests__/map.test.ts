@@ -29,9 +29,20 @@ vi.mock("~/composables/useStats", () => ({
   })),
 }));
 
-// useApiClient is a Nuxt auto-import used by usePlacesStore.
-const mockApiFetch = vi.fn().mockResolvedValue([]);
+// useApiClient is a Nuxt auto-import used by usePlacesStore. usePlacesStore
+// walks pages of GET /api/places until a response reports hasMore: false, so
+// this stub inspects the requested page and only returns data for page 1.
+const mockApiFetch = vi.fn();
 vi.stubGlobal("useApiClient", () => ({ apiFetch: mockApiFetch }));
+
+function stubPaginatedPlacesResponse(places: unknown[]) {
+  mockApiFetch.mockImplementation(async (url: string) => {
+    const page = Number(
+      new URL(url, "http://localhost").searchParams.get("page"),
+    );
+    return { places: page === 1 ? places : [], page, hasMore: false };
+  });
+}
 
 // defineStore is stubbed as vi.fn() in vitest.setup.ts for snapshot/component
 // tests. Override it to the real pinia defineStore so the store actually works.
@@ -123,7 +134,7 @@ const SAMPLE_PLACES = [
 async function mountWithPlaces(places = SAMPLE_PLACES) {
   // Make apiFetch return the given places so onMounted's fetchPlaces() call
   // populates the store with the expected data rather than clobbering it with [].
-  mockApiFetch.mockResolvedValue(places);
+  stubPaginatedPlacesResponse(places);
 
   const pinia = createPinia();
   setActivePinia(pinia);
@@ -146,7 +157,7 @@ async function mountWithPlaces(places = SAMPLE_PLACES) {
 describe("Map page (/map)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockApiFetch.mockResolvedValue([]);
+    stubPaginatedPlacesResponse([]);
     setActivePinia(createPinia());
   });
 

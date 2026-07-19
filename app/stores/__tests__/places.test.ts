@@ -30,7 +30,11 @@ describe("usePlacesStore", () => {
         { id: "p-1", userId: "u-1", name: "Tokyo" },
         { id: "p-2", userId: "u-1", name: "London" },
       ];
-      mockApiFetch.mockResolvedValue(mockPlaces);
+      mockApiFetch.mockResolvedValueOnce({
+        places: mockPlaces,
+        page: 1,
+        hasMore: false,
+      });
 
       const store = usePlacesStore();
       await store.fetchPlaces();
@@ -46,7 +50,7 @@ describe("usePlacesStore", () => {
 
       mockApiFetch.mockImplementation(async () => {
         capturedLoading = store.isLoading;
-        return [];
+        return { places: [], page: 1, hasMore: false };
       });
 
       await store.fetchPlaces();
@@ -55,7 +59,7 @@ describe("usePlacesStore", () => {
     });
 
     it("resets isLoading to false after fetch", async () => {
-      mockApiFetch.mockResolvedValue([]);
+      mockApiFetch.mockResolvedValue({ places: [], page: 1, hasMore: false });
       const store = usePlacesStore();
       await store.fetchPlaces();
 
@@ -72,20 +76,74 @@ describe("usePlacesStore", () => {
       expect(store.isLoading).toBe(false);
     });
 
-    it("calls /api/places with no query when no filters", async () => {
-      mockApiFetch.mockResolvedValue([]);
+    it("calls /api/places with page=1 when no filters", async () => {
+      mockApiFetch.mockResolvedValue({ places: [], page: 1, hasMore: false });
       const store = usePlacesStore();
       await store.fetchPlaces();
 
-      expect(mockApiFetch).toHaveBeenCalledWith("/api/places");
+      expect(mockApiFetch).toHaveBeenCalledWith("/api/places?page=1");
     });
 
     it("appends category query param when filter is provided", async () => {
-      mockApiFetch.mockResolvedValue([]);
+      mockApiFetch.mockResolvedValue({ places: [], page: 1, hasMore: false });
       const store = usePlacesStore();
       await store.fetchPlaces({ category: "museum" });
 
-      expect(mockApiFetch).toHaveBeenCalledWith("/api/places?category=museum");
+      expect(mockApiFetch).toHaveBeenCalledWith(
+        "/api/places?page=1&category=museum",
+      );
+    });
+
+    it("walks every page and concatenates the results while hasMore is true", async () => {
+      const pageOne = Array.from({ length: 20 }, (_, index) => ({
+        id: `p-${index}`,
+        userId: "u-1",
+        name: `Place ${index}`,
+      }));
+      const pageTwo = [{ id: "p-20", userId: "u-1", name: "Last Place" }];
+
+      mockApiFetch
+        .mockResolvedValueOnce({ places: pageOne, page: 1, hasMore: true })
+        .mockResolvedValueOnce({ places: pageTwo, page: 2, hasMore: false });
+
+      const store = usePlacesStore();
+      await store.fetchPlaces();
+
+      expect(store.places).toEqual([...pageOne, ...pageTwo]);
+      expect(mockApiFetch).toHaveBeenCalledTimes(2);
+      expect(mockApiFetch).toHaveBeenNthCalledWith(1, "/api/places?page=1");
+      expect(mockApiFetch).toHaveBeenNthCalledWith(2, "/api/places?page=2");
+    });
+
+    it("stops after a single request when the first page reports hasMore: false", async () => {
+      const singlePlace = [{ id: "p-1", userId: "u-1", name: "Tokyo" }];
+      mockApiFetch.mockResolvedValueOnce({
+        places: singlePlace,
+        page: 1,
+        hasMore: false,
+      });
+
+      const store = usePlacesStore();
+      await store.fetchPlaces();
+
+      expect(store.places).toEqual(singlePlace);
+      expect(mockApiFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it("fails loud instead of returning a truncated list when hasMore never turns false", async () => {
+      // A misbehaving API that always reports more pages must not be allowed
+      // to hand the UI a partial "all places" list dressed up as complete.
+      mockApiFetch.mockImplementation(async () => ({
+        places: [{ id: "p-x", userId: "u-1", name: "X" }],
+        page: 1,
+        hasMore: true,
+      }));
+
+      const store = usePlacesStore();
+
+      await expect(store.fetchPlaces()).rejects.toThrow(/exceeded .* pages/);
+      expect(store.error).toMatch(/exceeded .* pages/);
+      expect(store.places).toEqual([]);
     });
   });
 
@@ -134,7 +192,7 @@ describe("usePlacesStore", () => {
       const created = { id: "p-2", userId: "u-1", name: "Paris" };
 
       mockApiFetch
-        .mockResolvedValueOnce([existing])
+        .mockResolvedValueOnce({ places: [existing], page: 1, hasMore: false })
         .mockResolvedValueOnce(created);
 
       const store = usePlacesStore();
@@ -156,7 +214,7 @@ describe("usePlacesStore", () => {
       const updated = { id: "p-1", userId: "u-1", name: "Osaka" };
 
       mockApiFetch
-        .mockResolvedValueOnce([original])
+        .mockResolvedValueOnce({ places: [original], page: 1, hasMore: false })
         .mockResolvedValueOnce(updated);
 
       const store = usePlacesStore();
@@ -187,7 +245,11 @@ describe("usePlacesStore", () => {
       const updatedPlace1 = { id: "p-1", userId: "u-1", name: "Osaka" };
 
       mockApiFetch
-        .mockResolvedValueOnce([place1, place2])
+        .mockResolvedValueOnce({
+          places: [place1, place2],
+          page: 1,
+          hasMore: false,
+        })
         .mockResolvedValueOnce(updatedPlace1);
 
       const store = usePlacesStore();
@@ -210,7 +272,11 @@ describe("usePlacesStore", () => {
       const place2 = { id: "p-2", userId: "u-1", name: "London" };
 
       mockApiFetch
-        .mockResolvedValueOnce([place1, place2])
+        .mockResolvedValueOnce({
+          places: [place1, place2],
+          page: 1,
+          hasMore: false,
+        })
         .mockResolvedValueOnce({ success: true });
 
       const store = usePlacesStore();
