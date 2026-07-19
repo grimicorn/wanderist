@@ -53,6 +53,15 @@ Open Drizzle Studio (visual database browser):
 npm run db:studio
 ```
 
+### Migrations in CI
+
+Migrations are generated and committed locally, then applied automatically by CI — never generated at deploy time.
+
+- **Deploy previews / e2e:** each spec run creates an ephemeral Neon branch (copy-on-write from production, so it starts with production's schema), then applies any pending committed migrations to it before the tests run. The migrate step uses the branch's **direct** (non-pooler) connection; the app under test uses the pooled one.
+- **Production:** the `migrate-production` job in `.github/workflows/ci.yml` runs on every push to `main`, after the `ci` job passes, and applies committed migrations to the production database. Running it as its own job — rather than inside the Netlify build — makes a failed migration fail loudly instead of half-deploying.
+
+Migrations must use a **direct** Neon connection, not the pooled one the running app uses. Set a repository secret `DATABASE_URL_UNPOOLED` (Settings → Secrets and variables → Actions) to the production Neon **direct** connection string (the host without `-pooler`). Add a new migration to production by committing the generated SQL and merging to `main`.
+
 ## Map (Mapbox GL)
 
 The `/map` page uses [Mapbox GL JS](https://docs.mapbox.com/mapbox-gl-js/guides/) to render a real interactive map with place markers, zoom controls, a base-style switcher, and a drop-a-pin flow for creating new places.
