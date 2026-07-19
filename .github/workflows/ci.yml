@@ -30,6 +30,39 @@ jobs:
       - run: npx nuxt prepare
       - run: npm run test:ci
 
+  migrate-production:
+    name: Migrate production DB
+    runs-on: ubuntu-latest
+    # Apply committed Drizzle migrations to the production database on every push
+    # to main, as its own job (not buried in the Netlify build) so a failed
+    # migration fails loudly and visibly. Gated on `ci` so a broken build never
+    # migrates prod. Never runs on PRs or feature branches.
+    #
+    # Required repository secret (Settings -> Secrets and variables -> Actions):
+    #   DATABASE_URL_UNPOOLED - the production Neon DIRECT (non-pooler) connection
+    #                           string. Migrations use a direct connection, not the
+    #                           pooled one the running app uses. drizzle.config reads
+    #                           it via the DATABASE_URL env below.
+    needs: [ci]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+        env:
+          HUSKY: 0
+      - name: Apply Drizzle migrations to production
+        run: npm run db:migrate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL_UNPOOLED }}
+
   changed:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
@@ -104,9 +137,11 @@ jobs:
           api_key: ${{ secrets.NEON_API_KEY }}
           branch_name: ci-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.spec }}
       - name: Run database migrations
+        # Migrate over the DIRECT (non-pooler) URL; the app runs over the pooled
+        # one below. Matches production, where the migrate job uses a direct URL.
         run: npm run db:migrate
         env:
-          E2E_DATABASE_URL: ${{ steps.neon.outputs.db_url_pooled }}
+          E2E_DATABASE_URL: ${{ steps.neon.outputs.db_url }}
       - name: Run E2E tests (${{ matrix.spec }})
         run: npx playwright test e2e/${{ matrix.spec }}.spec.ts
         env:
