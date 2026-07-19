@@ -171,7 +171,12 @@ Object.assign(globalThis, {
   setResponseStatus: mockSetResponseStatus,
   getRouterParam: vi.fn(),
   getHeader: vi.fn(),
-  useRuntimeConfig: vi.fn(() => ({ databaseUrl: "postgres://test" })),
+  useRuntimeConfig: vi.fn(() => ({
+    databaseUrl: "postgres://test",
+    instagramClientId: "",
+    instagramClientSecret: "",
+    public: { siteOrigin: "" },
+  })),
 });
 
 // ---------------------------------------------------------------------------

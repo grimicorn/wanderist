@@ -38,11 +38,14 @@ jobs:
     # migration fails loudly and visibly. Gated on `ci` so a broken build never
     # migrates prod. Never runs on PRs or feature branches.
     #
+    # `db:migrate:production` is `dotenvx run -f .env.production -- drizzle-kit
+    # migrate`. drizzle.config prefers .env.production's DATABASE_URL_UNPOOLED
+    # (the direct, non-pooler connection) over the pooled DATABASE_URL the app
+    # uses.
+    #
     # Required repository secret (Settings -> Secrets and variables -> Actions):
-    #   DATABASE_URL_UNPOOLED - the production Neon DIRECT (non-pooler) connection
-    #                           string. Migrations use a direct connection, not the
-    #                           pooled one the running app uses. drizzle.config reads
-    #                           it via the DATABASE_URL env below.
+    #   DOTENV_PRIVATE_KEY_PRODUCTION - decrypts .env.production. Same key set in
+    #                                   Netlify (Builds scope).
     needs: [ci]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
@@ -59,9 +62,9 @@ jobs:
         env:
           HUSKY: 0
       - name: Apply Drizzle migrations to production
-        run: npm run db:migrate
+        run: npm run db:migrate:production
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL_UNPOOLED }}
+          DOTENV_PRIVATE_KEY_PRODUCTION: ${{ secrets.DOTENV_PRIVATE_KEY_PRODUCTION }}
 
   changed:
     runs-on: ubuntu-latest
@@ -129,31 +132,50 @@ jobs:
         env:
           HUSKY: 0
       - run: npx playwright install chromium --with-deps
+      - name: Load Neon credentials from .env.e2e
+        # The Neon project id and API key live encrypted in .env.e2e, so the only
+        # repository secret this job needs is DOTENV_PRIVATE_KEY_E2E. Decrypt them
+        # into $GITHUB_ENV so the create/delete branch actions below read them via
+        # ${{ env.* }}. add-mask keeps the API key out of the logs (dotenvx values
+        # are not auto-masked the way secrets.* are).
+        run: |
+          project_id="$(npx dotenvx get NEON_PROJECT_ID -f .env.e2e)"
+          api_key="$(npx dotenvx get NEON_API_KEY -f .env.e2e)"
+          echo "::add-mask::$api_key"
+          echo "NEON_PROJECT_ID=$project_id" >> "$GITHUB_ENV"
+          echo "NEON_API_KEY=$api_key" >> "$GITHUB_ENV"
+        env:
+          DOTENV_PRIVATE_KEY_E2E: ${{ secrets.DOTENV_PRIVATE_KEY_E2E }}
       - name: Create Neon branch
         id: neon
         uses: neondatabase/create-branch-action@72ed4f69a12b6be9c16aebfad893f6a21e9aba8b # v6.4.0
         with:
-          project_id: ${{ secrets.NEON_PROJECT_ID }}
-          api_key: ${{ secrets.NEON_API_KEY }}
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          api_key: ${{ env.NEON_API_KEY }}
           branch_name: ci-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.spec }}
       - name: Run database migrations
         # Migrate over the DIRECT (non-pooler) URL; the app runs over the pooled
-        # one below. Matches production, where the migrate job uses a direct URL.
-        run: npm run db:migrate
+        # one below. drizzle-kit is invoked directly (not via `npm run db:migrate`,
+        # which wraps dotenvx -f .env): the branch URL is injected below, so no
+        # env decryption — and thus no dev private key — is needed here.
+        run: npx drizzle-kit migrate
         env:
           E2E_DATABASE_URL: ${{ steps.neon.outputs.db_url }}
       - name: Run E2E tests (${{ matrix.spec }})
-        run: npx playwright test e2e/${{ matrix.spec }}.spec.ts
+        # `npm run e2e` is `dotenvx run -f .env.e2e -- playwright test`; the spec
+        # path is appended after `--`. dotenvx decrypts the Clerk keys from
+        # .env.e2e, while E2E_DATABASE_URL below (the fresh Neon branch) overrides
+        # the file's value — a var already in the environment wins.
+        run: npm run e2e -- e2e/${{ matrix.spec }}.spec.ts
         env:
+          DOTENV_PRIVATE_KEY_E2E: ${{ secrets.DOTENV_PRIVATE_KEY_E2E }}
           E2E_DATABASE_URL: ${{ steps.neon.outputs.db_url_pooled }}
-          NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
-          NUXT_CLERK_SECRET_KEY: ${{ secrets.NUXT_CLERK_SECRET_KEY }}
       - name: Delete Neon branch
         if: always()
         uses: neondatabase/delete-branch-action@4468d825d5a88ef4012f1705a82f02ec3072f776 # v3
         with:
-          project_id: ${{ secrets.NEON_PROJECT_ID }}
-          api_key: ${{ secrets.NEON_API_KEY }}
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          api_key: ${{ env.NEON_API_KEY }}
           branch: ci-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.spec }}
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # actions/upload-artifact@v7.0.1
         if: failure()
