@@ -10,8 +10,18 @@ export const MEDIA_STORE_NAME = "media";
 // Content-type metadata key stored alongside each blob.
 export const BLOB_CONTENT_TYPE_KEY = "contentType";
 
+// Suffix appended to an original's storage key to get its thumbnail's key,
+// e.g. "user-1/media-123" -> "user-1/media-123-thumb". Keeping the thumbnail
+// alongside the original under a derived key means no extra DB column is
+// needed to look it up.
+const THUMBNAIL_KEY_SUFFIX = "-thumb";
+
 function openStore(): ReturnType<typeof getStore> {
   return getStore(MEDIA_STORE_NAME);
+}
+
+export function toThumbnailKey(storageKey: string): string {
+  return `${storageKey}${THUMBNAIL_KEY_SUFFIX}`;
 }
 
 export async function putMediaBlob(

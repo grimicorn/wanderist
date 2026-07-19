@@ -31,6 +31,7 @@
     "e2e:report": "playwright show-report e2e/report"
   },
   "dependencies": {
+    "@clerk/backend": "^3.7.0",
     "@clerk/nuxt": "^2.6.19",
     "@neondatabase/serverless": "^1.1.0",
     "@netlify/blobs": "^10.7.9",
@@ -41,13 +42,13 @@
     "mapbox-gl": "^3.26.0",
     "nuxt": "^4.4.8",
     "pinia": "^3.0.4",
+    "sharp": "^0.35.3",
     "stripe": "^22.3.2",
     "svix": "^1.98.0",
     "vue": "^3.5.40",
     "vue-router": "^5.2.0"
   },
   "devDependencies": {
-    "@clerk/backend": "^3.7.0",
     "@clerk/testing": "^2.2.7",
     "@dotenvx/dotenvx": "^2.14.0",
     "@eslint/js": "^10.0.1",

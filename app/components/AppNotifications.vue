@@ -27,6 +27,11 @@
         :key="notification.id"
         class="notif__item"
         :class="{ 'is-unread': !notification.isRead }"
+        :tabindex="notification.isRead ? undefined : 0"
+        :role="notification.isRead ? undefined : 'button'"
+        @click="handleItemClick(notification)"
+        @keydown.enter="handleItemClick(notification)"
+        @keydown.space.prevent="handleItemClick(notification)"
       >
         <span
           class="notif__ico"
@@ -60,12 +65,19 @@ import {
   resolveNotificationIcon,
   formatNotificationTime,
 } from "~/utils/notificationDisplay";
+import type { AppNotification } from "~/composables/useNotifications";
 
 const props = defineProps<{ open: boolean }>();
 defineEmits<{ close: [] }>();
 
-const { notifications, isLoading, error, fetchNotifications, markAllRead } =
-  useNotifications();
+const {
+  notifications,
+  isLoading,
+  error,
+  fetchNotifications,
+  markAllRead,
+  markRead,
+} = useNotifications();
 
 watch(
   () => props.open,
@@ -83,5 +95,12 @@ watch(
 
 async function handleMarkAllRead(): Promise<void> {
   await markAllRead();
+}
+
+async function handleItemClick(notification: AppNotification): Promise<void> {
+  if (notification.isRead) {
+    return;
+  }
+  await markRead(notification.id);
 }
 </script>

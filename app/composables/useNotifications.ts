@@ -55,6 +55,20 @@ export function useNotifications() {
     }
   }
 
+  async function markRead(id: string): Promise<void> {
+    error.value = null;
+    try {
+      await apiFetch(`/api/notifications/${id}/read`, { method: "POST" });
+      notifications.value = notifications.value.map((notification) =>
+        notification.id === id
+          ? { ...notification, isRead: true }
+          : notification,
+      );
+    } catch (markError: unknown) {
+      error.value = extractErrorMessage(markError);
+    }
+  }
+
   return {
     notifications,
     isLoading: readonly(isLoading),
@@ -62,5 +76,6 @@ export function useNotifications() {
     unreadCount,
     fetchNotifications,
     markAllRead,
+    markRead,
   };
 }

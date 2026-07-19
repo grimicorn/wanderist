@@ -11,6 +11,7 @@ const notificationsRef = ref<AppNotification[]>([]);
 const isLoadingRef = ref(false);
 const errorRef = ref<string | null>(null);
 const mockMarkAllRead = vi.fn();
+const mockMarkRead = vi.fn();
 const mockFetchNotifications = vi.fn().mockResolvedValue(undefined);
 
 vi.stubGlobal("useNotifications", () => ({
@@ -20,6 +21,7 @@ vi.stubGlobal("useNotifications", () => ({
   unreadCount: 0,
   fetchNotifications: mockFetchNotifications,
   markAllRead: mockMarkAllRead,
+  markRead: mockMarkRead,
 }));
 
 const SAMPLE_NOTIFICATIONS: AppNotification[] = [
@@ -65,6 +67,7 @@ describe("AppNotifications", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockMarkAllRead.mockResolvedValue(undefined);
+    mockMarkRead.mockResolvedValue(undefined);
     notificationsRef.value = [...SAMPLE_NOTIFICATIONS];
     isLoadingRef.value = false;
     errorRef.value = null;
@@ -110,6 +113,56 @@ describe("AppNotifications", () => {
     });
     await wrapper.find(".notif__mark").trigger("click");
     expect(mockMarkAllRead).toHaveBeenCalledTimes(1);
+  });
+
+  it("calls composable markRead when an unread notification item is clicked", async () => {
+    const wrapper = mount(AppNotifications, {
+      props: { open: true },
+      ...globalConfig,
+    });
+    const unreadItem = wrapper.findAll(".notif__item.is-unread")[0];
+    await unreadItem?.trigger("click");
+    expect(mockMarkRead).toHaveBeenCalledTimes(1);
+    expect(mockMarkRead).toHaveBeenCalledWith("n-1");
+  });
+
+  it("does not call composable markRead when an already-read notification item is clicked", async () => {
+    const wrapper = mount(AppNotifications, {
+      props: { open: true },
+      ...globalConfig,
+    });
+    const readItem = wrapper
+      .findAll(".notif__item")
+      .find((item) => !item.classes("is-unread"));
+    await readItem?.trigger("click");
+    expect(mockMarkRead).not.toHaveBeenCalled();
+  });
+
+  it("calls composable markRead when Enter or Space is pressed on an unread item", async () => {
+    const wrapper = mount(AppNotifications, {
+      props: { open: true },
+      ...globalConfig,
+    });
+    const unreadItem = wrapper.findAll(".notif__item.is-unread")[0];
+    await unreadItem?.trigger("keydown.enter");
+    await unreadItem?.trigger("keydown.space");
+    expect(mockMarkRead).toHaveBeenCalledTimes(2);
+    expect(mockMarkRead).toHaveBeenCalledWith("n-1");
+  });
+
+  it("marks unread items as keyboard-focusable buttons and read items as neither", () => {
+    const wrapper = mount(AppNotifications, {
+      props: { open: true },
+      ...globalConfig,
+    });
+    const unreadItem = wrapper.findAll(".notif__item.is-unread")[0];
+    const readItem = wrapper
+      .findAll(".notif__item")
+      .find((item) => !item.classes("is-unread"));
+    expect(unreadItem?.attributes("tabindex")).toBe("0");
+    expect(unreadItem?.attributes("role")).toBe("button");
+    expect(readItem?.attributes("tabindex")).toBeUndefined();
+    expect(readItem?.attributes("role")).toBeUndefined();
   });
 
   it("renders the header with Notifications title", () => {
