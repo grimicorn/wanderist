@@ -16,7 +16,8 @@ const AUTH_TAG_BYTE_LENGTH = 16;
 const EXPECTED_KEY_HEX_LENGTH = 64;
 
 function readEncryptionKey(): Buffer {
-  const hex = process.env.TOKEN_ENCRYPTION_KEY ?? "";
+  const hex =
+    process.env.TOKEN_ENCRYPTION_KEY || useRuntimeConfig().tokenEncryptionKey;
   if (hex.length !== EXPECTED_KEY_HEX_LENGTH) {
     throw new Error(
       "TOKEN_ENCRYPTION_KEY must be a 64-character hex string (32 bytes). Generate one with: openssl rand -hex 32",
