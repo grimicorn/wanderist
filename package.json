@@ -31,7 +31,8 @@
     "e2e:report": "playwright show-report e2e/report"
   },
   "overrides": {
-    "minimatch": "^10.2.5"
+    "minimatch": "^10.2.5",
+    "h3": "^1.15.11"
   },
   "dependencies": {
     "@clerk/backend": "^3.7.0",
