@@ -22,6 +22,10 @@
         <AppIcon name="route" :size="17" />
         Trips
       </NuxtLink>
+      <NuxtLink class="nav__item" to="/guides" @click="close">
+        <AppIcon name="layers" :size="17" />
+        Guides
+      </NuxtLink>
       <NuxtLink class="nav__item" to="/explore" @click="close">
         <AppIcon name="globe" :size="17" />
         Explore

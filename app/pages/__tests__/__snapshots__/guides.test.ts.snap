@@ -1,0 +1,37 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Guides page (/guides) > renders without crashing and matches snapshot 1`] = `
+"<div data-v-3ab52aa2="" class="content content--wide">
+  <div data-v-3ab52aa2="" class="guides-head">
+    <div data-v-3ab52aa2="">
+      <div data-v-3ab52aa2="" class="label">// 2 guides</div>
+      <h1 data-v-3ab52aa2="">Your guides</h1>
+      <p data-v-3ab52aa2="">Write up a route, a city, or a trick you always tell people.</p>
+    </div><button data-v-3ab52aa2="" class="btn btn--outline"><svg data-v-3ab52aa2="" data-icon="" name="layers" size="15"></svg> new guide </button>
+  </div><!-- New guide form -->
+  <!--v-if-->
+  <!-- List load error -->
+  <!--v-if-->
+  <!-- Delete error (create/edit errors render inside GuideForm itself) -->
+  <!--v-if-->
+  <!-- Only shown before any guides have loaded — a refetch (e.g. retry)
+       while guides are already on screen must not blank the list out from
+       under the user, so this checks the list is still empty too. -->
+  <div data-v-2d511299="" data-v-3ab52aa2="" class="guide-list">
+    <div data-v-d468186a="" data-v-2d511299="" class="gcard">
+      <div data-v-d468186a="" class="gcard__body">
+        <div data-v-d468186a="" class="gcard__name">Tokyo on foot</div>
+        <div data-v-d468186a="" class="gcard__meta"><span data-v-d468186a="" class="m"><svg data-v-d468186a="" data-icon="" name="clock" size="12"></svg> 8 min read </span><span data-v-d468186a="" class="m"><svg data-v-d468186a="" data-icon="" name="heart" size="12"></svg> 12</span><span data-v-d468186a="" class="tag tag--ongoing">public</span></div>
+      </div>
+      <div data-v-d468186a="" class="gcard__acts"><button data-v-d468186a="" class="btn btn--outline btn--sm"> edit </button><button data-v-d468186a="" class="btn btn--outline btn--sm"> delete </button></div>
+    </div>
+    <div data-v-d468186a="" data-v-2d511299="" class="gcard">
+      <div data-v-d468186a="" class="gcard__body">
+        <div data-v-d468186a="" class="gcard__name">Slow coastlines</div>
+        <div data-v-d468186a="" class="gcard__meta"><span data-v-d468186a="" class="m"><svg data-v-d468186a="" data-icon="" name="clock" size="12"></svg> 5 min read </span><span data-v-d468186a="" class="m"><svg data-v-d468186a="" data-icon="" name="heart" size="12"></svg> 0</span><span data-v-d468186a="" class="tag tag--past">private</span></div>
+      </div>
+      <div data-v-d468186a="" class="gcard__acts"><button data-v-d468186a="" class="btn btn--outline btn--sm"> edit </button><button data-v-d468186a="" class="btn btn--outline btn--sm"> delete </button></div>
+    </div>
+  </div>
+</div>"
+`;
