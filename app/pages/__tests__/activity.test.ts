@@ -30,6 +30,7 @@ const SAMPLE_NOTIFICATIONS: AppNotification[] = [
     body: "Someone started following you",
     isRead: false,
     createdAt: new Date(Date.now() - 2 * 3600 * 1000).toISOString(),
+    actor: null,
   },
   {
     id: "n-2",
@@ -38,6 +39,7 @@ const SAMPLE_NOTIFICATIONS: AppNotification[] = [
     body: "Someone liked your entry",
     isRead: true,
     createdAt: new Date(Date.now() - 5 * 3600 * 1000).toISOString(),
+    actor: null,
   },
 ];
 
@@ -68,6 +70,30 @@ describe("Activity page (/activity)", () => {
       .map((element) => element.text());
     expect(texts).toContain("Someone started following you");
     expect(texts).toContain("Someone liked your entry");
+  });
+
+  it("renders the follower's display name when a new_follower notification has a resolved actor", () => {
+    notificationsRef.value = [
+      {
+        id: "n-3",
+        type: "new_follower",
+        tone: "accent",
+        body: "Someone started following you",
+        isRead: false,
+        createdAt: new Date().toISOString(),
+        actor: {
+          id: "user-elsa",
+          displayName: "Elsa Farsdottir",
+          handle: "elsa_far",
+        },
+      },
+    ];
+
+    const wrapper = mount(ActivityPage, globalConfig);
+    const texts = wrapper
+      .findAll(".activity__text")
+      .map((element) => element.text());
+    expect(texts).toContain("Elsa Farsdottir started following you");
   });
 
   it("shows unread dot only for unread notifications", () => {
