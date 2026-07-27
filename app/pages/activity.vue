@@ -36,7 +36,9 @@
             />
           </span>
           <div class="activity__body">
-            <p class="activity__text">{{ notification.body }}</p>
+            <p class="activity__text">
+              {{ resolveNotificationText(notification) }}
+            </p>
             <span class="activity__time">{{
               formatNotificationTime(notification.createdAt)
             }}</span>
@@ -52,6 +54,7 @@
 import {
   resolveNotificationIcon,
   formatNotificationTime,
+  resolveNotificationText,
 } from "~/utils/notificationDisplay";
 
 definePageMeta({ layout: "app", middleware: "auth" });

@@ -1,6 +1,12 @@
 import { useApiClient } from "~/composables/useApiClient";
 import { extractErrorMessage } from "~/utils/extractErrorMessage";
 
+export interface AppNotificationActor {
+  id: string;
+  displayName: string | null;
+  handle: string | null;
+}
+
 export interface AppNotification {
   id: string;
   type: string;
@@ -8,6 +14,10 @@ export interface AppNotification {
   body: string;
   isRead: boolean;
   createdAt: string;
+  // The acting user (e.g. the follower), resolved server-side. Null for
+  // legacy notifications with no actor recorded, or when the actor has since
+  // deleted their account — the UI falls back to `body` in either case.
+  actor: AppNotificationActor | null;
 }
 
 const NOTIFICATIONS_STATE_KEY = "notifications:list";

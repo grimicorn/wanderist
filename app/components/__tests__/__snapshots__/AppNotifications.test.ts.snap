@@ -17,7 +17,7 @@ exports[`AppNotifications > renders the panel when open and matches snapshot 1`]
     </div>
     <div class="notif__item"><span class="notif__ico notif__ico--accent"><svg data-icon="" name="users" size="16"></svg></span>
       <div class="notif__body">
-        <p class="notif__title">Someone started following you</p><span class="notif__time">4d</span>
+        <p class="notif__title">Elsa Farsdottir started following you</p><span class="notif__time">4d</span>
       </div><span class="notif__dot"></span>
     </div>
   </div><a class="notif__foot"> View all activity <svg data-icon="" name="arrow-right" size="14"></svg></a>
