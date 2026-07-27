@@ -295,6 +295,26 @@ describe("Guides page (/guides)", () => {
       expect(wrapper.text()).toContain("Failed to delete guide");
     });
 
+    it("keeps the confirm step open after a failed delete so retry is one click away", async () => {
+      const guidesStore = useGuidesStore();
+      vi.spyOn(guidesStore, "deleteGuide").mockRejectedValue(
+        new Error("Failed to delete guide"),
+      );
+
+      const wrapper = mount(GuidesPage, buildGlobalConfig(pinia));
+      await findButton(wrapper, "delete")?.trigger("click");
+      await findButton(wrapper, "confirm delete")?.trigger("click");
+      await flushPromises();
+
+      const retryButton = findButton(wrapper, "confirm delete");
+      expect(retryButton).toBeTruthy();
+
+      await retryButton?.trigger("click");
+      await flushPromises();
+
+      expect(guidesStore.deleteGuide).toHaveBeenCalledTimes(2);
+    });
+
     it("deleting one guide does not block confirming delete on a different guide", async () => {
       const guidesStore = useGuidesStore();
       let resolveFirstDelete: () => void = () => {};

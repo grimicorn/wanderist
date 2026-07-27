@@ -95,6 +95,37 @@ describe("useGuidesStore", () => {
 
       expect(store.hasLoaded).toBe(false);
     });
+
+    it("dedupes concurrent calls into a single request", async () => {
+      const mockGuides = [{ id: "g-1", userId: "u-1", title: "Tokyo" }];
+      let resolveFetch: (value: typeof mockGuides) => void;
+      mockApiFetch.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFetch = resolve;
+          }),
+      );
+
+      const store = useGuidesStore();
+      const first = store.fetchGuides();
+      const second = store.fetchGuides();
+
+      resolveFetch!(mockGuides);
+      await Promise.all([first, second]);
+
+      expect(mockApiFetch).toHaveBeenCalledTimes(1);
+      expect(store.guides).toEqual(mockGuides);
+    });
+
+    it("allows a fresh request once the in-flight one settles", async () => {
+      mockApiFetch.mockResolvedValue([]);
+      const store = useGuidesStore();
+
+      await store.fetchGuides();
+      await store.fetchGuides();
+
+      expect(mockApiFetch).toHaveBeenCalledTimes(2);
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -114,7 +145,12 @@ describe("useGuidesStore", () => {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
-      mockApiFetch.mockResolvedValue(newGuide);
+      // hasLoaded starts false, so createGuide's markLoadSucceeded triggers a
+      // refetch (see the "refetches instead of trusting the local list" test
+      // below) — queue its response too, alongside the create response.
+      mockApiFetch
+        .mockResolvedValueOnce(newGuide) // POST /api/guides
+        .mockResolvedValueOnce([newGuide]); // refetch GET /api/guides
 
       const store = useGuidesStore();
       const result = await store.createGuide({ title: "Paris in a weekend" });
@@ -169,9 +205,11 @@ describe("useGuidesStore", () => {
     });
 
     it("clears a stale load error on a successful create", async () => {
+      const created = { id: "g-1", userId: "u-1", title: "Paris" };
       mockApiFetch
         .mockRejectedValueOnce(new Error("Network error"))
-        .mockResolvedValueOnce({ id: "g-1", userId: "u-1", title: "Paris" });
+        .mockResolvedValueOnce(created)
+        .mockResolvedValueOnce([created]);
 
       const store = useGuidesStore();
       await expect(store.fetchGuides()).rejects.toThrow("Network error");
@@ -180,6 +218,42 @@ describe("useGuidesStore", () => {
       await store.createGuide({ title: "Paris" });
 
       expect(store.error).toBeNull();
+    });
+
+    it("refetches instead of trusting the local list when the initial load never succeeded", async () => {
+      // hasLoaded is still false here (no prior successful fetchGuides), so
+      // `guides` being `[]` doesn't mean the user has no guides — it means
+      // they were never loaded. A create must not let the optimistic
+      // [created, ...[]] stand in as the complete list.
+      const created = { id: "g-new", userId: "u-1", title: "Paris" };
+      const created2 = { id: "g-2", userId: "u-1", title: "Tokyo" };
+      mockApiFetch
+        .mockResolvedValueOnce(created) // POST /api/guides
+        .mockResolvedValueOnce([created2, created]); // refetch GET /api/guides
+
+      const store = useGuidesStore();
+      expect(store.hasLoaded).toBe(false);
+
+      await store.createGuide({ title: "Paris" });
+
+      expect(mockApiFetch).toHaveBeenCalledTimes(2);
+      expect(mockApiFetch).toHaveBeenNthCalledWith(2, "/api/guides");
+      expect(store.hasLoaded).toBe(true);
+      expect(store.guides).toEqual([created2, created]);
+    });
+
+    it("surfaces the refetch error instead of falsely marking the store loaded", async () => {
+      const created = { id: "g-new", userId: "u-1", title: "Paris" };
+      mockApiFetch
+        .mockResolvedValueOnce(created) // POST /api/guides succeeds
+        .mockRejectedValueOnce(new Error("refetch failed")); // GET /api/guides fails
+
+      const store = useGuidesStore();
+
+      await store.createGuide({ title: "Paris" });
+
+      expect(store.hasLoaded).toBe(false);
+      expect(store.error).toBe("refetch failed");
     });
   });
 

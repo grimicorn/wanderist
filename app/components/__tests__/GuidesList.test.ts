@@ -94,7 +94,7 @@ describe("GuidesList", () => {
     expect(wrapper.find(".gcard").exists()).toBe(false);
   });
 
-  it("emits edit and delete from the card", async () => {
+  it("emits edit from the card", async () => {
     const wrapper = mount(GuidesList, {
       ...globalConfig,
       props: { ...BASE_PROPS, guides: SAMPLE_GUIDES },
@@ -105,6 +105,24 @@ describe("GuidesList", () => {
       .find((button) => button.text() === "edit")
       ?.trigger("click");
     expect(wrapper.emitted("edit")?.[0]).toEqual([SAMPLE_GUIDES[0]]);
+  });
+
+  it("emits delete from the card once the delete is confirmed", async () => {
+    const wrapper = mount(GuidesList, {
+      ...globalConfig,
+      props: { ...BASE_PROPS, guides: SAMPLE_GUIDES },
+    });
+
+    await wrapper
+      .findAll(".gcard__acts button")
+      .find((button) => button.text() === "delete")
+      ?.trigger("click");
+    await wrapper
+      .findAll(".gcard__acts button")
+      .find((button) => button.text() === "confirm delete")
+      ?.trigger("click");
+
+    expect(wrapper.emitted("delete")?.[0]).toEqual([SAMPLE_GUIDES[0]]);
   });
 
   it("emits submitEdit with the guide id and input from the edit form", async () => {

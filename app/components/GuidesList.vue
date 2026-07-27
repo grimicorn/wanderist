@@ -21,8 +21,8 @@
         v-else
         :guide="guide"
         :deleting="deletingGuideIds.has(guide.id)"
-        @edit="(g) => emit('edit', g)"
-        @delete="(g) => emit('delete', g)"
+        @edit="emit('edit', guide)"
+        @delete="emit('delete', guide)"
       />
     </template>
   </div>

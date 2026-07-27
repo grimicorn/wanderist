@@ -34,8 +34,26 @@ export const useGuidesStore = defineStore("guides", () => {
   // an empty state before its first fetch resolves.
   const hasLoaded = ref(false);
   const error = ref<string | null>(null);
+  // Dedupes concurrent fetchGuides() calls into one request. Without this, a
+  // slow mount-triggered fetch overlapping a retry click — or a create/update/
+  // delete's markLoadSucceeded() refetch firing while the mount fetch is still
+  // in flight — starts a second, redundant request racing the first; whichever
+  // settles last wins, which can overwrite fresher state with a stale response.
+  let inFlightFetch: Promise<void> | null = null;
 
   async function fetchGuides(): Promise<void> {
+    if (inFlightFetch) {
+      return inFlightFetch;
+    }
+
+    inFlightFetch = runFetchGuides().finally(() => {
+      inFlightFetch = null;
+    });
+
+    return inFlightFetch;
+  }
+
+  async function runFetchGuides(): Promise<void> {
     isLoading.value = true;
     error.value = null;
 
@@ -54,15 +72,25 @@ export const useGuidesStore = defineStore("guides", () => {
     }
   }
 
-  // A successful write proves `guides` now reflects real server state —
-  // clear a stale load error and mark the store as loaded, the same as a
-  // successful fetchGuides would. Without also setting hasLoaded, a failed
-  // initial load followed by a successful create-then-delete would clear
-  // `error` while hasLoaded stayed false, leaving the page's error/list/empty
-  // v-if chain matching nothing (see guides/index.vue).
-  function markLoadSucceeded(): void {
+  // A successful write only proves the single mutated guide reflects server
+  // state, not that `guides` holds the user's complete set. If the initial
+  // load never succeeded (hasLoaded still false), `guides` may be missing
+  // rows the server has — e.g. it's `[]` after a failed fetchGuides — and a
+  // create/update/delete here must not be allowed to make that incomplete
+  // list look authoritative. In that case, await a real refetch instead of
+  // trusting the local mutation. Once hasLoaded is already true, a write's
+  // optimistic mutation is enough and no refetch is needed — just clear any
+  // stale load error.
+  async function markLoadSucceeded(): Promise<void> {
+    if (!hasLoaded.value) {
+      await fetchGuides().catch(() => {
+        // fetchGuides already records the failure in `error`; nothing further
+        // to do here.
+      });
+      return;
+    }
+
     error.value = null;
-    hasLoaded.value = true;
   }
 
   async function createGuide(input: CreateGuideInput): Promise<Guide> {
@@ -72,7 +100,7 @@ export const useGuidesStore = defineStore("guides", () => {
     });
 
     guides.value = [created, ...guides.value];
-    markLoadSucceeded();
+    await markLoadSucceeded();
 
     return created;
   }
@@ -89,7 +117,7 @@ export const useGuidesStore = defineStore("guides", () => {
     guides.value = guides.value.map((guide) =>
       guide.id === id ? updated : guide,
     );
-    markLoadSucceeded();
+    await markLoadSucceeded();
 
     return updated;
   }
@@ -98,7 +126,7 @@ export const useGuidesStore = defineStore("guides", () => {
     await apiFetch(`/api/guides/${id}`, { method: "DELETE" });
 
     guides.value = guides.value.filter((guide) => guide.id !== id);
-    markLoadSucceeded();
+    await markLoadSucceeded();
   }
 
   return {
