@@ -176,16 +176,9 @@ describe("fetchNotificationsForUser", () => {
     expect(
       describeEqCondition(selectChain.firstLeftJoin.mock.calls[0][1]),
     ).toEqual(["notifications.actor_id", "users.id"]);
-    // Asserts the literal `true`, not just the column, so flipping the gate
-    // to publicProfile = false (or dropping it) would fail this test.
     expect(
       describeEqCondition(selectChain.secondLeftJoin.mock.calls[0][1]),
-    ).toEqual([
-      "notifications.actor_id",
-      "user_preferences.user_id",
-      "user_preferences.public_profile",
-      "literal:true",
-    ]);
+    ).toEqual(["notifications.actor_id", "user_preferences.user_id"]);
   });
 
   it("scopes the query to the requesting user and applies ordering and the limit (authz-boundary regression guard)", async () => {
@@ -208,22 +201,48 @@ describe("fetchNotificationsForUser", () => {
     expect(selectChain.limit).toHaveBeenCalledWith(LIMIT);
   });
 
-  it("resolves an actor with a private profile (publicProfile false) to a null actor, same as legacy/deleted rows", async () => {
-    // The userPreferences join is gated on publicProfile = true (see
-    // fetchNotificationsForUser), so a private actor's row never matches it —
-    // displayName/handle come back null even though actorId (and the users
-    // join for the deletedAt check) are still present. resolveActor collapses
-    // that to a null actor rather than an id-only one, so a private user's id
-    // never reaches the client and can't later be wired into a profile link.
+  it("resolves an actor with a handle but no display name set (most real rows, before onboarding)", async () => {
     const selectChain = makeSelectChain([
       {
-        id: "notif-private-actor",
+        id: "notif-handle-only",
         type: "new_follower",
         tone: "accent",
         body: "Someone started following you",
         isRead: false,
         createdAt: new Date("2024-06-01T10:00:00Z"),
-        actorId: "private-user",
+        actorId: "follower-2",
+        actorDisplayName: null,
+        actorHandle: "elsa_far",
+        actorDeletedAt: null,
+      },
+    ]);
+    const database = selectChain as unknown as Parameters<
+      typeof fetchNotificationsForUser
+    >[0];
+
+    const result = await fetchNotificationsForUser(database, "user-1", LIMIT);
+
+    expect(result[0]?.actor).toEqual({
+      id: "follower-2",
+      displayName: null,
+      handle: "elsa_far",
+    });
+  });
+
+  it("resolves an actor with neither a display name nor a handle set to a null actor", async () => {
+    // A user_preferences row can exist (e.g. created on first preferences
+    // save) with both displayName and handle still null. There's nothing to
+    // render, so resolveActor treats this the same as no actor at all rather
+    // than returning an id with two null fields.
+    const selectChain = makeSelectChain([
+      {
+        id: "notif-nameless-actor",
+        type: "new_follower",
+        tone: "accent",
+        body: "Someone started following you",
+        isRead: false,
+        createdAt: new Date("2024-06-01T10:00:00Z"),
+        actorId: "nameless-user",
         actorDisplayName: null,
         actorHandle: null,
         actorDeletedAt: null,

@@ -147,6 +147,16 @@ describe("resolveNotificationText", () => {
     );
   });
 
+  it("builds a handle-identifying message for a new_follower notification with no display name set", () => {
+    const notification: AppNotification = {
+      ...baseNotification,
+      actor: { id: "user-1", displayName: null, handle: "elsa_far" },
+    };
+    expect(resolveNotificationText(notification)).toBe(
+      "@elsa_far started following you",
+    );
+  });
+
   it("falls back to the stored body for a new_follower notification with no actor (legacy row)", () => {
     expect(resolveNotificationText(baseNotification)).toBe(
       "Someone started following you",

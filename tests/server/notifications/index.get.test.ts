@@ -73,64 +73,10 @@ describe("GET /api/notifications", () => {
     });
   });
 
-  it("resolves a legacy notification (no actorId recorded) to a null actor", async () => {
-    mockRequireUser.mockReturnValue("user-1");
-
-    const rawRows = [
-      {
-        id: "notif-legacy",
-        type: "new_follower",
-        tone: "accent",
-        body: "Someone started following you",
-        isRead: true,
-        createdAt: new Date("2024-01-01T00:00:00Z"),
-        actorId: null,
-        actorDisplayName: null,
-        actorHandle: null,
-        actorDeletedAt: null,
-      },
-    ];
-
-    const selectChain = makeSelectChain(rawRows);
-    mockGetDb.mockReturnValue(
-      selectChain as unknown as ReturnType<typeof getDb>,
-    );
-
-    const result = await callHandler();
-    expect(result).toEqual({
-      notifications: [expect.objectContaining({ actor: null })],
-    });
-  });
-
-  it("resolves a notification whose actor has since deleted their account to a null actor", async () => {
-    mockRequireUser.mockReturnValue("user-1");
-
-    const rawRows = [
-      {
-        id: "notif-deleted-actor",
-        type: "new_follower",
-        tone: "accent",
-        body: "Someone started following you",
-        isRead: false,
-        createdAt: new Date("2024-06-01T10:00:00Z"),
-        actorId: "former-user",
-        actorDisplayName: "Departed Traveler",
-        actorHandle: "departed",
-        actorDeletedAt: new Date("2024-05-01T00:00:00Z"),
-      },
-    ];
-
-    const selectChain = makeSelectChain(rawRows);
-    mockGetDb.mockReturnValue(
-      selectChain as unknown as ReturnType<typeof getDb>,
-    );
-
-    const result = await callHandler();
-    expect(result).toEqual({
-      notifications: [expect.objectContaining({ actor: null })],
-    });
-  });
-
+  // Legacy-row, deleted-actor, and nameless-actor resolution are exercised
+  // thoroughly against fetchNotificationsForUser directly in
+  // notification-helpers.test.ts — this file only needs to prove the
+  // handler delegates to it with the right user and limit.
   it("returns an empty notifications array when the user has none", async () => {
     mockRequireUser.mockReturnValue("user-1");
 

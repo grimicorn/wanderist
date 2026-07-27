@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { getDb } from "../db/index";
 import { notifications, users, userPreferences } from "../db/schema";
 
@@ -76,12 +76,9 @@ interface RawNotificationRow {
  * Resolves the acting-user reference on a notification row into a renderable
  * actor, or null when there is nothing to show. Null covers legacy rows
  * (actorId was never set), rows whose actor has since soft-deleted their
- * account, and rows whose actor has a private (non-public) profile — all
- * three fall back to the notification's own generic body text. Private
- * profiles resolve to null rather than an id-only actor: there being nothing
- * to display should mean nothing identifying is returned either, so a private
- * user's id can't later be wired into a profile link and defeat the privacy
- * gate on the userPreferences join above.
+ * account, and rows whose actor has neither a display name nor a handle set
+ * (nothing to render) — all fall back to the notification's own generic
+ * body text.
  */
 function resolveActor(row: RawNotificationRow): NotificationActor | null {
   if (!row.actorId || row.actorDeletedAt) {
@@ -122,20 +119,20 @@ export async function fetchNotificationsForUser(
     })
     .from(notifications)
     .leftJoin(users, eq(notifications.actorId, users.id))
-    // Gated on publicProfile, matching every other cross-user disclosure of
-    // displayName/handle in this codebase (discover-queries.ts,
-    // search-queries.ts) — publicProfile defaults to false and is plan-gated,
-    // so a private actor must not have their name/handle leaked here even
-    // though the recipient can see *that* someone followed them. A private
-    // actor's row still joins on `users` above (for the deletedAt check) but
-    // resolves to no displayName/handle, which resolveActor below treats the
-    // same as no actor at all (falls back to the generic body client-side).
+    // Deliberately NOT gated on userPreferences.publicProfile, unlike every
+    // other cross-user disclosure of displayName/handle in this codebase
+    // (discover-queries.ts, search-queries.ts). That gate answers "can a
+    // stranger find this person on the explore/search page" — publicProfile
+    // defaults to false and is plan-gated, so most accounts can't even enable
+    // it. A follow is a different relationship: the follower already took a
+    // direct, targeted action naming this specific recipient (the follows
+    // row), not a passive stranger-discovery surface. Gating this on
+    // publicProfile would make "who followed you" render as the generic
+    // fallback for the majority of accounts, defeating the point of this
+    // notification for most users.
     .leftJoin(
       userPreferences,
-      and(
-        eq(notifications.actorId, userPreferences.userId),
-        eq(userPreferences.publicProfile, true),
-      ),
+      eq(notifications.actorId, userPreferences.userId),
     )
     .where(eq(notifications.userId, userId))
     .orderBy(desc(notifications.createdAt))
