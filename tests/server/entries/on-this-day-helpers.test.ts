@@ -22,7 +22,7 @@ vi.mock("drizzle-orm", async (importOriginal) => {
   };
 });
 
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { getDb } from "../../../server/db/index";
 import { entries } from "../../../server/db/schema";
 import { loadRelationsForEntries } from "../../../server/utils/entry-helpers";
@@ -81,7 +81,7 @@ describe("fetchOnThisDayEntries", () => {
     const fromMock = vi.fn().mockReturnValue({ where: whereMock });
     const mockDb = { select: vi.fn().mockReturnValue({ from: fromMock }) };
     mockGetDb.mockReturnValue(mockDb as unknown as ReturnType<typeof getDb>);
-    return { mockDb };
+    return { mockDb, whereMock };
   }
 
   it("returns an empty array when the database returns no rows", async () => {
@@ -113,15 +113,23 @@ describe("fetchOnThisDayEntries", () => {
   });
 
   it("scopes the query to the given user", async () => {
-    mockRowsReturned([]);
+    // A fixed reference date makes the built filter array comparable across
+    // the two buildOnThisDayFilter calls below (the one fetchOnThisDayEntries
+    // makes internally, and the one this test makes to compute what `where`
+    // should have received).
+    const referenceDate = new Date("2026-06-28T00:00:00.000Z");
+    const { whereMock } = mockRowsReturned([]);
 
-    await fetchOnThisDayEntries("user-42", new Date());
+    await fetchOnThisDayEntries("user-42", referenceDate);
 
-    // buildOnThisDayFilter's first filter is eq(entries.userId, userId); a
-    // regression that drops user scoping would still leave every other
-    // assertion in this file passing, so assert on `eq` directly rather than
-    // relying on it transitively via `where`.
+    // Asserting on `eq` alone only proves the user filter was constructed,
+    // not that it reached the executed query — a caller that built the
+    // filter and then dropped it before `.where(...)` would still pass that
+    // check. Assert the exact filter set reached `where` instead.
     expect(mockEq).toHaveBeenCalledWith(entries.userId, "user-42");
+    expect(whereMock).toHaveBeenCalledWith(
+      and(...buildOnThisDayFilter("user-42", referenceDate)),
+    );
   });
 
   it("enriches each entry row with photos and tags", async () => {
@@ -172,8 +180,21 @@ describe("fetchOnThisDayEntries", () => {
       { id: "e-2", userId: "user-1", title: "B" },
     ];
     mockRowsReturned(rows);
+    // Map insertion order is deliberately the reverse of `rows` order, so a
+    // regression that rebuilds the return value from the relations map
+    // instead of from `rows` (e.g. `[...relationsByEntryId].map(...)`) would
+    // both scramble entry order and fail the order assertion below.
     mockLoadRelationsForEntries.mockResolvedValue(
       new Map([
+        [
+          "e-2",
+          {
+            photos: [
+              { id: "p-1", entryId: "e-2", mediaId: "m-1", sortOrder: 0 },
+            ],
+            tags: [{ id: "t-1", name: "beach" }],
+          },
+        ],
         [
           "e-1",
           {
@@ -184,19 +205,14 @@ describe("fetchOnThisDayEntries", () => {
             tags: [{ id: "t-2", name: "mountains" }],
           },
         ],
-        [
-          "e-2",
-          {
-            photos: [
-              { id: "p-1", entryId: "e-2", mediaId: "m-1", sortOrder: 0 },
-            ],
-            tags: [{ id: "t-1", name: "beach" }],
-          },
-        ],
       ]),
     );
 
     const result = await fetchOnThisDayEntries("user-1", new Date());
+
+    // Order must follow the DB's `ORDER BY occurred_at DESC` (i.e. `rows`
+    // order), not relations-map insertion order.
+    expect(result.map((entry) => entry.id)).toEqual(["e-1", "e-2"]);
 
     const entryOne = result.find((entry) => entry.id === "e-1");
     const entryTwo = result.find((entry) => entry.id === "e-2");
