@@ -148,4 +148,40 @@ export async function loadEntryRelations(
   };
 }
 
+/**
+ * Fetches photos and tags for many entries at once, in 2 batched queries
+ * regardless of how many entries are requested (instead of 2 queries per
+ * entry). Every requested `entryId` is present in the returned map, even
+ * when it has no photos or tags, so callers never need to fall back to a
+ * default.
+ */
+export async function loadRelationsForEntries(
+  database: ReturnType<typeof getDb>,
+  entryIds: string[],
+): Promise<Map<string, EntryRelations>> {
+  const relationsByEntryId = new Map<string, EntryRelations>(
+    entryIds.map((entryId) => [entryId, { photos: [], tags: [] }]),
+  );
+
+  if (entryIds.length === 0) {
+    return relationsByEntryId;
+  }
+
+  const [photos, tagRows] = await Promise.all([
+    fetchPhotosForEntries(database, entryIds),
+    fetchTagsForEntries(database, entryIds),
+  ]);
+
+  for (const photo of photos) {
+    relationsByEntryId.get(photo.entryId)?.photos.push(photo);
+  }
+  for (const tagRow of tagRows) {
+    relationsByEntryId
+      .get(tagRow.entryId)
+      ?.tags.push({ id: tagRow.tagId, name: tagRow.tagName });
+  }
+
+  return relationsByEntryId;
+}
+
 export type EntryRow = typeof entries.$inferSelect;

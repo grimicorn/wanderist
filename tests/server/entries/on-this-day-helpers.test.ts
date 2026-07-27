@@ -8,8 +8,7 @@ vi.mock("../../../server/db/index", () => ({
 }));
 
 vi.mock("../../../server/utils/entry-helpers", () => ({
-  fetchPhotosForEntries: vi.fn().mockResolvedValue([]),
-  fetchTagsForEntries: vi.fn().mockResolvedValue([]),
+  loadRelationsForEntries: vi.fn().mockResolvedValue(new Map()),
 }));
 
 vi.mock("drizzle-orm", async (importOriginal) => {
@@ -23,19 +22,18 @@ vi.mock("drizzle-orm", async (importOriginal) => {
   };
 });
 
+import { eq } from "drizzle-orm";
 import { getDb } from "../../../server/db/index";
-import {
-  fetchPhotosForEntries,
-  fetchTagsForEntries,
-} from "../../../server/utils/entry-helpers";
+import { entries } from "../../../server/db/schema";
+import { loadRelationsForEntries } from "../../../server/utils/entry-helpers";
 import {
   buildOnThisDayFilter,
   fetchOnThisDayEntries,
 } from "../../../server/utils/on-this-day-helpers";
 
 const mockGetDb = vi.mocked(getDb);
-const mockFetchPhotosForEntries = vi.mocked(fetchPhotosForEntries);
-const mockFetchTagsForEntries = vi.mocked(fetchTagsForEntries);
+const mockEq = vi.mocked(eq);
+const mockLoadRelationsForEntries = vi.mocked(loadRelationsForEntries);
 
 describe("buildOnThisDayFilter", () => {
   it("returns a non-empty array of SQL filters", () => {
@@ -83,7 +81,7 @@ describe("fetchOnThisDayEntries", () => {
     const fromMock = vi.fn().mockReturnValue({ where: whereMock });
     const mockDb = { select: vi.fn().mockReturnValue({ from: fromMock }) };
     mockGetDb.mockReturnValue(mockDb as unknown as ReturnType<typeof getDb>);
-    return mockDb;
+    return { mockDb, whereMock };
   }
 
   it("returns an empty array when the database returns no rows", async () => {
@@ -97,8 +95,19 @@ describe("fetchOnThisDayEntries", () => {
     mockRowsReturned([]);
 
     await fetchOnThisDayEntries("user-1", new Date());
-    expect(mockFetchPhotosForEntries).not.toHaveBeenCalled();
-    expect(mockFetchTagsForEntries).not.toHaveBeenCalled();
+    expect(mockLoadRelationsForEntries).not.toHaveBeenCalled();
+  });
+
+  it("scopes the query to the given user", async () => {
+    mockRowsReturned([]);
+
+    await fetchOnThisDayEntries("user-42", new Date());
+
+    // buildOnThisDayFilter's first filter is eq(entries.userId, userId); a
+    // regression that drops user scoping would still leave every other
+    // assertion in this file passing, so assert on `eq` directly rather than
+    // relying on it transitively via `where`.
+    expect(mockEq).toHaveBeenCalledWith(entries.userId, "user-42");
   });
 
   it("enriches each entry row with photos and tags", async () => {
@@ -107,42 +116,40 @@ describe("fetchOnThisDayEntries", () => {
       userId: "user-1",
       title: "Harbor at 4am",
     };
-    const mockDb = mockRowsReturned([sampleRow]);
-    mockFetchPhotosForEntries.mockResolvedValue([]);
-    mockFetchTagsForEntries.mockResolvedValue([]);
+    const { mockDb } = mockRowsReturned([sampleRow]);
+    mockLoadRelationsForEntries.mockResolvedValue(
+      new Map([["e-1", { photos: [], tags: [] }]]),
+    );
 
     const result = await fetchOnThisDayEntries("user-1", new Date());
 
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({ ...sampleRow, photos: [], tags: [] });
-    expect(mockFetchPhotosForEntries).toHaveBeenCalledWith(mockDb, ["e-1"]);
-    expect(mockFetchTagsForEntries).toHaveBeenCalledWith(mockDb, ["e-1"]);
+    expect(mockLoadRelationsForEntries).toHaveBeenCalledWith(mockDb, ["e-1"]);
   });
 
-  it("calls the batched relation fetchers exactly once regardless of row count", async () => {
+  it("calls loadRelationsForEntries exactly once regardless of row count", async () => {
     const rows = [
       { id: "e-1", userId: "user-1", title: "A" },
       { id: "e-2", userId: "user-1", title: "B" },
       { id: "e-3", userId: "user-1", title: "C" },
     ];
     mockRowsReturned(rows);
-    mockFetchPhotosForEntries.mockResolvedValue([]);
-    mockFetchTagsForEntries.mockResolvedValue([]);
+    mockLoadRelationsForEntries.mockResolvedValue(
+      new Map([
+        ["e-1", { photos: [], tags: [] }],
+        ["e-2", { photos: [], tags: [] }],
+        ["e-3", { photos: [], tags: [] }],
+      ]),
+    );
 
     await fetchOnThisDayEntries("user-1", new Date());
 
-    expect(mockFetchPhotosForEntries).toHaveBeenCalledTimes(1);
-    expect(mockFetchTagsForEntries).toHaveBeenCalledTimes(1);
-    expect(mockFetchPhotosForEntries).toHaveBeenCalledWith(expect.anything(), [
-      "e-1",
-      "e-2",
-      "e-3",
-    ]);
-    expect(mockFetchTagsForEntries).toHaveBeenCalledWith(expect.anything(), [
-      "e-1",
-      "e-2",
-      "e-3",
-    ]);
+    expect(mockLoadRelationsForEntries).toHaveBeenCalledTimes(1);
+    expect(mockLoadRelationsForEntries).toHaveBeenCalledWith(
+      expect.anything(),
+      ["e-1", "e-2", "e-3"],
+    );
   });
 
   it("associates photos and tags to the correct entry when relations are interleaved", async () => {
@@ -151,15 +158,29 @@ describe("fetchOnThisDayEntries", () => {
       { id: "e-2", userId: "user-1", title: "B" },
     ];
     mockRowsReturned(rows);
-    mockFetchPhotosForEntries.mockResolvedValue([
-      { id: "p-1", entryId: "e-2", mediaId: "m-1", sortOrder: 0 },
-      { id: "p-2", entryId: "e-1", mediaId: "m-2", sortOrder: 0 },
-      { id: "p-3", entryId: "e-1", mediaId: "m-3", sortOrder: 1 },
-    ]);
-    mockFetchTagsForEntries.mockResolvedValue([
-      { entryId: "e-2", tagId: "t-1", tagName: "beach" },
-      { entryId: "e-1", tagId: "t-2", tagName: "mountains" },
-    ]);
+    mockLoadRelationsForEntries.mockResolvedValue(
+      new Map([
+        [
+          "e-1",
+          {
+            photos: [
+              { id: "p-2", entryId: "e-1", mediaId: "m-2", sortOrder: 0 },
+              { id: "p-3", entryId: "e-1", mediaId: "m-3", sortOrder: 1 },
+            ],
+            tags: [{ id: "t-2", name: "mountains" }],
+          },
+        ],
+        [
+          "e-2",
+          {
+            photos: [
+              { id: "p-1", entryId: "e-2", mediaId: "m-1", sortOrder: 0 },
+            ],
+            tags: [{ id: "t-1", name: "beach" }],
+          },
+        ],
+      ]),
+    );
 
     const result = await fetchOnThisDayEntries("user-1", new Date());
 
@@ -179,10 +200,20 @@ describe("fetchOnThisDayEntries", () => {
       { id: "e-2", userId: "user-1", title: "B" },
     ];
     mockRowsReturned(rows);
-    mockFetchPhotosForEntries.mockResolvedValue([
-      { id: "p-1", entryId: "e-1", mediaId: "m-1", sortOrder: 0 },
-    ]);
-    mockFetchTagsForEntries.mockResolvedValue([]);
+    mockLoadRelationsForEntries.mockResolvedValue(
+      new Map([
+        [
+          "e-1",
+          {
+            photos: [
+              { id: "p-1", entryId: "e-1", mediaId: "m-1", sortOrder: 0 },
+            ],
+            tags: [],
+          },
+        ],
+        ["e-2", { photos: [], tags: [] }],
+      ]),
+    );
 
     const result = await fetchOnThisDayEntries("user-1", new Date());
     const entryWithoutRelations = result.find((entry) => entry.id === "e-2");
