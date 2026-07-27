@@ -225,6 +225,28 @@ describe("useTripsStore", () => {
       expect(mockApiFetch).toHaveBeenCalledTimes(500);
     });
 
+    it("fails loud instead of looping forever when a page reports an empty trips array with hasMore: true", async () => {
+      // The real server can never emit this shape (`hasMore` is derived from
+      // `rows.length === PAGE_SIZE`, so an empty page always pairs with
+      // `hasMore: false`), but nothing stops a buggy/malformed API from doing
+      // it. This is just the "hasMore never turns false" case with an empty
+      // page each time — same fail-loud contract, pinned separately so a
+      // regression that special-cases an empty page (e.g. an early return
+      // that quietly treats it as "done") would fail here.
+      mockApiFetch.mockImplementation(async () => ({
+        trips: [],
+        page: 1,
+        hasMore: true,
+      }));
+
+      const store = useTripsStore();
+
+      await expect(store.fetchTrips()).rejects.toThrow(/exceeded .* pages/);
+      expect(store.listError).toMatch(/exceeded .* pages/);
+      expect(store.tripList).toEqual([]);
+      expect(mockApiFetch).toHaveBeenCalledTimes(500);
+    });
+
     it("fails loud when a page response is malformed (missing trips array)", async () => {
       mockApiFetch.mockResolvedValueOnce({ page: 1, hasMore: false });
 
