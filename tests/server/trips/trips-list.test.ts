@@ -1,5 +1,6 @@
 /**
- * Tests for GET /api/trips — list, user-scoping, status filter, sort order
+ * Tests for GET /api/trips — list, user-scoping, status filter, sort order,
+ * and pagination.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -13,11 +14,15 @@ const {
   mockFrom,
   mockWhere,
   mockOrderBy,
+  mockLimit,
+  mockOffset,
   mockGetQuery,
   mockCreateError,
   mockEq,
 } = vi.hoisted(() => {
-  const mockOrderBy = vi.fn().mockResolvedValue([]);
+  const mockOffset = vi.fn().mockResolvedValue([]);
+  const mockLimit = vi.fn(() => ({ offset: mockOffset }));
+  const mockOrderBy = vi.fn(() => ({ limit: mockLimit }));
   const mockWhere = vi.fn(() => ({ orderBy: mockOrderBy }));
   const mockFrom = vi.fn(() => ({ where: mockWhere }));
   const mockSelect = vi.fn(() => ({ from: mockFrom }));
@@ -36,6 +41,8 @@ const {
     mockFrom,
     mockWhere,
     mockOrderBy,
+    mockLimit,
+    mockOffset,
     mockGetQuery,
     mockCreateError,
     mockEq,
@@ -65,36 +72,43 @@ const { default: handler } =
   await import("../../../server/api/trips/index.get");
 
 // ---------------------------------------------------------------------------
-// Tests
+// Helpers
 // ---------------------------------------------------------------------------
 
 function buildEvent() {
   return { context: { userId: "user-1" } };
 }
 
+function setRows(rows: unknown[]) {
+  mockOffset.mockResolvedValue(rows);
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
 describe("GET /api/trips", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockRequireUser.mockReturnValue("user-1");
     mockGetQuery.mockReturnValue({});
-    mockOrderBy.mockResolvedValue([]);
+    mockOffset.mockResolvedValue([]);
   });
 
   it("returns the list of trips for the authenticated user", async () => {
     const sampleTrips = [
       { id: "t1", userId: "user-1", name: "Trip A", status: "ongoing" },
     ];
-    mockOrderBy.mockResolvedValue(sampleTrips);
+    setRows(sampleTrips);
 
     const result = await (handler as (event: object) => unknown)(buildEvent());
 
     expect(mockRequireUser).toHaveBeenCalledTimes(1);
-    expect(result).toEqual(sampleTrips);
+    expect(result).toEqual({ trips: sampleTrips, page: 1, hasMore: false });
   });
 
   it("scopes the query to the authenticated user's id", async () => {
     mockRequireUser.mockReturnValue("user-42");
-    mockOrderBy.mockResolvedValue([]);
 
     await (handler as (event: object) => unknown)({
       context: { userId: "user-42" },
@@ -106,12 +120,14 @@ describe("GET /api/trips", () => {
     expect(hasUserIdFilter).toBe(true);
   });
 
-  it("returns an empty array when the user has no trips", async () => {
-    mockOrderBy.mockResolvedValue([]);
+  it("returns an empty trips array when the user has no trips", async () => {
+    setRows([]);
 
-    const result = await (handler as (event: object) => unknown)(buildEvent());
+    const result = (await (handler as (event: object) => unknown)(
+      buildEvent(),
+    )) as { trips: unknown[] };
 
-    expect(result).toEqual([]);
+    expect(result.trips).toEqual([]);
   });
 
   it("applies a status filter when the status query param is provided", async () => {
@@ -171,5 +187,118 @@ describe("GET /api/trips", () => {
     await expect(
       (handler as (event: object) => unknown)(buildEvent()),
     ).rejects.toMatchObject({ statusCode: 401 });
+  });
+
+  // -------------------------------------------------------------------------
+  // Pagination
+  // -------------------------------------------------------------------------
+
+  it("defaults to page 1 and offset 0 when no page specified", async () => {
+    const result = (await (handler as (event: object) => unknown)(
+      buildEvent(),
+    )) as { page: number };
+
+    expect(result.page).toBe(1);
+    expect(mockOffset).toHaveBeenCalledWith(0);
+    expect(mockLimit).toHaveBeenCalledWith(20);
+  });
+
+  it("returns at most PAGE_SIZE trips with correct metadata on the first page", async () => {
+    const fullPage = Array.from({ length: 20 }, (_, index) => ({
+      id: `t-${index}`,
+      userId: "user-1",
+      name: `Trip ${index}`,
+    }));
+    setRows(fullPage);
+
+    const result = (await (handler as (event: object) => unknown)(
+      buildEvent(),
+    )) as { trips: unknown[]; page: number; hasMore: boolean };
+
+    expect(result.trips).toHaveLength(20);
+    expect(result.page).toBe(1);
+    expect(result.hasMore).toBe(true);
+  });
+
+  it("returns the correct slice on a later page", async () => {
+    mockGetQuery.mockReturnValue({ page: "2" });
+    const secondPageRows = [{ id: "t-20", userId: "user-1", name: "Trip 20" }];
+    setRows(secondPageRows);
+
+    const result = (await (handler as (event: object) => unknown)(
+      buildEvent(),
+    )) as { trips: unknown[]; page: number; hasMore: boolean };
+
+    expect(result.trips).toEqual(secondPageRows);
+    expect(result.page).toBe(2);
+    expect(result.hasMore).toBe(false);
+    expect(mockOffset).toHaveBeenCalledWith(20);
+    expect(mockLimit).toHaveBeenCalledWith(20);
+  });
+
+  it("returns an empty list rather than erroring for an out-of-range page", async () => {
+    mockGetQuery.mockReturnValue({ page: "999" });
+    setRows([]);
+
+    const result = (await (handler as (event: object) => unknown)(
+      buildEvent(),
+    )) as { trips: unknown[]; page: number; hasMore: boolean };
+
+    expect(result.trips).toEqual([]);
+    expect(result.page).toBe(999);
+    expect(result.hasMore).toBe(false);
+    expect(mockOffset).toHaveBeenCalledWith((999 - 1) * 20);
+  });
+
+  it("falls back to page 1 for a non-numeric page param", async () => {
+    mockGetQuery.mockReturnValue({ page: "not-a-number" });
+
+    const result = (await (handler as (event: object) => unknown)(
+      buildEvent(),
+    )) as { page: number };
+
+    expect(result.page).toBe(1);
+    expect(mockOffset).toHaveBeenCalledWith(0);
+  });
+
+  it("falls back to page 1 for a negative page param", async () => {
+    mockGetQuery.mockReturnValue({ page: "-3" });
+
+    const result = (await (handler as (event: object) => unknown)(
+      buildEvent(),
+    )) as { page: number };
+
+    expect(result.page).toBe(1);
+    expect(mockOffset).toHaveBeenCalledWith(0);
+  });
+
+  it("falls back to page 1 for a zero page param", async () => {
+    mockGetQuery.mockReturnValue({ page: "0" });
+
+    const result = (await (handler as (event: object) => unknown)(
+      buildEvent(),
+    )) as { page: number };
+
+    expect(result.page).toBe(1);
+    expect(mockOffset).toHaveBeenCalledWith(0);
+  });
+
+  it("combines a status filter with a later page", async () => {
+    mockGetQuery.mockReturnValue({ status: "past", page: "3" });
+    const thirdPageRows = [{ id: "t-40", userId: "user-1", status: "past" }];
+    setRows(thirdPageRows);
+
+    const result = (await (handler as (event: object) => unknown)(
+      buildEvent(),
+    )) as { trips: unknown[]; page: number };
+
+    expect(mockWhere).toHaveBeenCalledTimes(1);
+    expect(result.trips).toEqual(thirdPageRows);
+    expect(result.page).toBe(3);
+    expect(mockOffset).toHaveBeenCalledWith(40);
+
+    const eqCalls = mockEq.mock.calls;
+    const hasStatusFilter = eqCalls.some((args) => args.includes("past"));
+    expect(hasStatusFilter).toBe(true);
   });
 });

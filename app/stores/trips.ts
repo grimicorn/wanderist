@@ -81,6 +81,39 @@ export interface PatchStopPayload {
   placeId?: string | null;
 }
 
+export interface FetchTripsFilters {
+  status?: TripStatus | "All";
+  sort?: "asc" | "desc";
+}
+
+export interface FetchTripsResult {
+  trips: Trip[];
+  page: number;
+  hasMore: boolean;
+}
+
+// Safety net against an infinite loop if the API ever reports `hasMore: true`
+// forever (e.g. a server bug) — no user has anywhere near this many trips,
+// so hitting this cap always indicates a bug, not a real result set.
+const MAX_TRIPS_PAGES = 500;
+
+function buildTripsQuery(
+  filters: FetchTripsFilters | undefined,
+  page: number,
+): string {
+  const params = new URLSearchParams({ page: String(page) });
+
+  if (filters?.status && filters.status !== "All") {
+    params.set("status", filters.status);
+  }
+
+  if (filters?.sort) {
+    params.set("sort", filters.sort);
+  }
+
+  return `/api/trips?${params.toString()}`;
+}
+
 export const useTripsStore = defineStore("trips", () => {
   const { apiFetch } = useApiClient();
 
@@ -91,28 +124,46 @@ export const useTripsStore = defineStore("trips", () => {
   const listError = ref<string | null>(null);
   const detailError = ref<string | null>(null);
 
-  async function fetchTrips(params?: {
-    status?: TripStatus | "All";
-    sort?: "asc" | "desc";
-  }): Promise<void> {
+  // GET /api/trips is paginated server-side to keep each query bounded (see
+  // server/api/trips/index.get.ts), but every UI consumer of the trips page
+  // still needs the full list. Rather than invent a partial-list contract
+  // for those callers, this walks every page and concatenates the results,
+  // so the store's public `tripList` keeps behaving like "all of the user's
+  // trips".
+  async function fetchAllTripsPages(
+    filters?: FetchTripsFilters,
+  ): Promise<Trip[]> {
+    const allTrips: Trip[] = [];
+    let page = 1;
+    let hasMore = true;
+
+    while (hasMore) {
+      if (page > MAX_TRIPS_PAGES) {
+        // Bailing out here would silently hand every consumer a truncated
+        // list dressed up as the full one — fail loud instead so the UI
+        // surfaces the failure via the existing error handling below.
+        throw new Error(
+          `fetchTrips exceeded ${MAX_TRIPS_PAGES} pages — the API kept reporting hasMore: true`,
+        );
+      }
+
+      const result = await apiFetch<FetchTripsResult>(
+        buildTripsQuery(filters, page),
+      );
+      allTrips.push(...result.trips);
+      hasMore = result.hasMore;
+      page += 1;
+    }
+
+    return allTrips;
+  }
+
+  async function fetchTrips(params?: FetchTripsFilters): Promise<void> {
     isLoadingList.value = true;
     listError.value = null;
 
     try {
-      const query = new URLSearchParams();
-
-      if (params?.status && params.status !== "All") {
-        query.set("status", params.status);
-      }
-
-      if (params?.sort) {
-        query.set("sort", params.sort);
-      }
-
-      const queryString = query.toString();
-      const url = queryString ? `/api/trips?${queryString}` : "/api/trips";
-
-      tripList.value = await apiFetch<Trip[]>(url);
+      tripList.value = await fetchAllTripsPages(params);
     } catch (error) {
       listError.value =
         error instanceof Error ? error.message : "Failed to load trips";

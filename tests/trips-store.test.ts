@@ -80,7 +80,11 @@ describe("useTripsStore", () => {
 
   describe("fetchTrips", () => {
     it("populates tripList from the API response", async () => {
-      mockApiFetch.mockResolvedValue([SAMPLE_TRIP]);
+      mockApiFetch.mockResolvedValue({
+        trips: [SAMPLE_TRIP],
+        page: 1,
+        hasMore: false,
+      });
 
       const store = useTripsStore();
       await store.fetchTrips();
@@ -88,8 +92,17 @@ describe("useTripsStore", () => {
       expect(store.tripList).toEqual([SAMPLE_TRIP]);
     });
 
+    it("calls /api/trips with page=1 when no filters", async () => {
+      mockApiFetch.mockResolvedValue({ trips: [], page: 1, hasMore: false });
+
+      const store = useTripsStore();
+      await store.fetchTrips();
+
+      expect(mockApiFetch).toHaveBeenCalledWith("/api/trips?page=1");
+    });
+
     it("passes a status filter as a query param when provided", async () => {
-      mockApiFetch.mockResolvedValue([]);
+      mockApiFetch.mockResolvedValue({ trips: [], page: 1, hasMore: false });
 
       const store = useTripsStore();
       await store.fetchTrips({ status: "ongoing" });
@@ -100,17 +113,75 @@ describe("useTripsStore", () => {
     });
 
     it("does not append a status param when status is 'All'", async () => {
-      mockApiFetch.mockResolvedValue([]);
+      mockApiFetch.mockResolvedValue({ trips: [], page: 1, hasMore: false });
 
       const store = useTripsStore();
       await store.fetchTrips({ status: "All" });
 
-      expect(mockApiFetch).toHaveBeenCalledWith("/api/trips");
+      expect(mockApiFetch).toHaveBeenCalledWith("/api/trips?page=1");
+    });
+
+    it("walks every page and concatenates the results while hasMore is true", async () => {
+      const pageOne = Array.from({ length: 20 }, (_, index) => ({
+        ...SAMPLE_TRIP,
+        id: `trip-${index}`,
+      }));
+      const pageTwo = [{ ...SAMPLE_TRIP, id: "trip-last" }];
+
+      mockApiFetch
+        .mockResolvedValueOnce({ trips: pageOne, page: 1, hasMore: true })
+        .mockResolvedValueOnce({ trips: pageTwo, page: 2, hasMore: false });
+
+      const store = useTripsStore();
+      await store.fetchTrips();
+
+      expect(store.tripList).toEqual([...pageOne, ...pageTwo]);
+      expect(mockApiFetch).toHaveBeenCalledTimes(2);
+      expect(mockApiFetch).toHaveBeenNthCalledWith(1, "/api/trips?page=1");
+      expect(mockApiFetch).toHaveBeenNthCalledWith(2, "/api/trips?page=2");
+    });
+
+    it("stops after a single request when the first page reports hasMore: false", async () => {
+      mockApiFetch.mockResolvedValueOnce({
+        trips: [SAMPLE_TRIP],
+        page: 1,
+        hasMore: false,
+      });
+
+      const store = useTripsStore();
+      await store.fetchTrips();
+
+      expect(store.tripList).toEqual([SAMPLE_TRIP]);
+      expect(mockApiFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it("fails loud instead of returning a truncated list when hasMore never turns false", async () => {
+      // A misbehaving API that always reports more pages must not be allowed
+      // to hand the UI a partial "all trips" list dressed up as complete.
+      mockApiFetch.mockImplementation(async () => ({
+        trips: [SAMPLE_TRIP],
+        page: 1,
+        hasMore: true,
+      }));
+
+      const store = useTripsStore();
+
+      await expect(store.fetchTrips()).rejects.toThrow(/exceeded .* pages/);
+      expect(store.listError).toMatch(/exceeded .* pages/);
+      expect(store.tripList).toEqual([]);
     });
 
     it("sets isLoadingList to true during the request and false after", async () => {
-      let resolveLoad!: (value: Trip[]) => void;
-      const pending = new Promise<Trip[]>((resolve) => {
+      let resolveLoad!: (value: {
+        trips: Trip[];
+        page: number;
+        hasMore: boolean;
+      }) => void;
+      const pending = new Promise<{
+        trips: Trip[];
+        page: number;
+        hasMore: boolean;
+      }>((resolve) => {
         resolveLoad = resolve;
       });
       mockApiFetch.mockReturnValue(pending);
@@ -120,7 +191,7 @@ describe("useTripsStore", () => {
 
       expect(store.isLoadingList).toBe(true);
 
-      resolveLoad([]);
+      resolveLoad({ trips: [], page: 1, hasMore: false });
       await fetchPromise;
 
       expect(store.isLoadingList).toBe(false);
@@ -137,7 +208,11 @@ describe("useTripsStore", () => {
 
     it("clears listError before each new fetch", async () => {
       mockApiFetch.mockRejectedValueOnce(new Error("first error"));
-      mockApiFetch.mockResolvedValueOnce([]);
+      mockApiFetch.mockResolvedValueOnce({
+        trips: [],
+        page: 1,
+        hasMore: false,
+      });
 
       const store = useTripsStore();
       await store.fetchTrips().catch(() => {});
