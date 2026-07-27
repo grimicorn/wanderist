@@ -8,23 +8,29 @@ vi.mock("../../../server/utils/db-helpers", () => ({
   assertOwnership: vi.fn(),
 }));
 
+vi.mock("../../../server/utils/auth", () => ({
+  requireUser: vi.fn(),
+}));
+
 vi.mock("../../../server/db/index", () => ({
   getDb: vi.fn(),
 }));
 
 vi.mock("drizzle-orm", async (importOriginal) => {
   const original = await importOriginal<typeof import("drizzle-orm")>();
-  return { ...original, eq: vi.fn(original.eq) };
+  return { ...original, eq: vi.fn(original.eq), and: vi.fn(original.and) };
 });
 
 import {
   requireRouterParam,
   assertOwnership,
 } from "../../../server/utils/db-helpers";
+import { requireUser } from "../../../server/utils/auth";
 import { getDb } from "../../../server/db/index";
 
 const mockRequireRouterParam = vi.mocked(requireRouterParam);
 const mockAssertOwnership = vi.mocked(assertOwnership);
+const mockRequireUser = vi.mocked(requireUser);
 const mockGetDb = vi.mocked(getDb);
 
 function makeDbForDelete() {
@@ -38,6 +44,7 @@ const handler = await import("../../../server/api/guides/[id].delete");
 describe("DELETE /api/guides/:id", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockRequireUser.mockReturnValue("user-1");
   });
 
   it("deletes the guide and returns success", async () => {

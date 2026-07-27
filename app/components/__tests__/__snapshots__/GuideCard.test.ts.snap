@@ -1,0 +1,11 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`GuideCard > renders without crashing and matches snapshot 1`] = `
+"<div data-v-d468186a="" class="gcard">
+  <div data-v-d468186a="" class="gcard__body">
+    <div data-v-d468186a="" class="gcard__name">Tokyo on foot</div>
+    <div data-v-d468186a="" class="gcard__meta"><span data-v-d468186a="" class="m"><svg data-v-d468186a="" data-icon="" name="clock" size="12"></svg> 8 min read </span><span data-v-d468186a="" class="m"><svg data-v-d468186a="" data-icon="" name="heart" size="12"></svg> 12</span><span data-v-d468186a="" class="tag tag--ongoing">public</span></div>
+  </div>
+  <div data-v-d468186a="" class="gcard__acts"><button data-v-d468186a="" class="btn btn--outline btn--sm"> edit </button><button data-v-d468186a="" class="btn btn--outline btn--sm"> delete </button></div>
+</div>"
+`;

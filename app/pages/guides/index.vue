@@ -33,9 +33,11 @@
       {{ deleteError }}
     </div>
 
+    <div v-if="guidesStore.isLoading" class="empty-note">Loading guides…</div>
+
     <!-- Guides list -->
-    <div v-if="guidesStore.guides.length" class="guide-list">
-      <div v-for="guide in guidesStore.guides" :key="guide.id" class="gcard">
+    <div v-else-if="guidesStore.guides.length" class="guide-list">
+      <template v-for="guide in guidesStore.guides" :key="guide.id">
         <GuideForm
           v-if="editingGuideId === guide.id"
           title="Edit guide"
@@ -46,42 +48,16 @@
           @submit="(input) => handleUpdateGuide(guide.id, input)"
           @cancel="cancelEditGuide"
         />
-        <template v-else>
-          <div class="gcard__body">
-            <div class="gcard__name">{{ guide.title }}</div>
-            <div class="gcard__meta">
-              <span class="m">
-                <AppIcon name="clock" :size="12" />
-                {{ guide.readTimeMinutes }} min read
-              </span>
-              <span class="m">
-                <AppIcon name="heart" :size="12" />
-                {{ guide.likeCount }}
-              </span>
-              <span class="tag" :class="visibilityTagClass(guide.visibility)">
-                {{ guide.visibility }}
-              </span>
-            </div>
-          </div>
-          <div class="gcard__acts">
-            <button
-              class="btn btn--outline btn--sm"
-              @click="startEditGuide(guide)"
-            >
-              edit
-            </button>
-            <button
-              class="btn btn--outline btn--sm"
-              :disabled="deletingGuideId === guide.id"
-              @click="handleDeleteGuide(guide)"
-            >
-              {{ deletingGuideId === guide.id ? "deleting…" : "delete" }}
-            </button>
-          </div>
-        </template>
-      </div>
+        <GuideCard
+          v-else
+          :guide="guide"
+          :deleting="deletingGuideId === guide.id"
+          @edit="startEditGuide"
+          @delete="handleDeleteGuide"
+        />
+      </template>
     </div>
-    <div v-else-if="!guidesStore.isLoading" class="empty-note">
+    <div v-else class="empty-note">
       No guides yet — write your first one above.
     </div>
   </div>
@@ -92,11 +68,11 @@ import { ref, onMounted } from "vue";
 import { useGuidesStore } from "~/stores/guides";
 import type {
   Guide,
-  GuideVisibility,
   CreateGuideInput,
   UpdateGuideInput,
 } from "~/stores/guides";
 import GuideForm from "~/components/GuideForm.vue";
+import GuideCard from "~/components/GuideCard.vue";
 
 definePageMeta({ layout: "app", middleware: "auth" });
 useHead({ title: "Wanderist — Guides" });
@@ -113,6 +89,7 @@ const deleteError = ref<string | null>(null);
 function openNewGuideForm(): void {
   editingGuideId.value = null;
   formError.value = null;
+  deleteError.value = null;
   showNewGuideForm.value = true;
 }
 
@@ -124,6 +101,7 @@ function closeNewGuideForm(): void {
 function startEditGuide(guide: Guide): void {
   showNewGuideForm.value = false;
   formError.value = null;
+  deleteError.value = null;
   editingGuideId.value = guide.id;
 }
 
@@ -179,10 +157,6 @@ async function handleDeleteGuide(guide: Guide): Promise<void> {
   }
 }
 
-function visibilityTagClass(visibility: GuideVisibility): string {
-  return visibility === "public" ? "tag--ongoing" : "tag--past";
-}
-
 onMounted(() => {
   guidesStore.fetchGuides().catch((error) => {
     console.error("[guides] failed to load guides on mount", error);
@@ -215,44 +189,6 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 12px;
-}
-.gcard {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  padding: 14px 16px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--surface);
-}
-.gcard__body {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.gcard__name {
-  font-family: var(--font-display);
-  font-size: 14.5px;
-  font-weight: 600;
-}
-.gcard__meta {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 11px;
-  color: var(--faint);
-  margin-top: 6px;
-}
-.gcard__meta .m {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-.gcard__acts {
-  display: flex;
-  gap: 8px;
-  flex: none;
 }
 
 .empty-note {

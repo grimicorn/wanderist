@@ -2,22 +2,7 @@ import { describe, it, expect } from "vitest";
 import { mount } from "@vue/test-utils";
 import GuideForm from "../GuideForm.vue";
 import type { Guide } from "~/stores/guides";
-
-// InputText/InputTextarea are resolved via Nuxt's components/ auto-import at
-// build time, which plain Vitest can't do — stub them with a working
-// v-model relay so setValue() interactions still reach the parent's refs.
-const inputStub = {
-  props: ["modelValue", "label", "placeholder", "required"],
-  emits: ["update:modelValue"],
-  template:
-    '<input :placeholder="placeholder" :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />',
-};
-const textareaStub = {
-  props: ["modelValue", "label", "placeholder", "rows"],
-  emits: ["update:modelValue"],
-  template:
-    '<textarea :placeholder="placeholder" :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)"></textarea>',
-};
+import { inputStub, textareaStub } from "./input-stubs";
 
 const globalConfig = {
   global: {
@@ -101,6 +86,25 @@ describe("GuideForm", () => {
       body: "Start at the north jetty.",
       readTimeMinutes: 7,
       visibility: "public",
+    });
+  });
+
+  it("omits readTimeMinutes instead of submitting an invalid value when the field is cleared", async () => {
+    const wrapper = mount(GuideForm, {
+      ...globalConfig,
+      props: { title: "New guide", submitLabel: "publish guide" },
+    });
+
+    await wrapper
+      .find('input[placeholder="Guide title…"]')
+      .setValue("Slow coastlines");
+    // Simulate a cleared <input type="number">, which v-model.number leaves
+    // as an empty string rather than coercing to a number.
+    await wrapper.find(".guide-form__number").setValue("");
+    await wrapper.find("form").trigger("submit");
+
+    expect(wrapper.emitted("submit")?.[0][0]).toMatchObject({
+      readTimeMinutes: undefined,
     });
   });
 

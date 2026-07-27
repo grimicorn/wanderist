@@ -4,6 +4,7 @@ import { createPinia, setActivePinia } from "pinia";
 import GuidesPage from "../guides/index.vue";
 import { useGuidesStore } from "~/stores/guides";
 import type { Guide } from "~/stores/guides";
+import { inputStub, textareaStub } from "~/components/__tests__/input-stubs";
 
 const SAMPLE_GUIDES: Guide[] = [
   {
@@ -29,22 +30,6 @@ const SAMPLE_GUIDES: Guide[] = [
     updatedAt: "2026-01-01T00:00:00.000Z",
   },
 ];
-
-// InputText/InputTextarea are resolved via Nuxt's components/ auto-import at
-// build time, which plain Vitest can't do — stub them with a working
-// v-model relay so setValue() interactions still reach GuideForm's refs.
-const inputStub = {
-  props: ["modelValue", "label", "placeholder", "required"],
-  emits: ["update:modelValue"],
-  template:
-    '<input :placeholder="placeholder" :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />',
-};
-const textareaStub = {
-  props: ["modelValue", "label", "placeholder", "rows"],
-  emits: ["update:modelValue"],
-  template:
-    '<textarea :placeholder="placeholder" :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)"></textarea>',
-};
 
 function buildGlobalConfig(pinia: ReturnType<typeof createPinia>) {
   return {
@@ -206,15 +191,42 @@ describe("Guides page (/guides)", () => {
   });
 
   describe("deleting a guide", () => {
-    it("calls deleteGuide with the guide's id", async () => {
+    function findButton(wrapper: ReturnType<typeof mount>, text: string) {
+      return wrapper
+        .findAll(".gcard__acts button")
+        .find((button) => button.text() === text);
+    }
+
+    it("requires a confirm click before calling deleteGuide", async () => {
       const guidesStore = useGuidesStore();
       vi.spyOn(guidesStore, "deleteGuide").mockResolvedValue();
 
       const wrapper = mount(GuidesPage, buildGlobalConfig(pinia));
-      const deleteButtons = wrapper
-        .findAll(".gcard__acts button")
-        .filter((button) => button.text().includes("delete"));
-      await deleteButtons[0].trigger("click");
+      await findButton(wrapper, "delete")?.trigger("click");
+
+      expect(guidesStore.deleteGuide).not.toHaveBeenCalled();
+      expect(findButton(wrapper, "confirm delete")).toBeTruthy();
+    });
+
+    it("cancelling the confirm step does not call deleteGuide", async () => {
+      const guidesStore = useGuidesStore();
+      vi.spyOn(guidesStore, "deleteGuide").mockResolvedValue();
+
+      const wrapper = mount(GuidesPage, buildGlobalConfig(pinia));
+      await findButton(wrapper, "delete")?.trigger("click");
+      await findButton(wrapper, "cancel")?.trigger("click");
+
+      expect(guidesStore.deleteGuide).not.toHaveBeenCalled();
+      expect(findButton(wrapper, "delete")).toBeTruthy();
+    });
+
+    it("calls deleteGuide with the guide's id after confirming", async () => {
+      const guidesStore = useGuidesStore();
+      vi.spyOn(guidesStore, "deleteGuide").mockResolvedValue();
+
+      const wrapper = mount(GuidesPage, buildGlobalConfig(pinia));
+      await findButton(wrapper, "delete")?.trigger("click");
+      await findButton(wrapper, "confirm delete")?.trigger("click");
       await flushPromises();
 
       expect(guidesStore.deleteGuide).toHaveBeenCalledWith("g-1");
@@ -227,10 +239,8 @@ describe("Guides page (/guides)", () => {
       );
 
       const wrapper = mount(GuidesPage, buildGlobalConfig(pinia));
-      const deleteButtons = wrapper
-        .findAll(".gcard__acts button")
-        .filter((button) => button.text().includes("delete"));
-      await deleteButtons[0].trigger("click");
+      await findButton(wrapper, "delete")?.trigger("click");
+      await findButton(wrapper, "confirm delete")?.trigger("click");
       await flushPromises();
 
       expect(wrapper.text()).toContain("Failed to delete guide");

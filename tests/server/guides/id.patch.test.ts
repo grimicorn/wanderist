@@ -26,23 +26,29 @@ vi.mock("../../../server/utils/db-helpers", () => ({
   }),
 }));
 
+vi.mock("../../../server/utils/auth", () => ({
+  requireUser: vi.fn(),
+}));
+
 vi.mock("../../../server/db/index", () => ({
   getDb: vi.fn(),
 }));
 
 vi.mock("drizzle-orm", async (importOriginal) => {
   const original = await importOriginal<typeof import("drizzle-orm")>();
-  return { ...original, eq: vi.fn(original.eq) };
+  return { ...original, eq: vi.fn(original.eq), and: vi.fn(original.and) };
 });
 
 import {
   requireRouterParam,
   assertOwnership,
 } from "../../../server/utils/db-helpers";
+import { requireUser } from "../../../server/utils/auth";
 import { getDb } from "../../../server/db/index";
 
 const mockRequireRouterParam = vi.mocked(requireRouterParam);
 const mockAssertOwnership = vi.mocked(assertOwnership);
+const mockRequireUser = vi.mocked(requireUser);
 const mockGetDb = vi.mocked(getDb);
 
 function makeDbWithUpdate(returned: Record<string, unknown>) {
@@ -58,6 +64,7 @@ const handler = await import("../../../server/api/guides/[id].patch");
 describe("PATCH /api/guides/:id", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockRequireUser.mockReturnValue("user-1");
   });
 
   it("updates and returns the guide", async () => {
@@ -190,5 +197,25 @@ describe("PATCH /api/guides/:id", () => {
     expect(mockDb._set).toHaveBeenCalledWith(
       expect.not.objectContaining({ likeCount: expect.anything() }),
     );
+  });
+
+  it("throws 404 when the row is gone by the time of the write (race with a concurrent delete)", async () => {
+    mockRequireRouterParam.mockReturnValue("guide-1");
+    mockReadBody.mockResolvedValue({ title: "New title" });
+    mockAssertOwnership.mockResolvedValue(undefined);
+    const mockDb = {
+      update: vi.fn().mockReturnValue({
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            returning: vi.fn().mockResolvedValue([]),
+          }),
+        }),
+      }),
+    };
+    mockGetDb.mockReturnValue(mockDb as unknown as ReturnType<typeof getDb>);
+
+    await expect(
+      (handler.default as (event: unknown) => Promise<unknown>)({}),
+    ).rejects.toMatchObject({ statusCode: 404 });
   });
 });

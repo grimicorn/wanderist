@@ -1,16 +1,24 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { assertOwnership, requireRouterParam } from "../../utils/db-helpers";
+import { requireUser } from "../../utils/auth";
 import { getDb } from "../../db/index";
 import { guides } from "../../db/schema";
 
 export default defineEventHandler(async (event) => {
   const id = requireRouterParam(event, "id");
 
+  // assertOwnership already resolves and validates the authenticated user;
+  // requireUser here is a second, cheap read of event.context (no extra
+  // query) so the delete below can be scoped to the owner directly rather
+  // than relying solely on the preceding check.
   await assertOwnership(event, guides, guides.id, guides.userId, id);
+  const userId = requireUser(event);
 
   const database = getDb();
 
-  await database.delete(guides).where(eq(guides.id, id));
+  await database
+    .delete(guides)
+    .where(and(eq(guides.id, id), eq(guides.userId, userId)));
 
   return { success: true };
 });

@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { getDb } from "../../db/index";
 import { guides, VISIBILITY } from "../../db/schema";
 import {
@@ -6,16 +6,16 @@ import {
   optionalString,
   requireRouterParam,
 } from "../../utils/db-helpers";
+import { requireUser } from "../../utils/auth";
+import { parseOptionalEnum, setIfDefined } from "../../utils/validation";
 import {
-  parseOptionalEnum,
-  parseOptionalInt,
-  setIfDefined,
-} from "../../utils/validation";
+  parseOptionalGuideBody,
+  parseReadTimeMinutes,
+} from "../../utils/guide-helpers";
 
 type GuidePatchFields = Partial<typeof guides.$inferInsert>;
 
 const VALID_VISIBILITIES = [VISIBILITY.PRIVATE, VISIBILITY.PUBLIC] as const;
-const MIN_READ_TIME_MINUTES = 1;
 
 function parseTitle(body: Record<string, unknown>): string | undefined {
   const title = optionalString(body.title, "title");
@@ -36,33 +36,16 @@ function parseTitle(body: Record<string, unknown>): string | undefined {
   return trimmed;
 }
 
-function parseReadTimeMinutes(
-  body: Record<string, unknown>,
-): number | undefined {
-  const readTimeMinutes = parseOptionalInt(
-    body.readTimeMinutes,
-    "readTimeMinutes",
-  );
-
-  if (
-    readTimeMinutes !== undefined &&
-    readTimeMinutes < MIN_READ_TIME_MINUTES
-  ) {
-    throw createError({
-      statusCode: 400,
-      statusMessage: `readTimeMinutes must be at least ${MIN_READ_TIME_MINUTES}`,
-    });
-  }
-
-  return readTimeMinutes;
-}
-
 function buildPatchFields(body: Record<string, unknown>): GuidePatchFields {
   const fields: GuidePatchFields = {};
 
   setIfDefined(fields, "title", parseTitle(body));
-  setIfDefined(fields, "body", optionalString(body.body, "body"));
-  setIfDefined(fields, "readTimeMinutes", parseReadTimeMinutes(body));
+  setIfDefined(fields, "body", parseOptionalGuideBody(body.body));
+  setIfDefined(
+    fields,
+    "readTimeMinutes",
+    parseReadTimeMinutes(body.readTimeMinutes),
+  );
   setIfDefined(
     fields,
     "visibility",
@@ -84,7 +67,12 @@ function requireNonEmptyPatch(fields: GuidePatchFields): void {
 export default defineEventHandler(async (event) => {
   const id = requireRouterParam(event, "id");
 
+  // assertOwnership already resolves and validates the authenticated user;
+  // requireUser here is a second, cheap read of event.context (no extra
+  // query) so the update below can be scoped to the owner directly rather
+  // than relying solely on the preceding check.
   await assertOwnership(event, guides, guides.id, guides.userId, id);
+  const userId = requireUser(event);
 
   const body = ((await readBody(event)) ?? {}) as Record<string, unknown>;
 
@@ -101,8 +89,16 @@ export default defineEventHandler(async (event) => {
   const updated = await database
     .update(guides)
     .set(patchFields)
-    .where(eq(guides.id, id))
+    .where(and(eq(guides.id, id), eq(guides.userId, userId)))
     .returning();
+
+  if (!updated[0]) {
+    // The row existed at the ownership check above but is gone by the time
+    // of the write (e.g. deleted from another tab in between) — 404 rather
+    // than silently returning an empty body the store would splice into its
+    // guide list as `undefined`.
+    throw createError({ statusCode: 404, statusMessage: "Guide not found" });
+  }
 
   return updated[0];
 });

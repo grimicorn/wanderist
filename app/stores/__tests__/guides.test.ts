@@ -135,6 +135,21 @@ describe("useGuidesStore", () => {
       expect(store.guides[0]).toEqual(created);
       expect(store.guides[1]).toEqual(existing);
     });
+
+    it("leaves the list untouched and rethrows when the request fails", async () => {
+      const existing = { id: "g-1", userId: "u-1", title: "Tokyo on foot" };
+      mockApiFetch
+        .mockResolvedValueOnce([existing])
+        .mockRejectedValueOnce(new Error("boom"));
+
+      const store = useGuidesStore();
+      await store.fetchGuides();
+
+      await expect(store.createGuide({ title: "Paris" })).rejects.toThrow(
+        "boom",
+      );
+      expect(store.guides).toEqual([existing]);
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -191,6 +206,21 @@ describe("useGuidesStore", () => {
       expect(store.guides[0]).toEqual(updatedGuide1);
       expect(store.guides[1]).toEqual(guide2);
     });
+
+    it("leaves the list untouched and rethrows when the request fails", async () => {
+      const guide1 = { id: "g-1", userId: "u-1", title: "Tokyo on foot" };
+      mockApiFetch
+        .mockResolvedValueOnce([guide1])
+        .mockRejectedValueOnce(new Error("boom"));
+
+      const store = useGuidesStore();
+      await store.fetchGuides();
+
+      await expect(
+        store.updateGuide("g-1", { title: "New title" }),
+      ).rejects.toThrow("boom");
+      expect(store.guides).toEqual([guide1]);
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -223,6 +253,19 @@ describe("useGuidesStore", () => {
       expect(mockApiFetch).toHaveBeenCalledWith("/api/guides/g-1", {
         method: "DELETE",
       });
+    });
+
+    it("leaves the list untouched and rethrows when the request fails", async () => {
+      const guide1 = { id: "g-1", userId: "u-1", title: "Tokyo on foot" };
+      mockApiFetch
+        .mockResolvedValueOnce([guide1])
+        .mockRejectedValueOnce(new Error("boom"));
+
+      const store = useGuidesStore();
+      await store.fetchGuides();
+
+      await expect(store.deleteGuide("g-1")).rejects.toThrow("boom");
+      expect(store.guides).toEqual([guide1]);
     });
   });
 });

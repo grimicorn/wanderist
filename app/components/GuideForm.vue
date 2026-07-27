@@ -1,6 +1,6 @@
 <template>
-  <div class="guide-form" role="dialog" :aria-label="title">
-    <div class="guide-form__title">{{ title }}</div>
+  <section class="guide-form" :aria-label="title">
+    <h3 class="guide-form__title">{{ title }}</h3>
     <form class="guide-form__body" @submit.prevent="handleSubmit">
       <InputText
         v-model="formTitle"
@@ -53,13 +53,16 @@
         {{ error }}
       </p>
     </form>
-  </div>
+  </section>
 </template>
 
 <script setup lang="ts">
 import { ref } from "vue";
-import type { Guide, GuideVisibility } from "~/stores/guides";
+import type { CreateGuideInput, Guide, GuideVisibility } from "~/stores/guides";
 
+// Mirrors server/utils/guide-helpers.ts MIN_READ_TIME_MINUTES. Kept as a
+// separate constant rather than imported: that helper pulls in Nitro-only
+// globals (createError) that don't exist in the client bundle.
 const MIN_READ_TIME_MINUTES = 1;
 const DEFAULT_READ_TIME_MINUTES = 5;
 
@@ -79,25 +82,34 @@ const props = withDefaults(
 );
 
 const emit = defineEmits<{
-  submit: [
-    input: {
-      title: string;
-      body?: string;
-      readTimeMinutes?: number;
-      visibility?: GuideVisibility;
-    },
-  ];
+  submit: [input: CreateGuideInput];
   cancel: [];
 }>();
 
 const formTitle = ref(props.initialGuide?.title ?? "");
 const formBody = ref(props.initialGuide?.body ?? "");
-const formReadTimeMinutes = ref(
+// v-model.number on a cleared/non-numeric <input type="number"> falls back to
+// the raw string (often "") rather than a number, so this must accept both —
+// parseFormReadTimeMinutes() below is what actually validates it.
+const formReadTimeMinutes = ref<number | string>(
   props.initialGuide?.readTimeMinutes ?? DEFAULT_READ_TIME_MINUTES,
 );
 const formVisibility = ref<GuideVisibility>(
   props.initialGuide?.visibility ?? "private",
 );
+
+// Returns undefined for a blank/invalid read time (submitting then falls back
+// to "leave the read time as-is" server-side) instead of sending a value that
+// would 400 for what the user experiences as an empty, optional field.
+function parseFormReadTimeMinutes(): number | undefined {
+  const parsed = Number(formReadTimeMinutes.value);
+
+  if (!Number.isInteger(parsed) || parsed < MIN_READ_TIME_MINUTES) {
+    return undefined;
+  }
+
+  return parsed;
+}
 
 function handleSubmit(): void {
   const title = formTitle.value.trim();
@@ -109,7 +121,7 @@ function handleSubmit(): void {
   emit("submit", {
     title,
     body: formBody.value.trim(),
-    readTimeMinutes: formReadTimeMinutes.value,
+    readTimeMinutes: parseFormReadTimeMinutes(),
     visibility: formVisibility.value,
   });
 }
