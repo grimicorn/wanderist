@@ -12,8 +12,12 @@ Object.assign(globalThis, {
   createError: mockCreateError,
 });
 
-const { parseReadTimeMinutes, parseOptionalGuideBody, MIN_READ_TIME_MINUTES } =
-  await import("../../server/utils/guide-helpers");
+const {
+  parseReadTimeMinutes,
+  parseOptionalGuideBody,
+  MIN_READ_TIME_MINUTES,
+  MAX_READ_TIME_MINUTES,
+} = await import("../../server/utils/guide-helpers");
 
 describe("parseReadTimeMinutes", () => {
   it("returns undefined when the value is absent", () => {
@@ -32,6 +36,24 @@ describe("parseReadTimeMinutes", () => {
 
   it("throws 400 when the value is below the floor", () => {
     expect(() => parseReadTimeMinutes(0)).toThrow(
+      expect.objectContaining({ statusCode: 400 }),
+    );
+  });
+
+  it("returns the value when it is a valid integer at the ceiling", () => {
+    expect(parseReadTimeMinutes(MAX_READ_TIME_MINUTES)).toBe(
+      MAX_READ_TIME_MINUTES,
+    );
+  });
+
+  it("throws 400 when the value is above the ceiling", () => {
+    expect(() => parseReadTimeMinutes(MAX_READ_TIME_MINUTES + 1)).toThrow(
+      expect.objectContaining({ statusCode: 400 }),
+    );
+  });
+
+  it("throws 400 for a wildly out-of-range value that would overflow a Postgres int4", () => {
+    expect(() => parseReadTimeMinutes(3000000000)).toThrow(
       expect.objectContaining({ statusCode: 400 }),
     );
   });

@@ -12,6 +12,12 @@ import { parseOptionalInt } from "./validation";
 // 5 already implies "at least 1", this just enforces it on explicit input.
 export const MIN_READ_TIME_MINUTES = 1;
 
+// A day of continuous reading is already an absurd upper bound. This mainly
+// exists so a wildly out-of-range value 400s here with a clear message
+// instead of reaching Postgres and erroring on the int4 column's own range
+// limit (read_time_minutes is a plain `integer` — see server/db/schema.ts).
+export const MAX_READ_TIME_MINUTES = 1440;
+
 export function parseReadTimeMinutes(value: unknown): number | undefined {
   const readTimeMinutes = parseOptionalInt(value, "readTimeMinutes");
 
@@ -23,10 +29,15 @@ export function parseReadTimeMinutes(value: unknown): number | undefined {
   // null` (its "clear this field" signal for nullable columns), but this
   // column is NOT NULL — treat that the same as "invalid", not "no value",
   // so it 400s here instead of reaching the database as a null write.
-  if (readTimeMinutes === null || readTimeMinutes < MIN_READ_TIME_MINUTES) {
+  const isOutOfRange =
+    readTimeMinutes === null ||
+    readTimeMinutes < MIN_READ_TIME_MINUTES ||
+    readTimeMinutes > MAX_READ_TIME_MINUTES;
+
+  if (isOutOfRange) {
     throw createError({
       statusCode: 400,
-      statusMessage: `readTimeMinutes must be an integer of at least ${MIN_READ_TIME_MINUTES}`,
+      statusMessage: `readTimeMinutes must be an integer between ${MIN_READ_TIME_MINUTES} and ${MAX_READ_TIME_MINUTES}`,
     });
   }
 

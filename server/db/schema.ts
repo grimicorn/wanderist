@@ -30,6 +30,16 @@ export const VISIBILITY = {
   PUBLIC: "public",
 } as const;
 
+// Convenience array form of VISIBILITY's values, for route handlers that
+// validate a visibility field against `parseEnum`/`parseOptionalEnum`
+// (which take an array, not the VISIBILITY object itself). New call sites
+// should import this rather than redeclaring
+// `[VISIBILITY.PRIVATE, VISIBILITY.PUBLIC] as const` locally.
+export const VISIBILITY_VALUES = [
+  VISIBILITY.PRIVATE,
+  VISIBILITY.PUBLIC,
+] as const;
+
 export const TRIP_STOP_STATUS = {
   DONE: "done",
   NEXT: "next",

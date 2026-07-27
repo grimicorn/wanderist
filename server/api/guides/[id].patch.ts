@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { getDb } from "../../db/index";
-import { guides, VISIBILITY } from "../../db/schema";
+import { guides, VISIBILITY_VALUES } from "../../db/schema";
 import {
   assertOwnership,
   optionalString,
@@ -14,8 +14,6 @@ import {
 } from "../../utils/guide-helpers";
 
 type GuidePatchFields = Partial<typeof guides.$inferInsert>;
-
-const VALID_VISIBILITIES = [VISIBILITY.PRIVATE, VISIBILITY.PUBLIC] as const;
 
 function parseTitle(body: Record<string, unknown>): string | undefined {
   const title = optionalString(body.title, "title");
@@ -49,7 +47,7 @@ function buildPatchFields(body: Record<string, unknown>): GuidePatchFields {
   setIfDefined(
     fields,
     "visibility",
-    parseOptionalEnum(body.visibility, VALID_VISIBILITIES, "visibility"),
+    parseOptionalEnum(body.visibility, VISIBILITY_VALUES, "visibility"),
   );
 
   return fields;

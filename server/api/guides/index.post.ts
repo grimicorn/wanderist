@@ -1,6 +1,6 @@
 import { ensureUser } from "../../utils/auth";
 import { getDb } from "../../db/index";
-import { guides, VISIBILITY } from "../../db/schema";
+import { guides, VISIBILITY, VISIBILITY_VALUES } from "../../db/schema";
 import { requireString } from "../../utils/db-helpers";
 import { parseEnum } from "../../utils/validation";
 import {
@@ -8,8 +8,6 @@ import {
   parseReadTimeMinutes,
 } from "../../utils/guide-helpers";
 import { generateId } from "../../utils/ids";
-
-const VALID_VISIBILITIES = [VISIBILITY.PRIVATE, VISIBILITY.PUBLIC] as const;
 
 export default defineEventHandler(async (event) => {
   const userId = await ensureUser(event);
@@ -29,7 +27,7 @@ export default defineEventHandler(async (event) => {
   const readTimeMinutes = parseReadTimeMinutes(body?.readTimeMinutes);
   const visibility = parseEnum(
     body?.visibility,
-    VALID_VISIBILITIES,
+    VISIBILITY_VALUES,
     "visibility",
     VISIBILITY.PRIVATE,
   );

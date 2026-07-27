@@ -104,6 +104,32 @@ describe("Guides page (/guides)", () => {
     expect(wrapper.find(".empty-note").exists()).toBe(false);
   });
 
+  it("does not show the empty state when the initial load failed", () => {
+    const guidesStore = useGuidesStore();
+    guidesStore.guides = [];
+    guidesStore.hasLoaded = false;
+    guidesStore.isLoading = false;
+    guidesStore.error = "Failed to load guides";
+    const wrapper = mount(GuidesPage, buildGlobalConfig(pinia));
+
+    expect(wrapper.find(".alert--error").exists()).toBe(true);
+    expect(wrapper.find(".empty-note").exists()).toBe(false);
+  });
+
+  it("retries the fetch when the retry button is clicked", async () => {
+    const guidesStore = useGuidesStore();
+    guidesStore.error = "Failed to load guides";
+    const wrapper = mount(GuidesPage, buildGlobalConfig(pinia));
+
+    const retryButton = wrapper
+      .findAll(".alert--error button")
+      .find((button) => button.text() === "retry");
+    await retryButton?.trigger("click");
+
+    // Called once on mount and once from the retry click.
+    expect(guidesStore.fetchGuides).toHaveBeenCalledTimes(2);
+  });
+
   describe("new guide form", () => {
     it("shows the new guide form when the button is clicked", async () => {
       const wrapper = mount(GuidesPage, buildGlobalConfig(pinia));
@@ -267,6 +293,42 @@ describe("Guides page (/guides)", () => {
       await flushPromises();
 
       expect(wrapper.text()).toContain("Failed to delete guide");
+    });
+
+    it("deleting one guide does not block confirming delete on a different guide", async () => {
+      const guidesStore = useGuidesStore();
+      let resolveFirstDelete: () => void = () => {};
+      const firstDeletePromise = new Promise<void>((resolve) => {
+        resolveFirstDelete = resolve;
+      });
+      vi.spyOn(guidesStore, "deleteGuide").mockImplementation((id) =>
+        id === "g-1" ? firstDeletePromise : Promise.resolve(),
+      );
+
+      function findButtonInCard(cardIndex: number, text: string) {
+        return wrapper
+          .findAll(".gcard")
+          [cardIndex]?.findAll("button")
+          .find((button) => button.text() === text);
+      }
+
+      const wrapper = mount(GuidesPage, buildGlobalConfig(pinia));
+
+      // Start (but don't resolve) deleting the first guide.
+      await findButtonInCard(0, "delete")?.trigger("click");
+      await findButtonInCard(0, "confirm delete")?.trigger("click");
+
+      // The second guide's delete must still go through while the first is
+      // still in flight.
+      await findButtonInCard(1, "delete")?.trigger("click");
+      await findButtonInCard(1, "confirm delete")?.trigger("click");
+      await flushPromises();
+
+      expect(guidesStore.deleteGuide).toHaveBeenCalledWith("g-2");
+
+      resolveFirstDelete();
+      await flushPromises();
+      expect(guidesStore.deleteGuide).toHaveBeenCalledWith("g-1");
     });
   });
 });

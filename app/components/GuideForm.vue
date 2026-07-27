@@ -21,9 +21,17 @@
             v-model.number="formReadTimeMinutes"
             type="number"
             :min="MIN_READ_TIME_MINUTES"
+            :max="MAX_READ_TIME_MINUTES"
             class="guide-form__number"
+            :aria-invalid="Boolean(readTimeError)"
+            :aria-describedby="readTimeError ? readTimeErrorId : undefined"
           />
-          <span v-if="readTimeError" class="guide-form__field-error">
+          <span
+            v-if="readTimeError"
+            :id="readTimeErrorId"
+            class="guide-form__field-error"
+            role="alert"
+          >
             {{ readTimeError }}
           </span>
         </label>
@@ -60,13 +68,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, watch } from "vue";
 import type { CreateGuideInput, Guide, GuideVisibility } from "~/stores/guides";
 
-// Mirrors server/utils/guide-helpers.ts MIN_READ_TIME_MINUTES. Kept as a
-// separate constant rather than imported: that helper pulls in Nitro-only
-// globals (createError) that don't exist in the client bundle.
+// Mirrors server/utils/guide-helpers.ts MIN_READ_TIME_MINUTES /
+// MAX_READ_TIME_MINUTES. Kept as separate constants rather than imported:
+// that helper pulls in Nitro-only globals (createError) that don't exist in
+// the client bundle.
 const MIN_READ_TIME_MINUTES = 1;
+const MAX_READ_TIME_MINUTES = 1440;
 const DEFAULT_READ_TIME_MINUTES = 5;
 
 const props = withDefaults(
@@ -102,12 +112,21 @@ const formVisibility = ref<GuideVisibility>(
 );
 
 const readTimeError = ref<string | null>(null);
+const readTimeErrorId = useId();
+
+// Clear the error as soon as the user changes the field, rather than only on
+// the next submit attempt — otherwise a corrected value still shows the old
+// error message until submit is pressed again.
+watch(formReadTimeMinutes, () => {
+  readTimeError.value = null;
+});
 
 // A blank field means "leave the read time as-is / use the default" and
 // returns undefined with no error. Anything non-blank that doesn't parse to
-// a whole number >= MIN_READ_TIME_MINUTES sets readTimeError and returns
-// undefined too, but handleSubmit checks readTimeError first and blocks the
-// submit — the field was never optional-if-typed, it's optional-if-empty.
+// a whole number in [MIN_READ_TIME_MINUTES, MAX_READ_TIME_MINUTES] sets
+// readTimeError and returns undefined too, but handleSubmit checks
+// readTimeError first and blocks the submit — the field was never
+// optional-if-typed, it's optional-if-empty.
 function parseFormReadTimeMinutes(): number | undefined {
   readTimeError.value = null;
 
@@ -117,9 +136,13 @@ function parseFormReadTimeMinutes(): number | undefined {
   }
 
   const parsed = Number(raw);
+  const isOutOfRange =
+    !Number.isInteger(parsed) ||
+    parsed < MIN_READ_TIME_MINUTES ||
+    parsed > MAX_READ_TIME_MINUTES;
 
-  if (!Number.isInteger(parsed) || parsed < MIN_READ_TIME_MINUTES) {
-    readTimeError.value = `Read time must be a whole number of at least ${MIN_READ_TIME_MINUTES}, or left blank.`;
+  if (isOutOfRange) {
+    readTimeError.value = `Read time must be a whole number between ${MIN_READ_TIME_MINUTES} and ${MAX_READ_TIME_MINUTES}, or left blank.`;
     return undefined;
   }
 

@@ -78,6 +78,25 @@ describe("useGuidesStore", () => {
       expect(store.error).toBe("Network error");
       expect(store.isLoading).toBe(false);
     });
+
+    it("sets hasLoaded on success", async () => {
+      mockApiFetch.mockResolvedValue([]);
+      const store = useGuidesStore();
+
+      expect(store.hasLoaded).toBe(false);
+      await store.fetchGuides();
+
+      expect(store.hasLoaded).toBe(true);
+    });
+
+    it("does not set hasLoaded when the fetch fails", async () => {
+      mockApiFetch.mockRejectedValue(new Error("Network error"));
+      const store = useGuidesStore();
+
+      await expect(store.fetchGuides()).rejects.toThrow("Network error");
+
+      expect(store.hasLoaded).toBe(false);
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -149,6 +168,20 @@ describe("useGuidesStore", () => {
         "boom",
       );
       expect(store.guides).toEqual([existing]);
+    });
+
+    it("clears a stale load error on a successful create", async () => {
+      mockApiFetch
+        .mockRejectedValueOnce(new Error("Network error"))
+        .mockResolvedValueOnce({ id: "g-1", userId: "u-1", title: "Paris" });
+
+      const store = useGuidesStore();
+      await expect(store.fetchGuides()).rejects.toThrow("Network error");
+      expect(store.error).toBe("Network error");
+
+      await store.createGuide({ title: "Paris" });
+
+      expect(store.error).toBeNull();
     });
   });
 

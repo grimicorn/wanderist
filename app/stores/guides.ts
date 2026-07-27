@@ -40,6 +40,11 @@ export const useGuidesStore = defineStore("guides", () => {
 
     try {
       guides.value = await apiFetch<Guide[]>("/api/guides");
+      // Set only on success: a failed fetch must not read as "loaded and
+      // genuinely empty" (see hasLoaded's comment above) — it should keep
+      // reading as "not loaded" so the page keeps showing the error instead
+      // of also rendering the empty state underneath it.
+      hasLoaded.value = true;
     } catch (fetchError) {
       error.value =
         fetchError instanceof Error
@@ -48,7 +53,6 @@ export const useGuidesStore = defineStore("guides", () => {
       throw fetchError;
     } finally {
       isLoading.value = false;
-      hasLoaded.value = true;
     }
   }
 
@@ -59,6 +63,9 @@ export const useGuidesStore = defineStore("guides", () => {
     });
 
     guides.value = [created, ...guides.value];
+    // A successful write proves the list is reachable — drop a stale load
+    // error rather than leaving it under a list that's now visibly working.
+    error.value = null;
 
     return created;
   }
@@ -75,6 +82,7 @@ export const useGuidesStore = defineStore("guides", () => {
     guides.value = guides.value.map((guide) =>
       guide.id === id ? updated : guide,
     );
+    error.value = null;
 
     return updated;
   }
@@ -83,6 +91,7 @@ export const useGuidesStore = defineStore("guides", () => {
     await apiFetch(`/api/guides/${id}`, { method: "DELETE" });
 
     guides.value = guides.value.filter((guide) => guide.id !== id);
+    error.value = null;
   }
 
   return {

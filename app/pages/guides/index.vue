@@ -26,6 +26,9 @@
     <!-- List load error -->
     <div v-if="guidesStore.error" class="alert alert--error" role="alert">
       {{ guidesStore.error }}
+      <button class="btn btn--outline btn--sm" @click="loadGuides">
+        retry
+      </button>
     </div>
 
     <!-- Delete error (create/edit errors render inside GuideForm itself) -->
@@ -51,7 +54,7 @@
         <GuideCard
           v-else
           :guide="guide"
-          :deleting="deletingGuideId === guide.id"
+          :deleting="deletingGuideIds.has(guide.id)"
           @edit="startEditGuide"
           @delete="handleDeleteGuide"
         />
@@ -84,7 +87,10 @@ const guidesStore = useGuidesStore();
 const showNewGuideForm = ref(false);
 const editingGuideId = ref<string | null>(null);
 const isSavingGuide = ref(false);
-const deletingGuideId = ref<string | null>(null);
+// A Set (not a single id) so an in-flight delete of one guide never blocks a
+// delete of a different guide — each card's own in-flight state is looked up
+// independently.
+const deletingGuideIds = ref<Set<string>>(new Set());
 const formError = ref<string | null>(null);
 const deleteError = ref<string | null>(null);
 
@@ -146,14 +152,16 @@ async function handleUpdateGuide(
 }
 
 async function handleDeleteGuide(guide: Guide): Promise<void> {
-  if (deletingGuideId.value) {
-    // A delete is already in flight — GuideCard disables its confirm/cancel
-    // buttons while `deleting` is true, so this only guards against an event
-    // that slips through before Vue re-renders the disabled state.
+  if (deletingGuideIds.value.has(guide.id)) {
+    // A delete of this specific guide is already in flight — GuideCard
+    // disables its confirm/cancel buttons while `deleting` is true, so this
+    // only guards against an event that slips through before Vue re-renders
+    // the disabled state. Deleting a *different* guide concurrently is fine
+    // and not blocked by this check.
     return;
   }
 
-  deletingGuideId.value = guide.id;
+  deletingGuideIds.value.add(guide.id);
   deleteError.value = null;
 
   try {
@@ -162,15 +170,17 @@ async function handleDeleteGuide(guide: Guide): Promise<void> {
     deleteError.value =
       error instanceof Error ? error.message : "Failed to delete guide";
   } finally {
-    deletingGuideId.value = null;
+    deletingGuideIds.value.delete(guide.id);
   }
 }
 
-onMounted(() => {
+function loadGuides(): void {
   guidesStore.fetchGuides().catch((error) => {
-    console.error("[guides] failed to load guides on mount", error);
+    console.error("[guides] failed to load guides", error);
   });
-});
+}
+
+onMounted(loadGuides);
 </script>
 
 <style scoped>
