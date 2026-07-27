@@ -19,6 +19,8 @@ const {
   mockGetQuery,
   mockCreateError,
   mockEq,
+  mockAsc,
+  mockDesc,
 } = vi.hoisted(() => {
   const mockOffset = vi.fn().mockResolvedValue([]);
   const mockLimit = vi.fn(() => ({ offset: mockOffset }));
@@ -34,6 +36,8 @@ const {
       Object.assign(new Error(options.statusMessage), options),
   );
   const mockEq = vi.fn((...args: unknown[]) => ({ type: "eq", args }));
+  const mockAsc = vi.fn((column: unknown) => ({ type: "asc", column }));
+  const mockDesc = vi.fn((column: unknown) => ({ type: "desc", column }));
 
   return {
     mockRequireUser,
@@ -46,6 +50,8 @@ const {
     mockGetQuery,
     mockCreateError,
     mockEq,
+    mockAsc,
+    mockDesc,
   };
 });
 
@@ -59,8 +65,10 @@ vi.mock("../../../server/db/index", () => ({
 
 vi.mock("drizzle-orm", async (importOriginal) => {
   const actual = await importOriginal<typeof import("drizzle-orm")>();
-  return { ...actual, eq: mockEq };
+  return { ...actual, eq: mockEq, asc: mockAsc, desc: mockDesc };
 });
+
+import { trips } from "../../../server/db/schema";
 
 Object.assign(globalThis, {
   defineEventHandler: (handler: (event: object) => unknown) => handler,
@@ -155,20 +163,28 @@ describe("GET /api/trips", () => {
     ).rejects.toMatchObject({ statusCode: 400 });
   });
 
-  it("sorts ascending when sort=asc is provided", async () => {
+  it("sorts ascending by createdAt with id as a tie-break when sort=asc is provided", async () => {
     mockGetQuery.mockReturnValue({ sort: "asc" });
 
     await (handler as (event: object) => unknown)(buildEvent());
 
     expect(mockOrderBy).toHaveBeenCalledTimes(1);
+    expect(mockOrderBy.mock.calls[0]).toHaveLength(2);
+    expect(mockAsc).toHaveBeenCalledWith(trips.createdAt);
+    expect(mockAsc).toHaveBeenCalledWith(trips.id);
+    expect(mockDesc).not.toHaveBeenCalled();
   });
 
-  it("defaults to descending sort when no sort param is provided", async () => {
+  it("defaults to descending by createdAt with id as a tie-break when no sort param is provided", async () => {
     mockGetQuery.mockReturnValue({});
 
     await (handler as (event: object) => unknown)(buildEvent());
 
     expect(mockOrderBy).toHaveBeenCalledTimes(1);
+    expect(mockOrderBy.mock.calls[0]).toHaveLength(2);
+    expect(mockDesc).toHaveBeenCalledWith(trips.createdAt);
+    expect(mockDesc).toHaveBeenCalledWith(trips.id);
+    expect(mockAsc).not.toHaveBeenCalled();
   });
 
   it("throws 400 for an invalid sort value", async () => {

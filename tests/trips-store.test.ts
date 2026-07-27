@@ -141,6 +141,30 @@ describe("useTripsStore", () => {
       expect(mockApiFetch).toHaveBeenNthCalledWith(2, "/api/trips?page=2");
     });
 
+    it("carries the status and sort filters through every page of the walk", async () => {
+      const pageOne = Array.from({ length: 20 }, (_, index) => ({
+        ...SAMPLE_TRIP,
+        id: `trip-${index}`,
+      }));
+      const pageTwo = [{ ...SAMPLE_TRIP, id: "trip-last" }];
+
+      mockApiFetch
+        .mockResolvedValueOnce({ trips: pageOne, page: 1, hasMore: true })
+        .mockResolvedValueOnce({ trips: pageTwo, page: 2, hasMore: false });
+
+      const store = useTripsStore();
+      await store.fetchTrips({ status: "ongoing", sort: "asc" });
+
+      expect(mockApiFetch).toHaveBeenNthCalledWith(
+        1,
+        "/api/trips?page=1&status=ongoing&sort=asc",
+      );
+      expect(mockApiFetch).toHaveBeenNthCalledWith(
+        2,
+        "/api/trips?page=2&status=ongoing&sort=asc",
+      );
+    });
+
     it("stops after a single request when the first page reports hasMore: false", async () => {
       mockApiFetch.mockResolvedValueOnce({
         trips: [SAMPLE_TRIP],
