@@ -30,6 +30,7 @@ vi.mock("../../../server/db/index", () => ({
 
 import { ensureUser } from "../../../server/utils/auth";
 import { getDb } from "../../../server/db/index";
+import { notifications } from "../../../server/db/schema";
 
 const mockEnsureUser = vi.mocked(ensureUser);
 const mockGetDb = vi.mocked(getDb);
@@ -149,6 +150,10 @@ describe("POST /api/follows", () => {
     expect(notificationPayload.userId).toBe("followee-1");
     expect(notificationPayload.type).toBe("new_follower");
     expect(notificationPayload.actorId).toBe("follower-1");
+    // The second insert() call must target the notifications table — without
+    // this, an insert().values() call carrying the right-looking payload
+    // could still be writing to the wrong table.
+    expect(insertChain.insert.mock.calls[1]?.[0]).toBe(notifications);
   });
 
   it("does not create a notification when the follow already existed (onConflictDoNothing)", async () => {

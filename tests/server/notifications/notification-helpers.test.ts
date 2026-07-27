@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { makeInsertChain, makeSelectChain } from "./_helpers";
+import {
+  makeInsertChain,
+  makeSelectChain,
+  describeEqCondition,
+} from "./_helpers";
 
 vi.mock("../../../server/db/index", () => ({
   getDb: vi.fn(),
@@ -154,6 +158,65 @@ describe("fetchNotificationsForUser", () => {
         },
       },
     ]);
+  });
+
+  it("joins on the notification's actor_id, not the recipient's own user_id (join-key regression guard)", async () => {
+    const selectChain = makeSelectChain([]);
+    const database = selectChain as unknown as Parameters<
+      typeof fetchNotificationsForUser
+    >[0];
+
+    await fetchNotificationsForUser(database, "user-1", LIMIT);
+
+    // A join accidentally keyed off notifications.userId (the recipient)
+    // instead of notifications.actorId (the follower) would still return
+    // canned rows in every other test here — this is the guard against that
+    // exact regression class. leftJoin(table, condition) — index 1 is the
+    // condition; index 0 is just the joined table reference.
+    expect(
+      describeEqCondition(selectChain.firstLeftJoin.mock.calls[0][1]),
+    ).toEqual(["notifications.actor_id", "users.id"]);
+    expect(
+      describeEqCondition(selectChain.secondLeftJoin.mock.calls[0][1]),
+    ).toEqual([
+      "notifications.actor_id",
+      "user_preferences.user_id",
+      "user_preferences.public_profile",
+    ]);
+  });
+
+  it("resolves an actor with a private profile (publicProfile false) to a known-but-nameless actor", async () => {
+    // The userPreferences join is gated on publicProfile = true (see
+    // fetchNotificationsForUser), so a private actor's row never matches it —
+    // displayName/handle come back null even though actorId (and the users
+    // join for the deletedAt check) are still present. This still renders
+    // sensibly client-side (falls back to "Someone"), it just never leaks a
+    // private user's real name/handle.
+    const selectChain = makeSelectChain([
+      {
+        id: "notif-private-actor",
+        type: "new_follower",
+        tone: "accent",
+        body: "Someone started following you",
+        isRead: false,
+        createdAt: new Date("2024-06-01T10:00:00Z"),
+        actorId: "private-user",
+        actorDisplayName: null,
+        actorHandle: null,
+        actorDeletedAt: null,
+      },
+    ]);
+    const database = selectChain as unknown as Parameters<
+      typeof fetchNotificationsForUser
+    >[0];
+
+    const result = await fetchNotificationsForUser(database, "user-1", LIMIT);
+
+    expect(result[0]?.actor).toEqual({
+      id: "private-user",
+      displayName: null,
+      handle: null,
+    });
   });
 
   it("renders a legacy notification (actorId never recorded) with a null actor", async () => {

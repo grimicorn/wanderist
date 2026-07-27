@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { getDb } from "../db/index";
 import { notifications, users, userPreferences } from "../db/schema";
 
@@ -114,9 +114,20 @@ export async function fetchNotificationsForUser(
     })
     .from(notifications)
     .leftJoin(users, eq(notifications.actorId, users.id))
+    // Gated on publicProfile, matching every other cross-user disclosure of
+    // displayName/handle in this codebase (discover-queries.ts,
+    // search-queries.ts) — publicProfile defaults to false and is plan-gated,
+    // so a private actor must not have their name/handle leaked here even
+    // though the recipient can see *that* someone followed them. A private
+    // actor's row still joins on `users` above (for the deletedAt check) but
+    // resolves to no displayName/handle, which resolveActor below renders as
+    // a nameless-but-known actor (falls back to "Someone" client-side).
     .leftJoin(
       userPreferences,
-      eq(notifications.actorId, userPreferences.userId),
+      and(
+        eq(notifications.actorId, userPreferences.userId),
+        eq(userPreferences.publicProfile, true),
+      ),
     )
     .where(eq(notifications.userId, userId))
     .orderBy(desc(notifications.createdAt))
