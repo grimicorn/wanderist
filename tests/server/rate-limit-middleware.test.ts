@@ -1,31 +1,35 @@
 /**
  * Unit tests for server/middleware/rateLimit.ts.
  *
- * The rate limit store is mocked so these tests exercise only the
- * middleware's route matching, identifier resolution, header-setting, and
- * 429 behavior — not the counting algorithm itself (covered by
- * rate-limit-store.test.ts).
+ * The RateLimitStore class is mocked (the middleware constructs its own
+ * instance as the composition root — see the module comment there) so these
+ * tests exercise only the middleware's route matching, identifier
+ * resolution, header-setting, and 429 behavior — not the counting algorithm
+ * itself (covered by rate-limit-store.test.ts).
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { stubNitroGlobals } from "./test-utils";
 
 stubNitroGlobals();
 
-const { mockConsume, mockSetResponseHeader, mockGetRequestIP } = vi.hoisted(
-  () => ({
+const { mockConsume, mockSetResponseHeader, mockGetRequestIP, mockGetHeader } =
+  vi.hoisted(() => ({
     mockConsume: vi.fn(),
     mockSetResponseHeader: vi.fn(),
     mockGetRequestIP: vi.fn(),
-  }),
-);
+    mockGetHeader: vi.fn(),
+  }));
 
 vi.mock("../../server/utils/rateLimitStore", () => ({
-  rateLimitStore: { consume: mockConsume },
+  RateLimitStore: vi.fn().mockImplementation(function MockRateLimitStore() {
+    return { consume: mockConsume };
+  }),
 }));
 
 Object.assign(globalThis, {
   setResponseHeader: mockSetResponseHeader,
   getRequestIP: mockGetRequestIP,
+  getHeader: mockGetHeader,
 });
 
 const { default: rateLimitMiddleware } =
@@ -41,25 +45,34 @@ function buildEvent(path: string, method: string, userId?: string): FakeEvent {
   return { path, method, context: { userId } };
 }
 
+const FIXED_NOW = 1_700_000_000_000;
+
 const ALLOWED_RESULT = {
   allowed: true,
   limit: 20,
   remaining: 19,
-  resetAt: Date.now() + 60_000,
+  resetAt: FIXED_NOW + 60_000,
 };
 
 const REJECTED_RESULT = {
   allowed: false,
   limit: 20,
   remaining: 0,
-  resetAt: Date.now() + 30_000,
+  resetAt: FIXED_NOW + 30_000,
 };
 
 describe("rate limit middleware", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useFakeTimers();
+    vi.setSystemTime(FIXED_NOW);
     mockConsume.mockReturnValue(ALLOWED_RESULT);
     mockGetRequestIP.mockReturnValue(null);
+    mockGetHeader.mockReturnValue(undefined);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("skips routes with no configured policy", () => {
@@ -91,10 +104,29 @@ describe("rate limit middleware", () => {
       "RateLimit-Remaining",
       "19",
     );
+    // ALLOWED_RESULT.resetAt is FIXED_NOW + 60_000, pinned via fake timers.
     expect(mockSetResponseHeader).toHaveBeenCalledWith(
       event,
       "RateLimit-Reset",
-      expect.any(String),
+      "60",
+    );
+  });
+
+  it("clamps RateLimit-Reset to 0 when resetAt is already in the past", () => {
+    mockConsume.mockReturnValue({
+      allowed: true,
+      limit: 20,
+      remaining: 19,
+      resetAt: FIXED_NOW - 5_000,
+    });
+    const event = buildEvent("/api/media", "POST", "user-1");
+
+    rateLimitMiddleware(event as never);
+
+    expect(mockSetResponseHeader).toHaveBeenCalledWith(
+      event,
+      "RateLimit-Reset",
+      "0",
     );
   });
 
@@ -109,7 +141,37 @@ describe("rate limit middleware", () => {
     });
   });
 
-  it("falls back to the request IP when there is no authenticated user", () => {
+  it("strips a trailing slash before matching a policy", () => {
+    const event = buildEvent("/api/media/", "POST", "user-1");
+
+    rateLimitMiddleware(event as never);
+
+    expect(mockConsume).toHaveBeenCalledWith("POST /api/media:user:user-1", {
+      limit: 20,
+      windowMs: 60_000,
+    });
+  });
+
+  it("prefers Netlify's client-IP header over getRequestIP when there is no authenticated user", () => {
+    mockGetHeader.mockReturnValue("198.51.100.9");
+    mockGetRequestIP.mockReturnValue("10.0.0.1");
+    const event = buildEvent("/api/search", "GET", undefined);
+
+    rateLimitMiddleware(event as never);
+
+    expect(mockGetHeader).toHaveBeenCalledWith(
+      event,
+      "x-nf-client-connection-ip",
+    );
+    expect(mockConsume).toHaveBeenCalledWith(
+      "GET /api/search:ip:198.51.100.9",
+      { limit: 60, windowMs: 60_000 },
+    );
+    expect(mockGetRequestIP).not.toHaveBeenCalled();
+  });
+
+  it("falls back to getRequestIP when the Netlify header is absent", () => {
+    mockGetHeader.mockReturnValue(undefined);
     mockGetRequestIP.mockReturnValue("203.0.113.5");
     const event = buildEvent("/api/search", "GET", undefined);
 
@@ -122,6 +184,7 @@ describe("rate limit middleware", () => {
   });
 
   it("falls back to a shared anonymous bucket when no IP is resolvable", () => {
+    mockGetHeader.mockReturnValue(undefined);
     mockGetRequestIP.mockReturnValue(null);
     const event = buildEvent("/api/search", "GET", undefined);
 
@@ -137,14 +200,15 @@ describe("rate limit middleware", () => {
     mockConsume.mockReturnValue(REJECTED_RESULT);
     const event = buildEvent("/api/media", "POST", "user-1");
 
-    expect(() => rateLimitMiddleware(event as never)).toThrow(
-      "Too Many Requests",
+    expect(() => rateLimitMiddleware(event as never)).toThrowError(
+      expect.objectContaining({ statusCode: 429 }),
     );
 
+    // REJECTED_RESULT.resetAt is FIXED_NOW + 30_000, pinned via fake timers.
     expect(mockSetResponseHeader).toHaveBeenCalledWith(
       event,
       "Retry-After",
-      expect.any(String),
+      "30",
     );
   });
 

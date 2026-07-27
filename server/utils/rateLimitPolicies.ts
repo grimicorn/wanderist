@@ -36,3 +36,17 @@ export const RATE_LIMIT_POLICIES: Record<string, RateLimitPolicy> = {
   // capping scripted scraping.
   "GET /api/search": { limit: 60, windowMs: ONE_MINUTE_MS },
 };
+
+// Safety margin over the longest configured policy window: RateLimitStore
+// uses this to decide when an untouched window is stale enough to evict.
+// Derived from RATE_LIMIT_POLICIES (rather than a separate hardcoded
+// constant) so a future policy with a longer window can't silently get its
+// in-flight counter evicted mid-window — see the constructor doc on
+// RateLimitStore in ./rateLimitStore.
+const CLEANUP_SAFETY_MULTIPLIER = 2;
+
+export const RATE_LIMIT_CLEANUP_STALE_AFTER_MS =
+  CLEANUP_SAFETY_MULTIPLIER *
+  Math.max(
+    ...Object.values(RATE_LIMIT_POLICIES).map((policy) => policy.windowMs),
+  );

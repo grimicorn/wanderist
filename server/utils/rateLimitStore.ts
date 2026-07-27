@@ -12,13 +12,19 @@
  * counter table or a service like Upstash Redis). If these limits prove too
  * easy to evade in practice, that shared store is the natural next step —
  * swap it in behind this same RateLimitStore shape.
+ *
+ * Fixed windows also allow a boundary burst: a caller can send up to `limit`
+ * requests in the last instant of one window and `limit` more in the first
+ * instant of the next, i.e. up to 2x `limit` within a short span around the
+ * boundary. That is inherent to the fixed-window algorithm and is accepted
+ * here — a sliding-window log would remove it at the cost of unbounded
+ * per-key memory (one timestamp per request instead of one counter).
  */
 
-// Bounds memory growth from key churn (e.g. many distinct users/IPs) on a
-// long-lived warm instance: periodically drop windows that are stale even
-// relative to the longest policy window in use, rather than growing forever.
+// How often a consume() call is allowed to trigger a sweep for stale windows.
+// Purely a cost-control knob (avoid scanning the map on every request); it
+// has no relationship to any policy's window length.
 const CLEANUP_INTERVAL_MS = 5 * 60_000;
-const CLEANUP_STALE_AFTER_MS = 60 * 60_000;
 
 export interface RateLimitPolicy {
   limit: number;
@@ -41,6 +47,28 @@ interface WindowState {
 export class RateLimitStore {
   private readonly windows = new Map<string, WindowState>();
   private lastCleanupAt = 0;
+
+  /**
+   * @param staleAfterMs A window untouched for this long is evicted during
+   *   the next cleanup sweep. Callers must pass a value comfortably larger
+   *   than the longest `windowMs` among the policies they'll consume with —
+   *   otherwise a long-running window can be evicted (and its count silently
+   *   reset) before it naturally expires. See server/utils/rateLimitPolicies.ts,
+   *   which derives this from the policy map itself so the two can't drift.
+   */
+  constructor(private readonly staleAfterMs: number) {}
+
+  /**
+   * Number of distinct keys currently tracked. Exposed for tests to verify
+   * stale-window cleanup directly: once `staleAfterMs >= windowMs` (the
+   * documented, correct configuration), eviction and ordinary window expiry
+   * are behaviorally identical through `consume()`'s return value alone —
+   * this getter is the only way to observe cleanup itself rather than
+   * inferring it.
+   */
+  get windowCount(): number {
+    return this.windows.size;
+  }
 
   /**
    * Records one request against `key` under `policy` and reports whether it
@@ -89,7 +117,7 @@ export class RateLimitStore {
     this.lastCleanupAt = now;
 
     for (const [key, state] of this.windows) {
-      const isStale = now - state.windowStart >= CLEANUP_STALE_AFTER_MS;
+      const isStale = now - state.windowStart >= this.staleAfterMs;
       if (!isStale) {
         continue;
       }
@@ -97,8 +125,3 @@ export class RateLimitStore {
     }
   }
 }
-
-// Singleton used by server/middleware/rateLimit.ts. Tests that want an
-// isolated counter (no shared state across test cases) should construct
-// their own `new RateLimitStore()` instead of importing this instance.
-export const rateLimitStore = new RateLimitStore();
