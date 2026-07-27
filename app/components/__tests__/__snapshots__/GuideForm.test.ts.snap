@@ -4,7 +4,9 @@ exports[`GuideForm > renders without crashing and matches snapshot 1`] = `
 "<section data-v-db1b8848="" class="guide-form" aria-label="New guide">
   <h3 data-v-db1b8848="" class="guide-form__title">New guide</h3>
   <form data-v-db1b8848="" class="guide-form__body"><input data-v-db1b8848="" placeholder="Guide title…" value=""><textarea data-v-db1b8848="" placeholder="What should a fellow traveler know?" value=""></textarea>
-    <div data-v-db1b8848="" class="guide-form__row"><label data-v-db1b8848="" class="guide-form__field"><span data-v-db1b8848="" class="guide-form__label">Read time (minutes)</span><input data-v-db1b8848="" type="number" min="1" class="guide-form__number"></label><label data-v-db1b8848="" class="guide-form__field"><span data-v-db1b8848="" class="guide-form__label">Visibility</span><select data-v-db1b8848="" class="guide-form__select">
+    <div data-v-db1b8848="" class="guide-form__row"><label data-v-db1b8848="" class="guide-form__field"><span data-v-db1b8848="" class="guide-form__label">Read time (minutes)</span><input data-v-db1b8848="" type="number" min="1" class="guide-form__number">
+        <!--v-if-->
+      </label><label data-v-db1b8848="" class="guide-form__field"><span data-v-db1b8848="" class="guide-form__label">Visibility</span><select data-v-db1b8848="" class="guide-form__select">
           <option data-v-db1b8848="" value="private">Private</option>
           <option data-v-db1b8848="" value="public">Public</option>
         </select></label></div>

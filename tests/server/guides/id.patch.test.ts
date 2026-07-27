@@ -6,25 +6,19 @@ stubNitroGlobals();
 const mockReadBody = vi.fn();
 vi.stubGlobal("readBody", mockReadBody);
 
-vi.mock("../../../server/utils/db-helpers", () => ({
-  requireRouterParam: vi.fn(),
-  assertOwnership: vi.fn(),
-  optionalString: vi.fn((value: unknown, _field: string) => {
-    if (value === undefined || value === null) {
-      return undefined;
-    }
-    if (typeof value !== "string") {
-      const error = new Error("must be a string") as Error & {
-        statusCode: number;
-        statusMessage: string;
-      };
-      error.statusCode = 400;
-      error.statusMessage = "must be a string";
-      throw error;
-    }
-    return value;
-  }),
-}));
+// Only requireRouterParam/assertOwnership are stubbed (they hit the DB and
+// the authenticated user respectively) — optionalString is the real
+// implementation from db-helpers.ts, so a real regression there fails these
+// tests instead of a hand-written clone silently drifting out of sync.
+vi.mock("../../../server/utils/db-helpers", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../../../server/utils/db-helpers")>();
+  return {
+    ...actual,
+    requireRouterParam: vi.fn(),
+    assertOwnership: vi.fn(),
+  };
+});
 
 vi.mock("../../../server/utils/auth", () => ({
   requireUser: vi.fn(),

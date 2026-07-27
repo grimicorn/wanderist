@@ -7,12 +7,9 @@ import {
   parseOptionalGuideBody,
   parseReadTimeMinutes,
 } from "../../utils/guide-helpers";
+import { generateId } from "../../utils/ids";
 
 const VALID_VISIBILITIES = [VISIBILITY.PRIVATE, VISIBILITY.PUBLIC] as const;
-
-function generateId(): string {
-  return crypto.randomUUID();
-}
 
 export default defineEventHandler(async (event) => {
   const userId = await ensureUser(event);

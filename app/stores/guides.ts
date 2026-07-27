@@ -28,6 +28,10 @@ export const useGuidesStore = defineStore("guides", () => {
 
   const guides = ref<Guide[]>([]);
   const isLoading = ref(false);
+  // Distinct from isLoading: lets a consumer tell "haven't fetched yet" apart
+  // from "fetched and the list is genuinely empty", so a page doesn't flash
+  // an empty state before its first fetch resolves.
+  const hasLoaded = ref(false);
   const error = ref<string | null>(null);
 
   async function fetchGuides(): Promise<void> {
@@ -44,6 +48,7 @@ export const useGuidesStore = defineStore("guides", () => {
       throw fetchError;
     } finally {
       isLoading.value = false;
+      hasLoaded.value = true;
     }
   }
 
@@ -83,6 +88,7 @@ export const useGuidesStore = defineStore("guides", () => {
   return {
     guides,
     isLoading,
+    hasLoaded,
     error,
     fetchGuides,
     createGuide,

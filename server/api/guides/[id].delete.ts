@@ -16,6 +16,12 @@ export default defineEventHandler(async (event) => {
 
   const database = getDb();
 
+  // Unlike the PATCH handler, this doesn't check whether a row was actually
+  // removed before reporting success: a delete racing with another delete of
+  // the same row (e.g. a double click) is treated as idempotent, matching
+  // server/api/places/[id].delete.ts and server/api/trips/[id].delete.ts.
+  // PATCH's race guard exists because returning `undefined` there would
+  // otherwise surface as a corrupt 200 body; DELETE has no equivalent risk.
   await database
     .delete(guides)
     .where(and(eq(guides.id, id), eq(guides.userId, userId)));

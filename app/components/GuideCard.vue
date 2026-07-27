@@ -28,6 +28,7 @@
         </button>
         <button
           class="btn btn--outline btn--sm"
+          :disabled="deleting"
           @click="confirmingDelete = false"
         >
           cancel

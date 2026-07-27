@@ -23,6 +23,9 @@
             :min="MIN_READ_TIME_MINUTES"
             class="guide-form__number"
           />
+          <span v-if="readTimeError" class="guide-form__field-error">
+            {{ readTimeError }}
+          </span>
         </label>
         <label class="guide-form__field">
           <span class="guide-form__label">Visibility</span>
@@ -98,13 +101,25 @@ const formVisibility = ref<GuideVisibility>(
   props.initialGuide?.visibility ?? "private",
 );
 
-// Returns undefined for a blank/invalid read time (submitting then falls back
-// to "leave the read time as-is" server-side) instead of sending a value that
-// would 400 for what the user experiences as an empty, optional field.
+const readTimeError = ref<string | null>(null);
+
+// A blank field means "leave the read time as-is / use the default" and
+// returns undefined with no error. Anything non-blank that doesn't parse to
+// a whole number >= MIN_READ_TIME_MINUTES sets readTimeError and returns
+// undefined too, but handleSubmit checks readTimeError first and blocks the
+// submit — the field was never optional-if-typed, it's optional-if-empty.
 function parseFormReadTimeMinutes(): number | undefined {
-  const parsed = Number(formReadTimeMinutes.value);
+  readTimeError.value = null;
+
+  const raw = formReadTimeMinutes.value;
+  if (typeof raw === "string" && raw.trim() === "") {
+    return undefined;
+  }
+
+  const parsed = Number(raw);
 
   if (!Number.isInteger(parsed) || parsed < MIN_READ_TIME_MINUTES) {
+    readTimeError.value = `Read time must be a whole number of at least ${MIN_READ_TIME_MINUTES}, or left blank.`;
     return undefined;
   }
 
@@ -118,10 +133,16 @@ function handleSubmit(): void {
     return;
   }
 
+  const readTimeMinutes = parseFormReadTimeMinutes();
+
+  if (readTimeError.value) {
+    return;
+  }
+
   emit("submit", {
     title,
     body: formBody.value.trim(),
-    readTimeMinutes: parseFormReadTimeMinutes(),
+    readTimeMinutes,
     visibility: formVisibility.value,
   });
 }
@@ -169,6 +190,10 @@ function handleSubmit(): void {
 }
 .guide-form__number {
   width: 110px;
+}
+.guide-form__field-error {
+  font-size: 11px;
+  color: var(--error, #c0392b);
 }
 .guide-form__number:focus,
 .guide-form__select:focus {

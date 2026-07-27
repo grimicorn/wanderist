@@ -53,6 +53,9 @@ describe("Guides page (/guides)", () => {
 
     const guidesStore = useGuidesStore();
     guidesStore.guides = [...SAMPLE_GUIDES];
+    // The real fetchGuides sets this once the initial load resolves; set it
+    // directly here since fetchGuides itself is mocked out below.
+    guidesStore.hasLoaded = true;
     vi.spyOn(guidesStore, "fetchGuides").mockResolvedValue();
   });
 
@@ -74,11 +77,31 @@ describe("Guides page (/guides)", () => {
     expect(wrapper.findAll(".gcard")).toHaveLength(2);
   });
 
-  it("shows the empty state when there are no guides", () => {
+  it("shows the empty state when there are no guides and the initial load has finished", () => {
     const guidesStore = useGuidesStore();
     guidesStore.guides = [];
     const wrapper = mount(GuidesPage, buildGlobalConfig(pinia));
     expect(wrapper.find(".empty-note").exists()).toBe(true);
+    expect(wrapper.text()).toContain("No guides yet");
+  });
+
+  it("shows a loading state instead of the empty state before the initial load resolves", () => {
+    const guidesStore = useGuidesStore();
+    guidesStore.guides = [];
+    guidesStore.hasLoaded = false;
+    guidesStore.isLoading = true;
+    const wrapper = mount(GuidesPage, buildGlobalConfig(pinia));
+    expect(wrapper.text()).toContain("Loading guides");
+    expect(wrapper.text()).not.toContain("No guides yet");
+  });
+
+  it("shows neither state while genuinely not yet loaded and not loading (pre-mount tick)", () => {
+    const guidesStore = useGuidesStore();
+    guidesStore.guides = [];
+    guidesStore.hasLoaded = false;
+    guidesStore.isLoading = false;
+    const wrapper = mount(GuidesPage, buildGlobalConfig(pinia));
+    expect(wrapper.find(".empty-note").exists()).toBe(false);
   });
 
   describe("new guide form", () => {

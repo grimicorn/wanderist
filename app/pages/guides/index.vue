@@ -57,7 +57,9 @@
         />
       </template>
     </div>
-    <div v-else class="empty-note">
+    <!-- Gated on hasLoaded (not just !isLoading) so this never flashes before
+         the initial fetch resolves — see hasLoaded in stores/guides.ts. -->
+    <div v-else-if="guidesStore.hasLoaded" class="empty-note">
       No guides yet — write your first one above.
     </div>
   </div>
@@ -144,6 +146,13 @@ async function handleUpdateGuide(
 }
 
 async function handleDeleteGuide(guide: Guide): Promise<void> {
+  if (deletingGuideId.value) {
+    // A delete is already in flight — GuideCard disables its confirm/cancel
+    // buttons while `deleting` is true, so this only guards against an event
+    // that slips through before Vue re-renders the disabled state.
+    return;
+  }
+
   deletingGuideId.value = guide.id;
   deleteError.value = null;
 

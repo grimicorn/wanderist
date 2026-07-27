@@ -15,13 +15,18 @@ export const MIN_READ_TIME_MINUTES = 1;
 export function parseReadTimeMinutes(value: unknown): number | undefined {
   const readTimeMinutes = parseOptionalInt(value, "readTimeMinutes");
 
-  if (
-    readTimeMinutes !== undefined &&
-    readTimeMinutes < MIN_READ_TIME_MINUTES
-  ) {
+  if (readTimeMinutes === undefined) {
+    return undefined;
+  }
+
+  // parseOptionalInt also returns `null` for an explicit `readTimeMinutes:
+  // null` (its "clear this field" signal for nullable columns), but this
+  // column is NOT NULL — treat that the same as "invalid", not "no value",
+  // so it 400s here instead of reaching the database as a null write.
+  if (readTimeMinutes === null || readTimeMinutes < MIN_READ_TIME_MINUTES) {
     throw createError({
       statusCode: 400,
-      statusMessage: `readTimeMinutes must be at least ${MIN_READ_TIME_MINUTES}`,
+      statusMessage: `readTimeMinutes must be an integer of at least ${MIN_READ_TIME_MINUTES}`,
     });
   }
 
@@ -32,9 +37,12 @@ export function parseReadTimeMinutes(value: unknown): number | undefined {
  * Reads the optional `body` field and normalises it so a guide never ends up
  * with an empty string sitting in a nullable column alongside real `null`
  * values (two representations of "no body" otherwise exist side by side):
- * - key absent -> `undefined` (POST treats this as "no body"; PATCH's
- *   `setIfDefined` treats this as "don't touch the existing body")
- * - present but blank/whitespace-only -> `null` ("clear the body")
+ * - key absent OR explicit `null` -> `undefined` (POST treats this as "no
+ *   body"; PATCH's `setIfDefined` treats this as "don't touch the existing
+ *   body" — `optionalString` doesn't distinguish "absent" from "explicit
+ *   null", matching every other optional string field in this codebase, so
+ *   there's no way to explicitly clear body via `null`; send `""` instead)
+ * - present but blank/whitespace-only string -> `null` ("clear the body")
  * - present with content -> the trimmed string
  */
 export function parseOptionalGuideBody(

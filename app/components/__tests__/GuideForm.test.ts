@@ -89,7 +89,7 @@ describe("GuideForm", () => {
     });
   });
 
-  it("omits readTimeMinutes instead of submitting an invalid value when the field is cleared", async () => {
+  it("omits readTimeMinutes with no error when the field is left blank", async () => {
     const wrapper = mount(GuideForm, {
       ...globalConfig,
       props: { title: "New guide", submitLabel: "publish guide" },
@@ -106,6 +106,23 @@ describe("GuideForm", () => {
     expect(wrapper.emitted("submit")?.[0][0]).toMatchObject({
       readTimeMinutes: undefined,
     });
+    expect(wrapper.find(".guide-form__field-error").exists()).toBe(false);
+  });
+
+  it("blocks the submit and shows an error for a non-blank invalid read time", async () => {
+    const wrapper = mount(GuideForm, {
+      ...globalConfig,
+      props: { title: "New guide", submitLabel: "publish guide" },
+    });
+
+    await wrapper
+      .find('input[placeholder="Guide title…"]')
+      .setValue("Slow coastlines");
+    await wrapper.find(".guide-form__number").setValue(0);
+    await wrapper.find("form").trigger("submit");
+
+    expect(wrapper.emitted("submit")).toBeFalsy();
+    expect(wrapper.find(".guide-form__field-error").exists()).toBe(true);
   });
 
   it("does not emit submit when the title is only whitespace", async () => {
