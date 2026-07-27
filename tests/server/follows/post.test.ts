@@ -30,6 +30,7 @@ vi.mock("../../../server/db/index", () => ({
 
 import { ensureUser } from "../../../server/utils/auth";
 import { getDb } from "../../../server/db/index";
+import { notifications } from "../../../server/db/schema";
 
 const mockEnsureUser = vi.mocked(ensureUser);
 const mockGetDb = vi.mocked(getDb);
@@ -121,5 +122,56 @@ describe("POST /api/follows", () => {
     mockReadBody.mockResolvedValue({ followeeId: "followee-1" });
 
     await expect(callHandler()).rejects.toMatchObject({ statusCode: 401 });
+  });
+
+  it("creates a notification with the follower recorded as the actor", async () => {
+    mockEnsureUser.mockResolvedValue("follower-1");
+    mockReadBody.mockResolvedValue({ followeeId: "followee-1" });
+
+    const selectChain = makeSelectChain([{ id: "followee-1" }]);
+    const insertChain = makeInsertChain();
+    mockGetDb.mockReturnValue({
+      ...selectChain,
+      ...insertChain,
+    } as unknown as ReturnType<typeof getDb>);
+
+    await callHandler();
+
+    // insert() is called twice: once for the follows row, once (inside
+    // createNotification) for the notification row. Both calls share the
+    // same mocked .values() function, so its call history holds both
+    // payloads in order.
+    const valuesMock = insertChain.insert.mock.results[0].value.values;
+    expect(valuesMock.mock.calls).toHaveLength(2);
+    const notificationPayload = valuesMock.mock.calls[1][0] as Record<
+      string,
+      unknown
+    >;
+    expect(notificationPayload.userId).toBe("followee-1");
+    expect(notificationPayload.type).toBe("new_follower");
+    expect(notificationPayload.actorId).toBe("follower-1");
+    // The second insert() call must target the notifications table — without
+    // this, an insert().values() call carrying the right-looking payload
+    // could still be writing to the wrong table.
+    expect(insertChain.insert.mock.calls[1]?.[0]).toBe(notifications);
+  });
+
+  it("does not create a notification when the follow already existed (onConflictDoNothing)", async () => {
+    mockEnsureUser.mockResolvedValue("follower-1");
+    mockReadBody.mockResolvedValue({ followeeId: "followee-1" });
+
+    const selectChain = makeSelectChain([{ id: "followee-1" }]);
+    const insertChain = makeInsertChain([]);
+    mockGetDb.mockReturnValue({
+      ...selectChain,
+      ...insertChain,
+    } as unknown as ReturnType<typeof getDb>);
+
+    await callHandler();
+
+    const valuesMock = insertChain.insert.mock.results[0].value.values;
+    // Only the follows-row insert should have happened; createNotification
+    // is skipped entirely when the follow was already there.
+    expect(valuesMock.mock.calls).toHaveLength(1);
   });
 });
