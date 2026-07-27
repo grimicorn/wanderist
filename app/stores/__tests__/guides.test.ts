@@ -1,16 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { createPinia, setActivePinia } from "pinia";
 
 // useApiClient is a Nuxt auto-imported composable. Stub it before importing
 // the store so the module resolves against a controlled mock.
 const mockApiFetch = vi.fn();
 vi.stubGlobal("useApiClient", () => ({ apiFetch: mockApiFetch }));
 
-// defineStore is stubbed as vi.fn() in vitest.setup.ts for component tests.
-// For store unit tests we need the real pinia defineStore so restore it here.
-const { createPinia, setActivePinia, defineStore } = await import("pinia");
-vi.stubGlobal("defineStore", defineStore);
-
-// Import after globals are set.
+// Import after globals are set. guides.ts imports defineStore directly from
+// "pinia" (not via a Nuxt auto-import), so no defineStore global stub is
+// needed here — a plain import of the real pinia already resolves it.
 const { useGuidesStore } = await import("../guides");
 
 describe("useGuidesStore", () => {

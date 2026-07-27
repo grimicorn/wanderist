@@ -36,35 +36,19 @@
       {{ deleteError }}
     </div>
 
-    <div v-if="guidesStore.isLoading" class="empty-note">Loading guides…</div>
-
-    <!-- Guides list -->
-    <div v-else-if="guidesStore.guides.length" class="guide-list">
-      <template v-for="guide in guidesStore.guides" :key="guide.id">
-        <GuideForm
-          v-if="editingGuideId === guide.id"
-          title="Edit guide"
-          submit-label="save changes"
-          :initial-guide="guide"
-          :pending="isSavingGuide"
-          :error="formError"
-          @submit="(input) => handleUpdateGuide(guide.id, input)"
-          @cancel="cancelEditGuide"
-        />
-        <GuideCard
-          v-else
-          :guide="guide"
-          :deleting="deletingGuideIds.has(guide.id)"
-          @edit="startEditGuide"
-          @delete="handleDeleteGuide"
-        />
-      </template>
-    </div>
-    <!-- Gated on hasLoaded (not just !isLoading) so this never flashes before
-         the initial fetch resolves — see hasLoaded in stores/guides.ts. -->
-    <div v-else-if="guidesStore.hasLoaded" class="empty-note">
-      No guides yet — write your first one above.
-    </div>
+    <GuidesList
+      :guides="guidesStore.guides"
+      :is-loading="guidesStore.isLoading"
+      :has-loaded="guidesStore.hasLoaded"
+      :editing-guide-id="editingGuideId"
+      :deleting-guide-ids="deletingGuideIds"
+      :is-saving-guide="isSavingGuide"
+      :form-error="formError"
+      @edit="startEditGuide"
+      @delete="handleDeleteGuide"
+      @submit-edit="handleUpdateGuide"
+      @cancel-edit="cancelEditGuide"
+    />
   </div>
 </template>
 
@@ -76,8 +60,9 @@ import type {
   CreateGuideInput,
   UpdateGuideInput,
 } from "~/stores/guides";
+import { extractErrorMessage } from "~/utils/extractErrorMessage";
 import GuideForm from "~/components/GuideForm.vue";
-import GuideCard from "~/components/GuideCard.vue";
+import GuidesList from "~/components/GuidesList.vue";
 
 definePageMeta({ layout: "app", middleware: "auth" });
 useHead({ title: "Wanderist — Guides" });
@@ -126,8 +111,7 @@ async function handleCreateGuide(input: CreateGuideInput): Promise<void> {
     await guidesStore.createGuide(input);
     closeNewGuideForm();
   } catch (error) {
-    formError.value =
-      error instanceof Error ? error.message : "Failed to create guide";
+    formError.value = extractErrorMessage(error);
   } finally {
     isSavingGuide.value = false;
   }
@@ -144,8 +128,7 @@ async function handleUpdateGuide(
     await guidesStore.updateGuide(guideId, input);
     cancelEditGuide();
   } catch (error) {
-    formError.value =
-      error instanceof Error ? error.message : "Failed to update guide";
+    formError.value = extractErrorMessage(error);
   } finally {
     isSavingGuide.value = false;
   }
@@ -167,8 +150,7 @@ async function handleDeleteGuide(guide: Guide): Promise<void> {
   try {
     await guidesStore.deleteGuide(guide.id);
   } catch (error) {
-    deleteError.value =
-      error instanceof Error ? error.message : "Failed to delete guide";
+    deleteError.value = extractErrorMessage(error);
   } finally {
     deletingGuideIds.value.delete(guide.id);
   }
@@ -202,17 +184,5 @@ onMounted(loadGuides);
   margin: 6px 0 0;
   font-size: 12.5px;
   color: var(--muted);
-}
-
-.guide-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.empty-note {
-  font-size: 12.5px;
-  color: var(--faint);
-  padding: 12px 0;
 }
 </style>

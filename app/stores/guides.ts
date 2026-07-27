@@ -1,4 +1,5 @@
 import { defineStore } from "pinia";
+import { extractErrorMessage } from "~/utils/extractErrorMessage";
 
 export type GuideVisibility = "private" | "public";
 
@@ -46,14 +47,22 @@ export const useGuidesStore = defineStore("guides", () => {
       // of also rendering the empty state underneath it.
       hasLoaded.value = true;
     } catch (fetchError) {
-      error.value =
-        fetchError instanceof Error
-          ? fetchError.message
-          : "Failed to load guides";
+      error.value = extractErrorMessage(fetchError);
       throw fetchError;
     } finally {
       isLoading.value = false;
     }
+  }
+
+  // A successful write proves `guides` now reflects real server state —
+  // clear a stale load error and mark the store as loaded, the same as a
+  // successful fetchGuides would. Without also setting hasLoaded, a failed
+  // initial load followed by a successful create-then-delete would clear
+  // `error` while hasLoaded stayed false, leaving the page's error/list/empty
+  // v-if chain matching nothing (see guides/index.vue).
+  function markLoadSucceeded(): void {
+    error.value = null;
+    hasLoaded.value = true;
   }
 
   async function createGuide(input: CreateGuideInput): Promise<Guide> {
@@ -63,9 +72,7 @@ export const useGuidesStore = defineStore("guides", () => {
     });
 
     guides.value = [created, ...guides.value];
-    // A successful write proves the list is reachable — drop a stale load
-    // error rather than leaving it under a list that's now visibly working.
-    error.value = null;
+    markLoadSucceeded();
 
     return created;
   }
@@ -82,7 +89,7 @@ export const useGuidesStore = defineStore("guides", () => {
     guides.value = guides.value.map((guide) =>
       guide.id === id ? updated : guide,
     );
-    error.value = null;
+    markLoadSucceeded();
 
     return updated;
   }
@@ -91,7 +98,7 @@ export const useGuidesStore = defineStore("guides", () => {
     await apiFetch(`/api/guides/${id}`, { method: "DELETE" });
 
     guides.value = guides.value.filter((guide) => guide.id !== id);
-    error.value = null;
+    markLoadSucceeded();
   }
 
   return {

@@ -33,17 +33,21 @@ vi.mock("drizzle-orm", async (importOriginal) => {
   return { ...original, eq: vi.fn(original.eq), and: vi.fn(original.and) };
 });
 
+import { eq, and } from "drizzle-orm";
 import {
   requireRouterParam,
   assertOwnership,
 } from "../../../server/utils/db-helpers";
 import { requireUser } from "../../../server/utils/auth";
 import { getDb } from "../../../server/db/index";
+import { guides } from "../../../server/db/schema";
 
 const mockRequireRouterParam = vi.mocked(requireRouterParam);
 const mockAssertOwnership = vi.mocked(assertOwnership);
 const mockRequireUser = vi.mocked(requireUser);
 const mockGetDb = vi.mocked(getDb);
+const mockEq = vi.mocked(eq);
+const mockAnd = vi.mocked(and);
 
 function makeDbWithUpdate(returned: Record<string, unknown>) {
   const returningMock = vi.fn().mockResolvedValue([returned]);
@@ -79,6 +83,12 @@ describe("PATCH /api/guides/:id", () => {
 
     expect(result).toEqual(updatedGuide);
     expect(mockAssertOwnership).toHaveBeenCalledTimes(1);
+    // The update's own where clause must also scope to the owner — the
+    // preceding assertOwnership check is not the only guard against a
+    // cross-tenant patch.
+    expect(mockEq).toHaveBeenCalledWith(guides.id, "guide-1");
+    expect(mockEq).toHaveBeenCalledWith(guides.userId, "user-1");
+    expect(mockAnd).toHaveBeenCalled();
   });
 
   it("a user cannot patch another user's guide — 404 from assertOwnership propagates", async () => {

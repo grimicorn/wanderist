@@ -72,9 +72,12 @@ import { ref, watch } from "vue";
 import type { CreateGuideInput, Guide, GuideVisibility } from "~/stores/guides";
 
 // Mirrors server/utils/guide-helpers.ts MIN_READ_TIME_MINUTES /
-// MAX_READ_TIME_MINUTES. Kept as separate constants rather than imported:
-// that helper pulls in Nitro-only globals (createError) that don't exist in
-// the client bundle.
+// MAX_READ_TIME_MINUTES and must be kept in sync by hand if either changes —
+// this file can't import that helper because it pulls in Nitro-only globals
+// (createError) that don't exist in the client bundle, and this repo has no
+// shared client/server module to hold just the two numbers instead. If these
+// drift, the server stays the source of truth (worst case here is a stale
+// client-side error message on a value the server would actually accept).
 const MIN_READ_TIME_MINUTES = 1;
 const MAX_READ_TIME_MINUTES = 1440;
 const DEFAULT_READ_TIME_MINUTES = 5;

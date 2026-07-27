@@ -20,11 +20,15 @@ vi.mock("drizzle-orm", async (importOriginal) => {
   };
 });
 
+import { eq, desc } from "drizzle-orm";
 import { requireUser } from "../../../server/utils/auth";
 import { getDb } from "../../../server/db/index";
+import { guides } from "../../../server/db/schema";
 
 const mockRequireUser = vi.mocked(requireUser);
 const mockGetDb = vi.mocked(getDb);
+const mockEq = vi.mocked(eq);
+const mockDesc = vi.mocked(desc);
 
 function makeDbWithRows(rows: Record<string, unknown>[]) {
   const orderByMock = vi.fn().mockResolvedValue(rows);
@@ -55,6 +59,9 @@ describe("GET /api/guides", () => {
 
     expect(result).toEqual(expectedGuides);
     expect(mockDb.select).toHaveBeenCalledTimes(1);
+    // The list must be scoped to the authenticated user, not every guide.
+    expect(mockEq).toHaveBeenCalledWith(guides.userId, "user-1");
+    expect(mockDesc).toHaveBeenCalledWith(guides.createdAt);
   });
 
   it("returns an empty array when the user has no guides", async () => {
