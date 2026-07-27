@@ -1,8 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { stubNitroGlobals } from "../test-utils";
-import { inArray } from "drizzle-orm";
+import { asc, inArray } from "drizzle-orm";
 import { entryPhotos, entryTags } from "../../../server/db/schema";
-import { loadRelationsForEntries } from "../../../server/utils/entry-helpers";
+import {
+  loadEntryRelations,
+  loadRelationsForEntries,
+} from "../../../server/utils/entry-helpers";
 import type { getDb } from "../../../server/db/index";
 
 stubNitroGlobals();
@@ -11,10 +14,12 @@ vi.mock("drizzle-orm", async (importOriginal) => {
   const original = await importOriginal<typeof import("drizzle-orm")>();
   return {
     ...original,
+    asc: vi.fn(original.asc),
     inArray: vi.fn(original.inArray),
   };
 });
 
+const mockAsc = vi.mocked(asc);
 const mockInArray = vi.mocked(inArray);
 
 /**
@@ -23,13 +28,17 @@ const mockInArray = vi.mocked(inArray);
  * tag query chain when called with a projection object (as
  * `fetchTagsForEntries` calls it). Dispatching on call shape, rather than
  * call order, keeps this fake correct even if the two batched fetches were
- * reordered inside `Promise.all`.
+ * reordered inside `Promise.all`. Returns the `orderBy` spy for the photo
+ * chain so callers can assert the batched photo query still sorts by
+ * `sortOrder` (batching moves this from a per-entry to a global ORDER BY;
+ * dropping it would silently scramble photo order within an entry).
  */
 function createFakeDatabase(photoRows: unknown[], tagRows: unknown[]) {
+  const photoOrderBy = vi.fn().mockResolvedValue(photoRows);
   const photoChain = {
     from: vi.fn().mockReturnValue({
       where: vi.fn().mockReturnValue({
-        orderBy: vi.fn().mockResolvedValue(photoRows),
+        orderBy: photoOrderBy,
       }),
     }),
   };
@@ -46,11 +55,14 @@ function createFakeDatabase(photoRows: unknown[], tagRows: unknown[]) {
       projection ? tagChain : photoChain,
     );
 
-  return { select } as unknown as ReturnType<typeof getDb>;
+  return { select, photoOrderBy } as unknown as ReturnType<typeof getDb> & {
+    photoOrderBy: typeof photoOrderBy;
+  };
 }
 
 describe("loadRelationsForEntries", () => {
   beforeEach(() => {
+    mockAsc.mockClear();
     mockInArray.mockClear();
   });
 
@@ -64,6 +76,16 @@ describe("loadRelationsForEntries", () => {
       "e-2",
     ]);
     expect(mockInArray).toHaveBeenCalledWith(entryTags.entryId, ["e-1", "e-2"]);
+  });
+
+  it("still sorts the batched photo query by sortOrder", async () => {
+    const database = createFakeDatabase([], []);
+
+    await loadRelationsForEntries(database, ["e-1", "e-2"]);
+
+    expect(database.photoOrderBy).toHaveBeenCalledWith(
+      asc(entryPhotos.sortOrder),
+    );
   });
 
   it("returns an empty map and issues no queries when entryIds is empty", async () => {
@@ -119,5 +141,28 @@ describe("loadRelationsForEntries", () => {
 
     expect(result.get("e-1")).toEqual({ photos: [], tags: [] });
     expect(result.has("e-999")).toBe(false);
+  });
+});
+
+describe("loadEntryRelations", () => {
+  it("delegates to loadRelationsForEntries for a single entry", async () => {
+    const photoRows = [
+      { id: "p-1", entryId: "e-1", mediaId: "m-1", sortOrder: 0 },
+    ];
+    const tagRows = [{ entryId: "e-1", tagId: "t-1", tagName: "beach" }];
+    const database = createFakeDatabase(photoRows, tagRows);
+
+    const result = await loadEntryRelations(database, "e-1");
+
+    expect(result.photos.map((photo) => photo.id)).toEqual(["p-1"]);
+    expect(result.tags).toEqual([{ id: "t-1", name: "beach" }]);
+  });
+
+  it("returns empty photos/tags for an entry with no relations", async () => {
+    const database = createFakeDatabase([], []);
+
+    const result = await loadEntryRelations(database, "e-1");
+
+    expect(result).toEqual({ photos: [], tags: [] });
   });
 });

@@ -131,21 +131,21 @@ async function fetchTagsForEntries(
 /**
  * Fetches photos and tags for a single entry by ID. Returns them in the shape
  * expected by the Entry type in the store so every endpoint returns a
- * consistent enriched response.
+ * consistent enriched response. Delegates to `loadRelationsForEntries` so the
+ * two never drift on how a tag row is reshaped into `{ id, name }`.
  */
 export async function loadEntryRelations(
   database: ReturnType<typeof getDb>,
   entryId: string,
 ): Promise<EntryRelations> {
-  const [photos, tagRows] = await Promise.all([
-    fetchPhotosForEntries(database, [entryId]),
-    fetchTagsForEntries(database, [entryId]),
-  ]);
-
-  return {
-    photos,
-    tags: tagRows.map((row) => ({ id: row.tagId, name: row.tagName })),
-  };
+  const relationsByEntryId = await loadRelationsForEntries(database, [entryId]);
+  const relations = relationsByEntryId.get(entryId);
+  if (!relations) {
+    throw new Error(
+      `loadRelationsForEntries did not return relations for entry ${entryId}`,
+    );
+  }
+  return relations;
 }
 
 /**

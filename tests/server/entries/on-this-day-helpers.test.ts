@@ -98,6 +98,20 @@ describe("fetchOnThisDayEntries", () => {
     expect(mockLoadRelationsForEntries).not.toHaveBeenCalled();
   });
 
+  it("throws when the batched relations map is missing an entry", async () => {
+    mockRowsReturned([
+      { id: "e-1", userId: "user-1", title: "A" },
+      { id: "e-2", userId: "user-1", title: "B" },
+    ]);
+    mockLoadRelationsForEntries.mockResolvedValue(
+      new Map([["e-1", { photos: [], tags: [] }]]),
+    );
+
+    await expect(fetchOnThisDayEntries("user-1", new Date())).rejects.toThrow(
+      /e-2/,
+    );
+  });
+
   it("scopes the query to the given user", async () => {
     mockRowsReturned([]);
 
