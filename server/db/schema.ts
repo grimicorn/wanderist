@@ -408,8 +408,19 @@ export const notifications = pgTable(
     body: text("body").notNull(),
     isRead: boolean("is_read").notNull().default(false),
     createdAt: timestamp("created_at").defaultNow().notNull(),
+    // The user whose action triggered this notification (e.g. the follower for
+    // a new_follower notification). Nullable so pre-existing rows (created
+    // before this column existed) still render. SET NULL on delete rather than
+    // CASCADE — the actor's account going away should not delete the
+    // recipient's notification, just fall back to a generic rendering.
+    actorId: text("actor_id").references(() => users.id, {
+      onDelete: ON_DELETE.SET_NULL,
+    }),
   },
-  (table) => [index("notifications_user_id_idx").on(table.userId)],
+  (table) => [
+    index("notifications_user_id_idx").on(table.userId),
+    index("notifications_actor_id_idx").on(table.actorId),
+  ],
 );
 
 // ---------------------------------------------------------------------------
