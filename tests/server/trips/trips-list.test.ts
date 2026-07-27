@@ -266,6 +266,28 @@ describe("GET /api/trips", () => {
     expect(mockOffset).toHaveBeenCalledWith((999 - 1) * 20);
   });
 
+  it("falls back to page 1 for a page beyond the MAX_PAGE bound", async () => {
+    mockGetQuery.mockReturnValue({ page: "1001" });
+
+    const result = (await (handler as (event: object) => unknown)(
+      buildEvent(),
+    )) as { page: number };
+
+    expect(result.page).toBe(1);
+    expect(mockOffset).toHaveBeenCalledWith(0);
+  });
+
+  it("falls back to page 1 for a non-safe-integer page param (e.g. 1e300)", async () => {
+    mockGetQuery.mockReturnValue({ page: "1e300" });
+
+    const result = (await (handler as (event: object) => unknown)(
+      buildEvent(),
+    )) as { page: number };
+
+    expect(result.page).toBe(1);
+    expect(mockOffset).toHaveBeenCalledWith(0);
+  });
+
   it("falls back to page 1 for a non-numeric page param", async () => {
     mockGetQuery.mockReturnValue({ page: "not-a-number" });
 

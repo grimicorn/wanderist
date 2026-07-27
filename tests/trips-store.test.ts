@@ -195,6 +195,32 @@ describe("useTripsStore", () => {
       expect(store.tripList).toEqual([]);
     });
 
+    it("preserves the previous tripList and surfaces the error when a page fails mid-walk", async () => {
+      mockApiFetch.mockResolvedValueOnce({
+        trips: [SAMPLE_TRIP],
+        page: 1,
+        hasMore: false,
+      });
+      const store = useTripsStore();
+      await store.fetchTrips();
+      expect(store.tripList).toEqual([SAMPLE_TRIP]);
+
+      const pageOne = Array.from({ length: 20 }, (_, index) => ({
+        ...SAMPLE_TRIP,
+        id: `trip-${index}`,
+      }));
+      mockApiFetch
+        .mockResolvedValueOnce({ trips: pageOne, page: 1, hasMore: true })
+        .mockRejectedValueOnce(new Error("Network error on page 2"));
+
+      await expect(store.fetchTrips()).rejects.toThrow(
+        "Network error on page 2",
+      );
+
+      expect(store.listError).toBe("Network error on page 2");
+      expect(store.tripList).toEqual([SAMPLE_TRIP]);
+    });
+
     it("sets isLoadingList to true during the request and false after", async () => {
       let resolveLoad!: (value: {
         trips: Trip[];
