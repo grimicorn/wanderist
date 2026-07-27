@@ -1,0 +1,263 @@
+<template>
+  <div class="content content--wide">
+    <div class="guides-head">
+      <div>
+        <div class="label">// {{ guidesStore.guides.length }} guides</div>
+        <h1>Your guides</h1>
+        <p>Write up a route, a city, or a trick you always tell people.</p>
+      </div>
+      <button class="btn btn--outline" @click="openNewGuideForm">
+        <AppIcon name="layers" :size="15" />
+        new guide
+      </button>
+    </div>
+
+    <!-- New guide form -->
+    <GuideForm
+      v-if="showNewGuideForm"
+      title="New guide"
+      submit-label="publish guide"
+      :pending="isSavingGuide"
+      :error="formError"
+      @submit="handleCreateGuide"
+      @cancel="closeNewGuideForm"
+    />
+
+    <!-- List load error -->
+    <div v-if="guidesStore.error" class="alert alert--error" role="alert">
+      {{ guidesStore.error }}
+    </div>
+
+    <!-- Delete error (create/edit errors render inside GuideForm itself) -->
+    <div v-if="deleteError" class="alert alert--error" role="alert">
+      {{ deleteError }}
+    </div>
+
+    <!-- Guides list -->
+    <div v-if="guidesStore.guides.length" class="guide-list">
+      <div v-for="guide in guidesStore.guides" :key="guide.id" class="gcard">
+        <GuideForm
+          v-if="editingGuideId === guide.id"
+          title="Edit guide"
+          submit-label="save changes"
+          :initial-guide="guide"
+          :pending="isSavingGuide"
+          :error="formError"
+          @submit="(input) => handleUpdateGuide(guide.id, input)"
+          @cancel="cancelEditGuide"
+        />
+        <template v-else>
+          <div class="gcard__body">
+            <div class="gcard__name">{{ guide.title }}</div>
+            <div class="gcard__meta">
+              <span class="m">
+                <AppIcon name="clock" :size="12" />
+                {{ guide.readTimeMinutes }} min read
+              </span>
+              <span class="m">
+                <AppIcon name="heart" :size="12" />
+                {{ guide.likeCount }}
+              </span>
+              <span class="tag" :class="visibilityTagClass(guide.visibility)">
+                {{ guide.visibility }}
+              </span>
+            </div>
+          </div>
+          <div class="gcard__acts">
+            <button
+              class="btn btn--outline btn--sm"
+              @click="startEditGuide(guide)"
+            >
+              edit
+            </button>
+            <button
+              class="btn btn--outline btn--sm"
+              :disabled="deletingGuideId === guide.id"
+              @click="handleDeleteGuide(guide)"
+            >
+              {{ deletingGuideId === guide.id ? "deleting…" : "delete" }}
+            </button>
+          </div>
+        </template>
+      </div>
+    </div>
+    <div v-else-if="!guidesStore.isLoading" class="empty-note">
+      No guides yet — write your first one above.
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, onMounted } from "vue";
+import { useGuidesStore } from "~/stores/guides";
+import type {
+  Guide,
+  GuideVisibility,
+  CreateGuideInput,
+  UpdateGuideInput,
+} from "~/stores/guides";
+import GuideForm from "~/components/GuideForm.vue";
+
+definePageMeta({ layout: "app", middleware: "auth" });
+useHead({ title: "Wanderist — Guides" });
+
+const guidesStore = useGuidesStore();
+
+const showNewGuideForm = ref(false);
+const editingGuideId = ref<string | null>(null);
+const isSavingGuide = ref(false);
+const deletingGuideId = ref<string | null>(null);
+const formError = ref<string | null>(null);
+const deleteError = ref<string | null>(null);
+
+function openNewGuideForm(): void {
+  editingGuideId.value = null;
+  formError.value = null;
+  showNewGuideForm.value = true;
+}
+
+function closeNewGuideForm(): void {
+  showNewGuideForm.value = false;
+  formError.value = null;
+}
+
+function startEditGuide(guide: Guide): void {
+  showNewGuideForm.value = false;
+  formError.value = null;
+  editingGuideId.value = guide.id;
+}
+
+function cancelEditGuide(): void {
+  editingGuideId.value = null;
+  formError.value = null;
+}
+
+async function handleCreateGuide(input: CreateGuideInput): Promise<void> {
+  isSavingGuide.value = true;
+  formError.value = null;
+
+  try {
+    await guidesStore.createGuide(input);
+    closeNewGuideForm();
+  } catch (error) {
+    formError.value =
+      error instanceof Error ? error.message : "Failed to create guide";
+  } finally {
+    isSavingGuide.value = false;
+  }
+}
+
+async function handleUpdateGuide(
+  guideId: string,
+  input: UpdateGuideInput,
+): Promise<void> {
+  isSavingGuide.value = true;
+  formError.value = null;
+
+  try {
+    await guidesStore.updateGuide(guideId, input);
+    cancelEditGuide();
+  } catch (error) {
+    formError.value =
+      error instanceof Error ? error.message : "Failed to update guide";
+  } finally {
+    isSavingGuide.value = false;
+  }
+}
+
+async function handleDeleteGuide(guide: Guide): Promise<void> {
+  deletingGuideId.value = guide.id;
+  deleteError.value = null;
+
+  try {
+    await guidesStore.deleteGuide(guide.id);
+  } catch (error) {
+    deleteError.value =
+      error instanceof Error ? error.message : "Failed to delete guide";
+  } finally {
+    deletingGuideId.value = null;
+  }
+}
+
+function visibilityTagClass(visibility: GuideVisibility): string {
+  return visibility === "public" ? "tag--ongoing" : "tag--past";
+}
+
+onMounted(() => {
+  guidesStore.fetchGuides().catch((error) => {
+    console.error("[guides] failed to load guides on mount", error);
+  });
+});
+</script>
+
+<style scoped>
+.guides-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 22px;
+  flex-wrap: wrap;
+}
+.guides-head h1 {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-top: 10px;
+}
+.guides-head p {
+  margin: 6px 0 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.guide-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.gcard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.gcard__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.gcard__name {
+  font-family: var(--font-display);
+  font-size: 14.5px;
+  font-weight: 600;
+}
+.gcard__meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--faint);
+  margin-top: 6px;
+}
+.gcard__meta .m {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.gcard__acts {
+  display: flex;
+  gap: 8px;
+  flex: none;
+}
+
+.empty-note {
+  font-size: 12.5px;
+  color: var(--faint);
+  padding: 12px 0;
+}
+</style>

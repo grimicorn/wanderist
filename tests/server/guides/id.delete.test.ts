@@ -1,0 +1,108 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { stubNitroGlobals } from "../test-utils";
+
+stubNitroGlobals();
+
+vi.mock("../../../server/utils/db-helpers", () => ({
+  requireRouterParam: vi.fn(),
+  assertOwnership: vi.fn(),
+}));
+
+vi.mock("../../../server/db/index", () => ({
+  getDb: vi.fn(),
+}));
+
+vi.mock("drizzle-orm", async (importOriginal) => {
+  const original = await importOriginal<typeof import("drizzle-orm")>();
+  return { ...original, eq: vi.fn(original.eq) };
+});
+
+import {
+  requireRouterParam,
+  assertOwnership,
+} from "../../../server/utils/db-helpers";
+import { getDb } from "../../../server/db/index";
+
+const mockRequireRouterParam = vi.mocked(requireRouterParam);
+const mockAssertOwnership = vi.mocked(assertOwnership);
+const mockGetDb = vi.mocked(getDb);
+
+function makeDbForDelete() {
+  const whereMock = vi.fn().mockResolvedValue(undefined);
+  const deleteMock = vi.fn().mockReturnValue({ where: whereMock });
+  return { delete: deleteMock };
+}
+
+const handler = await import("../../../server/api/guides/[id].delete");
+
+describe("DELETE /api/guides/:id", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("deletes the guide and returns success", async () => {
+    mockRequireRouterParam.mockReturnValue("guide-1");
+    mockAssertOwnership.mockResolvedValue(undefined);
+    const mockDb = makeDbForDelete();
+    mockGetDb.mockReturnValue(mockDb as unknown as ReturnType<typeof getDb>);
+
+    const result = await (
+      handler.default as (event: unknown) => Promise<unknown>
+    )({});
+
+    expect(result).toEqual({ success: true });
+    expect(mockDb.delete).toHaveBeenCalledTimes(1);
+  });
+
+  it("throws 400 when id param is missing", async () => {
+    const missingError = createError({
+      statusCode: 400,
+      statusMessage: "id is required",
+    });
+    mockRequireRouterParam.mockImplementation(() => {
+      throw missingError;
+    });
+
+    await expect(
+      (handler.default as (event: unknown) => Promise<unknown>)({}),
+    ).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  it("a user cannot delete another user's guide — 404 from assertOwnership propagates", async () => {
+    mockRequireRouterParam.mockReturnValue("guide-1");
+    const notFoundError = createError({
+      statusCode: 404,
+      statusMessage: "Not found",
+    });
+    mockAssertOwnership.mockRejectedValue(notFoundError);
+
+    await expect(
+      (handler.default as (event: unknown) => Promise<unknown>)({}),
+    ).rejects.toMatchObject({ statusCode: 404 });
+  });
+
+  it("throws 401 when not authenticated", async () => {
+    mockRequireRouterParam.mockReturnValue("guide-1");
+    const unauthorizedError = createError({
+      statusCode: 401,
+      statusMessage: "Unauthorized",
+    });
+    mockAssertOwnership.mockRejectedValue(unauthorizedError);
+
+    await expect(
+      (handler.default as (event: unknown) => Promise<unknown>)({}),
+    ).rejects.toMatchObject({ statusCode: 401 });
+  });
+
+  it("calls assertOwnership before deleting", async () => {
+    mockRequireRouterParam.mockReturnValue("guide-1");
+    mockAssertOwnership.mockResolvedValue(undefined);
+    const mockDb = makeDbForDelete();
+    mockGetDb.mockReturnValue(mockDb as unknown as ReturnType<typeof getDb>);
+
+    await (handler.default as (event: unknown) => Promise<unknown>)({});
+
+    expect(mockAssertOwnership).toHaveBeenCalledTimes(1);
+    expect(mockDb.delete).toHaveBeenCalledTimes(1);
+  });
+});
