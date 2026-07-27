@@ -150,6 +150,13 @@ export const useTripsStore = defineStore("trips", () => {
       const result = await apiFetch<FetchTripsResult>(
         buildTripsQuery(filters, page),
       );
+
+      if (!Array.isArray(result?.trips)) {
+        throw new Error(
+          "Malformed /api/trips response: expected a trips array",
+        );
+      }
+
       allTrips.push(...result.trips);
       hasMore = result.hasMore;
       page += 1;

@@ -71,7 +71,10 @@ const SAMPLE_DETAIL: TripDetail = {
 describe("useTripsStore", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
-    vi.clearAllMocks();
+    // resetAllMocks (not clearAllMocks) so a mockImplementation left behind by
+    // one test (e.g. the "hasMore never turns false" case below) can't leak
+    // into the next test — only call history is cleared otherwise.
+    vi.resetAllMocks();
   });
 
   // ---------------------------------------------------------------------------
@@ -179,6 +182,28 @@ describe("useTripsStore", () => {
       expect(mockApiFetch).toHaveBeenCalledTimes(1);
     });
 
+    it("makes one extra (empty) request when the trip count is an exact multiple of PAGE_SIZE", async () => {
+      // The server's hasMore heuristic (rows.length === PAGE_SIZE) can't tell
+      // "exactly a full page" from "more rows exist" — an accepted tradeoff
+      // shared with the places store's identical pattern. This pins down
+      // that the walk still terminates correctly, just with one wasted round
+      // trip, rather than looping or losing data.
+      const fullPage = Array.from({ length: 20 }, (_, index) => ({
+        ...SAMPLE_TRIP,
+        id: `trip-${index}`,
+      }));
+
+      mockApiFetch
+        .mockResolvedValueOnce({ trips: fullPage, page: 1, hasMore: true })
+        .mockResolvedValueOnce({ trips: [], page: 2, hasMore: false });
+
+      const store = useTripsStore();
+      await store.fetchTrips();
+
+      expect(store.tripList).toEqual(fullPage);
+      expect(mockApiFetch).toHaveBeenCalledTimes(2);
+    });
+
     it("fails loud instead of returning a truncated list when hasMore never turns false", async () => {
       // A misbehaving API that always reports more pages must not be allowed
       // to hand the UI a partial "all trips" list dressed up as complete.
@@ -193,6 +218,19 @@ describe("useTripsStore", () => {
       await expect(store.fetchTrips()).rejects.toThrow(/exceeded .* pages/);
       expect(store.listError).toMatch(/exceeded .* pages/);
       expect(store.tripList).toEqual([]);
+      // Pins the cap itself (MAX_TRIPS_PAGES in app/stores/trips.ts) so a
+      // regression that gives up early, or loops forever, would fail here
+      // rather than only matching on the error message.
+      expect(mockApiFetch).toHaveBeenCalledTimes(500);
+    });
+
+    it("fails loud when a page response is malformed (missing trips array)", async () => {
+      mockApiFetch.mockResolvedValueOnce({ page: 1, hasMore: false });
+
+      const store = useTripsStore();
+
+      await expect(store.fetchTrips()).rejects.toThrow(/Malformed/);
+      expect(store.listError).toMatch(/Malformed/);
     });
 
     it("preserves the previous tripList and surfaces the error when a page fails mid-walk", async () => {
