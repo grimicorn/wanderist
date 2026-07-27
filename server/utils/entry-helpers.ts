@@ -131,21 +131,57 @@ async function fetchTagsForEntries(
 /**
  * Fetches photos and tags for a single entry by ID. Returns them in the shape
  * expected by the Entry type in the store so every endpoint returns a
- * consistent enriched response.
+ * consistent enriched response. Delegates to `loadRelationsForEntries` so the
+ * two never drift on how a tag row is reshaped into `{ id, name }`.
  */
 export async function loadEntryRelations(
   database: ReturnType<typeof getDb>,
   entryId: string,
 ): Promise<EntryRelations> {
+  const relationsByEntryId = await loadRelationsForEntries(database, [entryId]);
+  const relations = relationsByEntryId.get(entryId);
+  if (!relations) {
+    throw new Error(
+      `loadRelationsForEntries did not return relations for entry ${entryId}`,
+    );
+  }
+  return relations;
+}
+
+/**
+ * Fetches photos and tags for many entries at once, in 2 batched queries
+ * regardless of how many entries are requested (instead of 2 queries per
+ * entry). Every requested `entryId` is present in the returned map, even
+ * when it has no photos or tags, so callers never need to fall back to a
+ * default.
+ */
+export async function loadRelationsForEntries(
+  database: ReturnType<typeof getDb>,
+  entryIds: string[],
+): Promise<Map<string, EntryRelations>> {
+  const relationsByEntryId = new Map<string, EntryRelations>(
+    entryIds.map((entryId) => [entryId, { photos: [], tags: [] }]),
+  );
+
+  if (entryIds.length === 0) {
+    return relationsByEntryId;
+  }
+
   const [photos, tagRows] = await Promise.all([
-    fetchPhotosForEntries(database, [entryId]),
-    fetchTagsForEntries(database, [entryId]),
+    fetchPhotosForEntries(database, entryIds),
+    fetchTagsForEntries(database, entryIds),
   ]);
 
-  return {
-    photos,
-    tags: tagRows.map((row) => ({ id: row.tagId, name: row.tagName })),
-  };
+  for (const photo of photos) {
+    relationsByEntryId.get(photo.entryId)?.photos.push(photo);
+  }
+  for (const tagRow of tagRows) {
+    relationsByEntryId
+      .get(tagRow.entryId)
+      ?.tags.push({ id: tagRow.tagId, name: tagRow.tagName });
+  }
+
+  return relationsByEntryId;
 }
 
 export type EntryRow = typeof entries.$inferSelect;
