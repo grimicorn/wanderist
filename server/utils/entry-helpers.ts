@@ -10,7 +10,7 @@ import {
 
 export type EntryVisibility = (typeof VISIBILITY)[keyof typeof VISIBILITY];
 export type PhotoRow = typeof entryPhotos.$inferSelect;
-export type TagRow = { entryId: string; tagId: string; tagName: string };
+type TagRow = { entryId: string; tagId: string; tagName: string };
 
 export const VALID_VISIBILITY = Object.values(VISIBILITY) as EntryVisibility[];
 
@@ -100,7 +100,7 @@ export interface EntryRelations {
   tags: { id: string; name: string }[];
 }
 
-export async function fetchPhotosForEntries(
+async function fetchPhotosForEntries(
   database: ReturnType<typeof getDb>,
   entryIds: string[],
 ): Promise<PhotoRow[]> {
@@ -114,7 +114,7 @@ export async function fetchPhotosForEntries(
     .orderBy(asc(entryPhotos.sortOrder));
 }
 
-export async function fetchTagsForEntries(
+async function fetchTagsForEntries(
   database: ReturnType<typeof getDb>,
   entryIds: string[],
 ): Promise<TagRow[]> {

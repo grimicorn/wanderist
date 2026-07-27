@@ -1,15 +1,29 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { stubNitroGlobals } from "../test-utils";
+import { inArray } from "drizzle-orm";
+import { entryPhotos, entryTags } from "../../../server/db/schema";
 import { loadRelationsForEntries } from "../../../server/utils/entry-helpers";
 import type { getDb } from "../../../server/db/index";
 
 stubNitroGlobals();
 
+vi.mock("drizzle-orm", async (importOriginal) => {
+  const original = await importOriginal<typeof import("drizzle-orm")>();
+  return {
+    ...original,
+    inArray: vi.fn(original.inArray),
+  };
+});
+
+const mockInArray = vi.mocked(inArray);
+
 /**
- * Builds a fake database whose `select()` returns the photo query chain on
- * its first call and the tag query chain on its second call, matching the
- * order `loadRelationsForEntries` invokes `fetchPhotosForEntries` and
- * `fetchTagsForEntries` in.
+ * Builds a fake database whose `select()` returns the photo query chain when
+ * called with no projection (as `fetchPhotosForEntries` calls it) and the
+ * tag query chain when called with a projection object (as
+ * `fetchTagsForEntries` calls it). Dispatching on call shape, rather than
+ * call order, keeps this fake correct even if the two batched fetches were
+ * reordered inside `Promise.all`.
  */
 function createFakeDatabase(photoRows: unknown[], tagRows: unknown[]) {
   const photoChain = {
@@ -28,13 +42,30 @@ function createFakeDatabase(photoRows: unknown[], tagRows: unknown[]) {
   };
   const select = vi
     .fn()
-    .mockReturnValueOnce(photoChain)
-    .mockReturnValueOnce(tagChain);
+    .mockImplementation((projection?: unknown) =>
+      projection ? tagChain : photoChain,
+    );
 
   return { select } as unknown as ReturnType<typeof getDb>;
 }
 
 describe("loadRelationsForEntries", () => {
+  beforeEach(() => {
+    mockInArray.mockClear();
+  });
+
+  it("scopes both batched queries to the requested entryIds", async () => {
+    const database = createFakeDatabase([], []);
+
+    await loadRelationsForEntries(database, ["e-1", "e-2"]);
+
+    expect(mockInArray).toHaveBeenCalledWith(entryPhotos.entryId, [
+      "e-1",
+      "e-2",
+    ]);
+    expect(mockInArray).toHaveBeenCalledWith(entryTags.entryId, ["e-1", "e-2"]);
+  });
+
   it("returns an empty map and issues no queries when entryIds is empty", async () => {
     const database = createFakeDatabase([], []);
 

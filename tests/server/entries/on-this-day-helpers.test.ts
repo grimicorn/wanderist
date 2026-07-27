@@ -81,7 +81,7 @@ describe("fetchOnThisDayEntries", () => {
     const fromMock = vi.fn().mockReturnValue({ where: whereMock });
     const mockDb = { select: vi.fn().mockReturnValue({ from: fromMock }) };
     mockGetDb.mockReturnValue(mockDb as unknown as ReturnType<typeof getDb>);
-    return { mockDb, whereMock };
+    return { mockDb };
   }
 
   it("returns an empty array when the database returns no rows", async () => {

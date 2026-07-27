@@ -61,8 +61,13 @@ export async function fetchOnThisDayEntries(
   const entryIds = rows.map((row) => row.id);
   const relationsByEntryId = await loadRelationsForEntries(database, entryIds);
 
-  return rows.map((row) => ({
-    ...row,
-    ...relationsByEntryId.get(row.id)!,
-  }));
+  return rows.map((row) => {
+    const relations = relationsByEntryId.get(row.id);
+    if (!relations) {
+      throw new Error(
+        `loadRelationsForEntries did not return relations for entry ${row.id}`,
+      );
+    }
+    return { ...row, ...relations };
+  });
 }
