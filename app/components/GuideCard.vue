@@ -1,0 +1,124 @@
+<template>
+  <div class="gcard">
+    <div class="gcard__body">
+      <div class="gcard__name">{{ guide.title }}</div>
+      <div class="gcard__meta">
+        <span class="m">
+          <AppIcon name="clock" :size="12" />
+          {{ guide.readTimeMinutes }} min read
+        </span>
+        <span class="m">
+          <AppIcon name="heart" :size="12" />
+          {{ guide.likeCount }}
+        </span>
+        <span class="tag" :class="visibilityTagClass">
+          {{ guide.visibility }}
+        </span>
+      </div>
+    </div>
+    <div class="gcard__acts">
+      <template v-if="confirmingDelete">
+        <button
+          class="btn btn--sm gcard__delete-confirm"
+          :disabled="deleting"
+          @click="emit('delete', guide)"
+        >
+          {{ deleting ? "deleting…" : "confirm delete" }}
+        </button>
+        <button
+          class="btn btn--outline btn--sm"
+          :disabled="deleting"
+          @click="confirmingDelete = false"
+        >
+          cancel
+        </button>
+      </template>
+      <template v-else>
+        <button class="btn btn--outline btn--sm" @click="emit('edit', guide)">
+          edit
+        </button>
+        <button
+          class="btn btn--outline btn--sm"
+          @click="confirmingDelete = true"
+        >
+          delete
+        </button>
+      </template>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { computed, ref } from "vue";
+import type { Guide } from "~/stores/guides";
+
+const VISIBILITY_TAG_CLASS: Record<Guide["visibility"], string> = {
+  public: "tag--ongoing",
+  private: "tag--past",
+};
+
+const props = defineProps<{
+  guide: Guide;
+  deleting?: boolean;
+}>();
+
+const emit = defineEmits<{
+  edit: [guide: Guide];
+  delete: [guide: Guide];
+}>();
+
+// Stays true across a failed delete so a retry is one click away — the
+// page-level error banner (see guides/index.vue) explains the failure.
+const confirmingDelete = ref(false);
+const visibilityTagClass = computed(
+  () => VISIBILITY_TAG_CLASS[props.guide.visibility],
+);
+</script>
+
+<style scoped>
+.gcard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.gcard__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.gcard__name {
+  font-family: var(--font-display);
+  font-size: 14.5px;
+  font-weight: 600;
+}
+.gcard__meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--faint);
+  margin-top: 6px;
+}
+.gcard__meta .m {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.gcard__acts {
+  display: flex;
+  gap: 8px;
+  flex: none;
+}
+/* Matches the destructive-action styling in app/pages/settings.vue's danger
+   zone (delete account); no shared `.btn--danger` class exists yet in the
+   design system to reuse instead of repeating the two literal colors. */
+.gcard__delete-confirm {
+  background: var(--error);
+  color: #fff;
+}
+</style>
