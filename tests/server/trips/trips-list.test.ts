@@ -234,6 +234,9 @@ describe("GET /api/trips", () => {
     expect(result.trips).toHaveLength(20);
     expect(result.page).toBe(1);
     expect(result.hasMore).toBe(true);
+    // Pins the actual bound sent to the DB, not just the mock's own fixture
+    // length — this is the guarantee the test name promises.
+    expect(mockLimit).toHaveBeenCalledWith(20);
   });
 
   it("returns the correct slice on a later page", async () => {
@@ -286,6 +289,27 @@ describe("GET /api/trips", () => {
 
     expect(result.page).toBe(1000);
     expect(mockOffset).toHaveBeenCalledWith((1000 - 1) * 20);
+  });
+
+  it("reports hasMore: false at MAX_PAGE even with a full page, since there is no page 1001 to serve", async () => {
+    mockGetQuery.mockReturnValue({ page: "1000" });
+    const fullPage = Array.from({ length: 20 }, (_, index) => ({
+      id: `t-${index}`,
+      userId: "user-1",
+      name: `Trip ${index}`,
+    }));
+    setRows(fullPage);
+
+    const result = (await (handler as (event: object) => unknown)(
+      buildEvent(),
+    )) as { hasMore: boolean };
+
+    // A page-1001 request would clamp back to page 1 (see the "falls back"
+    // test above), so advertising hasMore: true here would send a walker
+    // into a request it can never resolve. Capping hasMore at the boundary
+    // keeps the contract honest regardless of what any given client does
+    // with it.
+    expect(result.hasMore).toBe(false);
   });
 
   it("falls back to page 1 when the page param arrives as an array (repeated query key)", async () => {

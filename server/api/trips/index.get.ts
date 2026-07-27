@@ -117,5 +117,9 @@ export default defineEventHandler(async (event) => {
 
   const rows = await fetchTripsPage(database, filters, sortOrder, page);
 
-  return { trips: rows, page, hasMore: rows.length === PAGE_SIZE };
+  return {
+    trips: rows,
+    page,
+    hasMore: rows.length === PAGE_SIZE && page < MAX_PAGE,
+  };
 });

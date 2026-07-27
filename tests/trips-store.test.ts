@@ -218,6 +218,7 @@ describe("useTripsStore", () => {
       await expect(store.fetchTrips()).rejects.toThrow(/exceeded .* pages/);
       expect(store.listError).toMatch(/exceeded .* pages/);
       expect(store.tripList).toEqual([]);
+      expect(store.isLoadingList).toBe(false);
       // Pins the cap itself (MAX_TRIPS_PAGES in app/stores/trips.ts) so a
       // regression that gives up early, or loops forever, would fail here
       // rather than only matching on the error message.
@@ -226,6 +227,19 @@ describe("useTripsStore", () => {
 
     it("fails loud when a page response is malformed (missing trips array)", async () => {
       mockApiFetch.mockResolvedValueOnce({ page: 1, hasMore: false });
+
+      const store = useTripsStore();
+
+      await expect(store.fetchTrips()).rejects.toThrow(/Malformed/);
+      expect(store.listError).toMatch(/Malformed/);
+    });
+
+    it("fails loud when a page response is malformed (non-boolean hasMore)", async () => {
+      mockApiFetch.mockResolvedValueOnce({
+        trips: [SAMPLE_TRIP],
+        page: 1,
+        hasMore: undefined,
+      });
 
       const store = useTripsStore();
 
@@ -257,6 +271,7 @@ describe("useTripsStore", () => {
 
       expect(store.listError).toBe("Network error on page 2");
       expect(store.tripList).toEqual([SAMPLE_TRIP]);
+      expect(store.isLoadingList).toBe(false);
     });
 
     it("sets isLoadingList to true during the request and false after", async () => {

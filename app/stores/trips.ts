@@ -151,9 +151,12 @@ export const useTripsStore = defineStore("trips", () => {
         buildTripsQuery(filters, page),
       );
 
-      if (!Array.isArray(result?.trips)) {
+      if (
+        !Array.isArray(result?.trips) ||
+        typeof result?.hasMore !== "boolean"
+      ) {
         throw new Error(
-          "Malformed /api/trips response: expected a trips array",
+          "Malformed /api/trips response: expected { trips: Trip[], hasMore: boolean }",
         );
       }
 
