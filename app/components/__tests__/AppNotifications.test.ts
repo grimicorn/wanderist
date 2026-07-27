@@ -32,6 +32,7 @@ const SAMPLE_NOTIFICATIONS: AppNotification[] = [
     body: "12 geotagged photos from Lisbon are ready to import",
     isRead: false,
     createdAt: new Date(Date.now() - 2 * 3600 * 1000).toISOString(),
+    actor: null,
   },
   {
     id: "n-2",
@@ -40,6 +41,7 @@ const SAMPLE_NOTIFICATIONS: AppNotification[] = [
     body: "elsa_far liked your entry",
     isRead: false,
     createdAt: new Date(Date.now() - 5 * 3600 * 1000).toISOString(),
+    actor: null,
   },
   {
     id: "n-3",
@@ -48,6 +50,11 @@ const SAMPLE_NOTIFICATIONS: AppNotification[] = [
     body: "Someone started following you",
     isRead: true,
     createdAt: new Date(Date.now() - 4 * 86400 * 1000).toISOString(),
+    actor: {
+      id: "user-elsa",
+      displayName: "Elsa Farsdottir",
+      handle: "elsa_far",
+    },
   },
 ];
 
@@ -180,6 +187,33 @@ describe("AppNotifications", () => {
     });
     expect(wrapper.find(".notif__foot").exists()).toBe(true);
     expect(wrapper.find(".notif__foot").text()).toContain("View all activity");
+  });
+
+  it("renders the follower's display name for a new_follower notification with a resolved actor", () => {
+    const wrapper = mount(AppNotifications, {
+      props: { open: true },
+      ...globalConfig,
+    });
+    expect(wrapper.text()).toContain("Elsa Farsdottir started following you");
+  });
+
+  it("falls back to the generic body when a new_follower notification has no actor", () => {
+    notificationsRef.value = [
+      {
+        id: "n-4",
+        type: "new_follower",
+        tone: "accent",
+        body: "Someone started following you",
+        isRead: false,
+        createdAt: new Date().toISOString(),
+        actor: null,
+      },
+    ];
+    const wrapper = mount(AppNotifications, {
+      props: { open: true },
+      ...globalConfig,
+    });
+    expect(wrapper.text()).toContain("Someone started following you");
   });
 
   it("renders tone classes for notifications", () => {

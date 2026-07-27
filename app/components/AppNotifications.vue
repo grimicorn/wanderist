@@ -43,7 +43,9 @@
           />
         </span>
         <div class="notif__body">
-          <p class="notif__title">{{ notification.body }}</p>
+          <p class="notif__title">
+            {{ resolveNotificationText(notification) }}
+          </p>
           <span class="notif__time">{{
             formatNotificationTime(notification.createdAt)
           }}</span>
@@ -64,6 +66,7 @@
 import {
   resolveNotificationIcon,
   formatNotificationTime,
+  resolveNotificationText,
 } from "~/utils/notificationDisplay";
 import type { AppNotification } from "~/composables/useNotifications";
 

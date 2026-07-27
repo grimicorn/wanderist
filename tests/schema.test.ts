@@ -460,6 +460,12 @@ const ON_DELETE_POLICY: ReadonlyArray<{
     expected: ON_DELETE.CASCADE,
   },
   {
+    label: "notifications.actorId",
+    table: notifications,
+    column: "actor_id",
+    expected: ON_DELETE.SET_NULL,
+  },
+  {
     label: "connectedAccounts.userId",
     table: connectedAccounts,
     column: "user_id",

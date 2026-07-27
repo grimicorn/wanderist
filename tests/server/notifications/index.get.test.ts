@@ -30,10 +30,10 @@ describe("GET /api/notifications", () => {
     vi.clearAllMocks();
   });
 
-  it("returns notifications for the authenticated user", async () => {
+  it("returns notifications with the resolved actor for the authenticated user", async () => {
     mockRequireUser.mockReturnValue("user-1");
 
-    const sampleRows = [
+    const rawRows = [
       {
         id: "notif-1",
         type: "new_follower",
@@ -41,18 +41,42 @@ describe("GET /api/notifications", () => {
         body: "Someone started following you",
         isRead: false,
         createdAt: new Date("2024-06-01T10:00:00Z"),
+        actorId: "follower-1",
+        actorDisplayName: "Elsa Farsdottir",
+        actorHandle: "elsa_far",
+        actorDeletedAt: null,
       },
     ];
 
-    const selectChain = makeSelectChain(sampleRows);
+    const selectChain = makeSelectChain(rawRows);
     mockGetDb.mockReturnValue(
       selectChain as unknown as ReturnType<typeof getDb>,
     );
 
     const result = await callHandler();
-    expect(result).toEqual({ notifications: sampleRows });
+    expect(result).toEqual({
+      notifications: [
+        {
+          id: "notif-1",
+          type: "new_follower",
+          tone: "accent",
+          body: "Someone started following you",
+          isRead: false,
+          createdAt: new Date("2024-06-01T10:00:00Z"),
+          actor: {
+            id: "follower-1",
+            displayName: "Elsa Farsdottir",
+            handle: "elsa_far",
+          },
+        },
+      ],
+    });
   });
 
+  // Legacy-row, deleted-actor, and nameless-actor resolution are exercised
+  // thoroughly against fetchNotificationsForUser directly in
+  // notification-helpers.test.ts — this file only needs to prove the
+  // handler delegates to it with the right user and limit.
   it("returns an empty notifications array when the user has none", async () => {
     mockRequireUser.mockReturnValue("user-1");
 

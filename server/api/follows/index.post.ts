@@ -46,7 +46,11 @@ export default defineEventHandler(async (event) => {
       userId: followeeId,
       type: "new_follower",
       tone: "accent",
+      // Generic fallback body — rendered only when the actor can't be
+      // resolved (legacy row, or the follower has since deleted their
+      // account). See notification-helpers.ts fetchNotificationsForUser.
       body: "Someone started following you",
+      actorId: followerId,
     });
   }
 
