@@ -2,7 +2,7 @@ import { and, eq, isNotNull, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { getDb } from "../db/index";
 import { entries } from "../db/schema";
-import { loadEntryRelations } from "./entry-helpers";
+import { loadRelationsForEntries } from "./entry-helpers";
 import type { EntryRelations } from "./entry-helpers";
 
 export type OnThisDayEntry = typeof entries.$inferSelect & EntryRelations;
@@ -36,7 +36,10 @@ export function buildOnThisDayFilter(
  * `referenceDate` but in prior years, scoped to `userId`.
  *
  * Returns entries enriched with photos and tags, ordered by `occurred_at` desc
- * so the most-recent matching year appears first.
+ * so the most-recent matching year appears first. Relations are fetched via
+ * `loadRelationsForEntries`, which issues two batched queries (one for
+ * photos, one for tags) regardless of how many entries match, instead of two
+ * queries per matching entry.
  */
 export async function fetchOnThisDayEntries(
   userId: string,
@@ -51,12 +54,20 @@ export async function fetchOnThisDayEntries(
     .where(and(...filters))
     .orderBy(sql`${entries.occurredAt} DESC`);
 
-  const enriched = await Promise.all(
-    rows.map(async (row) => {
-      const relations = await loadEntryRelations(database, row.id);
-      return { ...row, ...relations };
-    }),
-  );
+  if (rows.length === 0) {
+    return [];
+  }
 
-  return enriched;
+  const entryIds = rows.map((row) => row.id);
+  const relationsByEntryId = await loadRelationsForEntries(database, entryIds);
+
+  return rows.map((row) => {
+    const relations = relationsByEntryId.get(row.id);
+    if (!relations) {
+      throw new Error(
+        `loadRelationsForEntries did not return relations for entry ${row.id}`,
+      );
+    }
+    return { ...row, ...relations };
+  });
 }
