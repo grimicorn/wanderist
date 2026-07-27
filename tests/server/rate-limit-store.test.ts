@@ -7,7 +7,12 @@
  * without fake timers.
  */
 import { describe, it, expect } from "vitest";
-import { RateLimitStore } from "../../server/utils/rateLimitStore";
+import {
+  RateLimitStore,
+  CLEANUP_INTERVAL_MS,
+  MAX_TRACKED_WINDOWS,
+  EVICTION_TARGET_LOAD_FACTOR,
+} from "../../server/utils/rateLimitStore";
 
 const POLICY = { limit: 3, windowMs: 60_000 };
 const WINDOW_START = 1_000_000;
@@ -108,10 +113,8 @@ describe("RateLimitStore", () => {
   // policy's windowMs (mirrors the store's internal CLEANUP_SAFETY_MULTIPLIER,
   // which isn't exported since it's an implementation detail — these tests
   // pick windowMs values that make that horizon land clearly before/after
-  // CLEANUP_INTERVAL_MS below, rather than importing the constant).
+  // the imported CLEANUP_INTERVAL_MS below).
   describe("stale window cleanup", () => {
-    const CLEANUP_INTERVAL_MS = 5 * 60_000;
-
     it("evicts a key only once it has been untouched for 2x its own windowMs", () => {
       // windowMs=250_000 -> stale horizon of 500_000, comfortably straddling
       // two CLEANUP_INTERVAL_MS (300_000) sweeps.
@@ -168,11 +171,9 @@ describe("RateLimitStore", () => {
     });
 
     it("forces a sweep once the tracked-window count hits the cap, even inside the interval gate", () => {
-      // Mirrors the store's internal MAX_TRACKED_WINDOWS (not exported, same
-      // reasoning as CLEANUP_SAFETY_MULTIPLIER above). A tiny windowMs keeps
-      // every one of these keys well past its own stale horizon by the time
-      // the cap-triggering consume happens 30ms later.
-      const MAX_TRACKED_WINDOWS = 10_000;
+      // A tiny windowMs keeps every one of these keys well past its own
+      // stale horizon by the time the cap-triggering consume happens 30ms
+      // later.
       const tinyPolicy = { limit: 3, windowMs: 10 };
       const store = new RateLimitStore();
 
@@ -187,6 +188,54 @@ describe("RateLimitStore", () => {
       // key should remain.
       store.consume("one-more-key", tinyPolicy, WINDOW_START + 30);
       expect(store.windowCount).toBe(1);
+    });
+
+    it("evicts a batch of least-recently-touched windows to stay under the cap when every tracked key is still live", () => {
+      // Long windowMs keeps every key well within its own stale horizon, so
+      // the staleness sweep alone cannot bring the map back under the cap —
+      // only the size-based eviction fallback can. Each key is consumed once,
+      // in order, so map iteration order (insertion order, since nothing is
+      // re-touched) doubles as least-recently-touched-first order.
+      const longPolicy = { limit: 3, windowMs: 250_000 };
+      const store = new RateLimitStore();
+
+      for (let index = 0; index < MAX_TRACKED_WINDOWS; index += 1) {
+        store.consume(`key-${index}`, longPolicy, WINDOW_START + index);
+      }
+      expect(store.windowCount).toBe(MAX_TRACKED_WINDOWS);
+
+      store.consume(
+        "one-more-key",
+        longPolicy,
+        WINDOW_START + MAX_TRACKED_WINDOWS,
+      );
+
+      // Adding one more key while every existing key is still live must not
+      // grow the map past the cap, and eviction must trim a whole batch down
+      // to EVICTION_TARGET_LOAD_FACTOR of the cap (not just one key over) so
+      // this path doesn't recur on every request while a caller keeps
+      // minting distinct keys at the cap.
+      const expectedSizeAfterEviction =
+        Math.floor(MAX_TRACKED_WINDOWS * EVICTION_TARGET_LOAD_FACTOR) + 1;
+      expect(store.windowCount).toBe(expectedSizeAfterEviction);
+      // The very first key (least recently touched) must be among those
+      // evicted: a fresh window (remaining === limit - 1) rather than its
+      // original count being incremented (which would report limit - 2).
+      const oldestKeyWasEvicted =
+        store.consume("key-0", longPolicy, WINDOW_START + MAX_TRACKED_WINDOWS)
+          .remaining ===
+        longPolicy.limit - 1;
+      expect(oldestKeyWasEvicted).toBe(true);
+      // The most recently touched key before the trigger must survive: its
+      // original count increments instead of restarting a fresh window.
+      const newestKeySurvived =
+        store.consume(
+          `key-${MAX_TRACKED_WINDOWS - 1}`,
+          longPolicy,
+          WINDOW_START + MAX_TRACKED_WINDOWS,
+        ).remaining ===
+        longPolicy.limit - 2;
+      expect(newestKeySurvived).toBe(true);
     });
   });
 });

@@ -61,7 +61,7 @@ const REJECTED_RESULT = {
   resetAt: FIXED_NOW + 30_000,
 };
 
-const ORIGINAL_NETLIFY_ENV = process.env.NETLIFY;
+const ORIGINAL_TRUST_NETLIFY_ENV = process.env.TRUST_NETLIFY_CLIENT_IP;
 
 describe("rate limit middleware", () => {
   beforeEach(() => {
@@ -75,15 +75,15 @@ describe("rate limit middleware", () => {
     mockGetHeader.mockReturnValue(undefined);
     // Default to "not on Netlify" so the Netlify-only header path is opt-in
     // per test, matching local/dev/CI where it's genuinely unset.
-    delete process.env.NETLIFY;
+    delete process.env.TRUST_NETLIFY_CLIENT_IP;
   });
 
   afterEach(() => {
     vi.useRealTimers();
-    if (ORIGINAL_NETLIFY_ENV === undefined) {
-      delete process.env.NETLIFY;
+    if (ORIGINAL_TRUST_NETLIFY_ENV === undefined) {
+      delete process.env.TRUST_NETLIFY_CLIENT_IP;
     } else {
-      process.env.NETLIFY = ORIGINAL_NETLIFY_ENV;
+      process.env.TRUST_NETLIFY_CLIENT_IP = ORIGINAL_TRUST_NETLIFY_ENV;
     }
   });
 
@@ -121,6 +121,11 @@ describe("rate limit middleware", () => {
       event,
       "RateLimit-Reset",
       "60",
+    );
+    expect(mockSetResponseHeader).not.toHaveBeenCalledWith(
+      event,
+      "Retry-After",
+      expect.anything(),
     );
   });
 
@@ -164,8 +169,19 @@ describe("rate limit middleware", () => {
     });
   });
 
+  it("normalizes a HEAD request to the GET policy, since h3 runs the GET handler for it", () => {
+    const event = buildEvent("/api/search", "HEAD", "user-1");
+
+    rateLimitMiddleware(event as never);
+
+    expect(mockConsume).toHaveBeenCalledWith("GET /api/search:user:user-1", {
+      limit: 60,
+      windowMs: 60_000,
+    });
+  });
+
   it("prefers Netlify's client-IP header over getRequestIP when actually running on Netlify", () => {
-    process.env.NETLIFY = "true";
+    process.env.TRUST_NETLIFY_CLIENT_IP = "true";
     mockGetHeader.mockReturnValue("198.51.100.9");
     mockGetRequestIP.mockReturnValue("10.0.0.1");
     const event = buildEvent("/api/search", "GET", undefined);
@@ -184,7 +200,7 @@ describe("rate limit middleware", () => {
   });
 
   it("ignores the Netlify client-IP header when not running on Netlify, since it isn't trustworthy off-platform", () => {
-    // process.env.NETLIFY is unset by default (see beforeEach).
+    // process.env.TRUST_NETLIFY_CLIENT_IP is unset by default (see beforeEach).
     mockGetHeader.mockReturnValue("198.51.100.9");
     mockGetRequestIP.mockReturnValue("203.0.113.5");
     const event = buildEvent("/api/search", "GET", undefined);
@@ -199,7 +215,7 @@ describe("rate limit middleware", () => {
   });
 
   it("falls back to getRequestIP when running on Netlify but the header is absent", () => {
-    process.env.NETLIFY = "true";
+    process.env.TRUST_NETLIFY_CLIENT_IP = "true";
     mockGetHeader.mockReturnValue(undefined);
     mockGetRequestIP.mockReturnValue("203.0.113.5");
     const event = buildEvent("/api/search", "GET", undefined);
@@ -212,17 +228,26 @@ describe("rate limit middleware", () => {
     });
   });
 
-  it("falls back to a shared anonymous bucket when no IP is resolvable", () => {
+  it("falls back to a shared anonymous bucket when no IP is resolvable, warning only once per process", () => {
+    const consoleWarnSpy = vi
+      .spyOn(console, "warn")
+      .mockImplementation(() => {});
     mockGetHeader.mockReturnValue(undefined);
     mockGetRequestIP.mockReturnValue(undefined);
     const event = buildEvent("/api/search", "GET", undefined);
 
+    rateLimitMiddleware(event as never);
     rateLimitMiddleware(event as never);
 
     expect(mockConsume).toHaveBeenCalledWith("GET /api/search:anonymous", {
       limit: 60,
       windowMs: 60_000,
     });
+    // hasWarnedAboutAnonymousBucket is a module-level flag: this asserts at
+    // most one warning across this whole test file's run, not per call —
+    // exercising it twice here proves the second call didn't add another.
+    expect(consoleWarnSpy.mock.calls.length).toBeLessThanOrEqual(1);
+    consoleWarnSpy.mockRestore();
   });
 
   it("does not limit a policied path under a different HTTP method", () => {
@@ -261,6 +286,18 @@ describe("rate limit middleware", () => {
       event,
       "Retry-After",
       "30",
+    );
+    // Headers are set before the 429 throws, so the limit/remaining info
+    // still reaches the rejected response, not just Retry-After.
+    expect(mockSetResponseHeader).toHaveBeenCalledWith(
+      event,
+      "RateLimit-Limit",
+      "20",
+    );
+    expect(mockSetResponseHeader).toHaveBeenCalledWith(
+      event,
+      "RateLimit-Remaining",
+      "0",
     );
   });
 

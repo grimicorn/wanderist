@@ -30,6 +30,11 @@ const EXPECTED_POLICY_KEYS = [
 // directory-index level — all four shapes are valid places a route could
 // legitimately live.
 function candidateHandlerPaths(method: string, apiPath: string): string[] {
+  if (!apiPath.startsWith(API_PATH_PREFIX)) {
+    throw new Error(
+      `Policy key "${method} ${apiPath}" is outside ${API_PATH_PREFIX}; extend candidateHandlerPaths to cover it.`,
+    );
+  }
   const routeSegment = apiPath.slice(API_PATH_PREFIX.length);
   const methodSuffix = method.toLowerCase();
 

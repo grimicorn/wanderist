@@ -3,41 +3,46 @@ import { RATE_LIMIT_POLICIES } from "../utils/rateLimitPolicies";
 import { RateLimitStore } from "../utils/rateLimitStore";
 import type { RateLimitResult } from "../utils/rateLimitStore";
 
-// This is the composition root: server/utils/rateLimitStore.ts stays a
-// generic, policy-agnostic counter; server/utils/rateLimitPolicies.ts stays
-// pure config; this is the one place that wires a store instance up to run
-// against the policy map.
+// Composition root wiring the generic RateLimitStore up to the policy map.
 const rateLimitStore = new RateLimitStore();
 
-// Netlify's edge sets this header to the caller's true IP and it cannot be
-// overridden by the client, unlike X-Forwarded-For, which an unauthenticated
-// caller can set to an arbitrary value per request to land in a fresh bucket
-// every time and defeat the limit entirely. That's only true when a Netlify
-// edge actually sits in front of the request, though — trusting the header
-// unconditionally would let it be spoofed on any other host (local dev, a
-// container, a future non-Netlify deploy target), so it's gated on Netlify's
-// own runtime flag (set to "true" in every Netlify Functions/Edge context).
+// Netlify's edge sets this to the caller's true IP and it can't be
+// client-overridden, unlike X-Forwarded-For — but only when a Netlify edge
+// actually sits in front of the request, so it's gated on an explicit,
+// app-owned flag rather than trusted unconditionally (spoofable off-platform)
+// or inferred from a generic-looking env var another host/tool could also
+// set. NETLIFY=true is a Netlify *build*-time variable only — it is not
+// injected into the Functions runtime, so it can't be used to detect this at
+// request time either; TRUST_NETLIFY_CLIENT_IP is set explicitly in the
+// Netlify site's environment variables instead (see .env.example).
 const NETLIFY_CLIENT_IP_HEADER = "x-nf-client-connection-ip";
-const isRunningOnNetlify = (): boolean => process.env.NETLIFY === "true";
+const isTrustedNetlifyDeployment = (): boolean =>
+  process.env.TRUST_NETLIFY_CLIENT_IP === "true";
 
-// Runs after server/middleware/auth.ts (Nitro executes server/middleware/*
-// alphabetically, and "auth" sorts before "rateLimit"), so for every policied
-// route below, event.context.userId is already set — auth.ts throws its own
-// 401 first if the bearer token is missing or invalid.
+// Shared bucket for the rare case neither a user nor an IP can be resolved
+// (see resolveIdentifier below). Every policied route currently requires a
+// bearer token (auth.ts throws its own 401 first), so this branch is
+// unreachable today — it exists only to guard a future unauthenticated
+// policy entry. Warns once per process rather than per request so that if it
+// ever becomes reachable, an identity-less caller can't use it to flood logs.
+const ANONYMOUS_IDENTIFIER = "anonymous";
+let hasWarnedAboutAnonymousBucket = false;
+
+// Runs after server/middleware/auth.ts (Nitro runs server/middleware/*
+// alphabetically), so for every policied route below, event.context.userId
+// is already set — auth.ts throws its own 401 first if the token is invalid.
 function resolveRouteKey(event: H3Event): string {
   const pathWithoutQuery = event.path.split("?")[0];
   const pathWithoutTrailingSlash = pathWithoutQuery.replace(/\/+$/, "");
-  return `${event.method} ${pathWithoutTrailingSlash}`;
+  // h3 falls back to a route's GET handler for HEAD requests with no HEAD
+  // handler registered, so HEAD must be normalized to GET to stay metered.
+  const method = event.method === "HEAD" ? "GET" : event.method;
+  return `${method} ${pathWithoutTrailingSlash}`;
 }
 
-/**
- * The caller's IP, preferring Netlify's own client-IP header (not spoofable
- * by the request, but only trusted when Netlify's edge is actually in front
- * of this request) over the raw socket address that `getRequestIP(event)`
- * falls back to locally/in dev.
- */
+/** Prefers Netlify's client-IP header over the raw socket address `getRequestIP` falls back to. */
 function resolveClientIp(event: H3Event): string | null {
-  const netlifyClientIp = isRunningOnNetlify()
+  const netlifyClientIp = isTrustedNetlifyDeployment()
     ? getHeader(event, NETLIFY_CLIENT_IP_HEADER)
     : undefined;
   if (netlifyClientIp) {
@@ -47,13 +52,10 @@ function resolveClientIp(event: H3Event): string | null {
 }
 
 /**
- * Identifies the caller for rate-limit bucketing. All three policied routes
- * require a verified bearer token (see the module comment above), so this
- * resolves to the authenticated user in practice. The IP fallback only
- * exists to guard a future policy entry on an unauthenticated route; if the
- * IP itself is unavailable, every such request shares one "anonymous" bucket
- * rather than going unmetered entirely — logged since it means the limit is
- * no longer per-caller for whichever route hit this path.
+ * Identifies the caller for rate-limit bucketing: the authenticated user in
+ * practice (all three policied routes require a bearer token), falling back
+ * to IP to guard a future unauthenticated policy entry, then to one shared
+ * "anonymous" bucket (logged — it means the limit is no longer per-caller).
  */
 function resolveIdentifier(event: H3Event): string {
   if (event.context.userId) {
@@ -63,10 +65,13 @@ function resolveIdentifier(event: H3Event): string {
   if (clientIp) {
     return `ip:${clientIp}`;
   }
-  console.warn(
-    `rateLimit: no user or IP for ${event.method} ${event.path}; using the shared anonymous bucket`,
-  );
-  return "anonymous";
+  if (!hasWarnedAboutAnonymousBucket) {
+    hasWarnedAboutAnonymousBucket = true;
+    console.warn(
+      `rateLimit: no user or IP for ${event.method} ${event.path}; using the shared anonymous bucket (further occurrences are not logged)`,
+    );
+  }
+  return ANONYMOUS_IDENTIFIER;
 }
 
 function secondsUntil(epochMs: number, now: number): number {
