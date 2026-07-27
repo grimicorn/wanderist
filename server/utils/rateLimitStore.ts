@@ -26,6 +26,15 @@
 // has no relationship to any policy's window length.
 const CLEANUP_INTERVAL_MS = 5 * 60_000;
 
+// A window is evicted once it's been untouched for this many multiples of
+// its OWN policy's windowMs (see WindowState.windowMs below — staleness is
+// per-key, not a single global horizon). Comfortably larger than 1x so a key
+// that goes quiet right at the edge of its window isn't evicted before a
+// caller has a real chance to start a fresh one; has no relationship to any
+// other key's policy, so mixing a 1-minute and a 1-hour policy in the same
+// store can never cause one to evict the other early.
+const CLEANUP_SAFETY_MULTIPLIER = 2;
+
 export interface RateLimitPolicy {
   limit: number;
   windowMs: number;
@@ -42,6 +51,8 @@ export interface RateLimitResult {
 interface WindowState {
   count: number;
   windowStart: number;
+  /** The windowMs this window was opened with, so cleanup can size its own staleness horizon per key. */
+  windowMs: number;
 }
 
 export class RateLimitStore {
@@ -49,22 +60,11 @@ export class RateLimitStore {
   private lastCleanupAt = 0;
 
   /**
-   * @param staleAfterMs A window untouched for this long is evicted during
-   *   the next cleanup sweep. Callers must pass a value comfortably larger
-   *   than the longest `windowMs` among the policies they'll consume with —
-   *   otherwise a long-running window can be evicted (and its count silently
-   *   reset) before it naturally expires. See server/utils/rateLimitPolicies.ts,
-   *   which derives this from the policy map itself so the two can't drift.
-   */
-  constructor(private readonly staleAfterMs: number) {}
-
-  /**
    * Number of distinct keys currently tracked. Exposed for tests to verify
-   * stale-window cleanup directly: once `staleAfterMs >= windowMs` (the
-   * documented, correct configuration), eviction and ordinary window expiry
-   * are behaviorally identical through `consume()`'s return value alone —
-   * this getter is the only way to observe cleanup itself rather than
-   * inferring it.
+   * stale-window cleanup directly: once a window has naturally expired,
+   * eviction and ordinary expiry are behaviorally identical through
+   * `consume()`'s return value alone — this getter is the only way to
+   * observe cleanup itself rather than inferring it.
    */
   get windowCount(): number {
     return this.windows.size;
@@ -104,7 +104,7 @@ export class RateLimitStore {
       !existing || now - existing.windowStart >= policy.windowMs;
 
     if (windowHasExpired) {
-      return { count: 0, windowStart: now };
+      return { count: 0, windowStart: now, windowMs: policy.windowMs };
     }
     return existing;
   }
@@ -117,7 +117,8 @@ export class RateLimitStore {
     this.lastCleanupAt = now;
 
     for (const [key, state] of this.windows) {
-      const isStale = now - state.windowStart >= this.staleAfterMs;
+      const staleAfterMs = CLEANUP_SAFETY_MULTIPLIER * state.windowMs;
+      const isStale = now - state.windowStart >= staleAfterMs;
       if (!isStale) {
         continue;
       }

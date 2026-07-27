@@ -12,13 +12,9 @@ import { RateLimitStore } from "../../server/utils/rateLimitStore";
 const POLICY = { limit: 3, windowMs: 60_000 };
 const WINDOW_START = 1_000_000;
 
-// Comfortably larger than POLICY.windowMs so ordinary window-expiry tests
-// never trip the cleanup sweep by accident.
-const STALE_AFTER_MS = 10 * POLICY.windowMs;
-
 describe("RateLimitStore", () => {
   it("allows requests under the limit", () => {
-    const store = new RateLimitStore(STALE_AFTER_MS);
+    const store = new RateLimitStore();
 
     const first = store.consume("key", POLICY, WINDOW_START);
     const second = store.consume("key", POLICY, WINDOW_START);
@@ -30,7 +26,7 @@ describe("RateLimitStore", () => {
   });
 
   it("rejects the request that exceeds the limit", () => {
-    const store = new RateLimitStore(STALE_AFTER_MS);
+    const store = new RateLimitStore();
 
     store.consume("key", POLICY, WINDOW_START);
     store.consume("key", POLICY, WINDOW_START);
@@ -44,7 +40,7 @@ describe("RateLimitStore", () => {
   });
 
   it("resets the window once windowMs has elapsed", () => {
-    const store = new RateLimitStore(STALE_AFTER_MS);
+    const store = new RateLimitStore();
 
     store.consume("key", POLICY, WINDOW_START);
     store.consume("key", POLICY, WINDOW_START);
@@ -63,7 +59,7 @@ describe("RateLimitStore", () => {
   });
 
   it("isolates counters per key", () => {
-    const store = new RateLimitStore(STALE_AFTER_MS);
+    const store = new RateLimitStore();
 
     store.consume("user-a", POLICY, WINDOW_START);
     store.consume("user-a", POLICY, WINDOW_START);
@@ -78,7 +74,7 @@ describe("RateLimitStore", () => {
   });
 
   it("allows a boundary burst across a window edge — a known, accepted tradeoff of fixed windows", () => {
-    const store = new RateLimitStore(STALE_AFTER_MS);
+    const store = new RateLimitStore();
 
     // First request anchors the window at WINDOW_START. Fill it right up to
     // its last millisecond.
@@ -103,66 +99,70 @@ describe("RateLimitStore", () => {
     expect(firstOfNextWindow.remaining).toBe(POLICY.limit - 1);
   });
 
-  // These use RateLimitStore.windowCount (an internal-state getter meant
-  // for tests) rather than consume()'s return value: once staleAfterMs >=
-  // windowMs (the documented, correct configuration), eviction and ordinary
-  // window expiry look identical through consume() alone, since an expired-
-  // but-not-yet-evicted window and a freshly-evicted one both start over.
-  // windowCount is the only way to observe cleanup itself.
+  // These use RateLimitStore.windowCount (an internal-state getter meant for
+  // tests) rather than consume()'s return value: once a window has expired,
+  // eviction and ordinary expiry look identical through consume() alone —
+  // windowCount is the only way to observe the cleanup sweep itself.
+  //
+  // Staleness is per-key: a window is evicted once untouched for 2x its OWN
+  // policy's windowMs (mirrors the store's internal CLEANUP_SAFETY_MULTIPLIER,
+  // which isn't exported since it's an implementation detail — these tests
+  // pick windowMs values that make that horizon land clearly before/after
+  // CLEANUP_INTERVAL_MS below, rather than importing the constant).
   describe("stale window cleanup", () => {
     const CLEANUP_INTERVAL_MS = 5 * 60_000;
 
-    it("evicts a key only once it has been untouched for staleAfterMs", () => {
-      const staleAfterMs = 500_000;
-      const store = new RateLimitStore(staleAfterMs);
+    it("evicts a key only once it has been untouched for 2x its own windowMs", () => {
+      // windowMs=250_000 -> stale horizon of 500_000, comfortably straddling
+      // two CLEANUP_INTERVAL_MS (300_000) sweeps.
+      const longPolicy = { limit: 3, windowMs: 250_000 };
+      const store = new RateLimitStore();
 
-      store.consume("key-a", POLICY, WINDOW_START);
+      store.consume("key-a", longPolicy, WINDOW_START);
       expect(store.windowCount).toBe(1);
 
       // A sweep runs here (past the cleanup interval), but key-a's age
-      // (CLEANUP_INTERVAL_MS) is still under staleAfterMs, so it survives.
+      // (CLEANUP_INTERVAL_MS = 300_000) is still under its 500_000 stale
+      // horizon, so it survives.
       const firstSweepTime = WINDOW_START + CLEANUP_INTERVAL_MS;
-      store.consume("key-b", POLICY, firstSweepTime);
+      store.consume("key-b", longPolicy, firstSweepTime);
       expect(store.windowCount).toBe(2);
 
-      // Advance past both key-a's stale horizon AND another full cleanup
-      // interval (so the gate has reopened since the last sweep at
+      // Advance past both key-a's stale horizon and another full cleanup
+      // interval (so the gate has reopened since the sweep at
       // firstSweepTime). The next sweep must drop key-a specifically: if it
       // didn't, adding key-c would bring the count to 3 instead of 2.
-      const afterStaleHorizon =
-        Math.max(
-          WINDOW_START + staleAfterMs,
-          firstSweepTime + CLEANUP_INTERVAL_MS,
-        ) + 1;
-      store.consume("key-c", POLICY, afterStaleHorizon);
+      const secondSweepTime = firstSweepTime + CLEANUP_INTERVAL_MS;
+      store.consume("key-c", longPolicy, secondSweepTime);
       expect(store.windowCount).toBe(2);
     });
 
     it("does not sweep more than once per cleanup interval", () => {
-      const staleAfterMs = 100;
-      const store = new RateLimitStore(staleAfterMs);
+      // windowMs=50 -> stale horizon of 100, trivially small so key-a is
+      // already stale by the second consume below if a sweep were to run.
+      const shortPolicy = { limit: 3, windowMs: 50 };
+      const store = new RateLimitStore();
 
-      store.consume("key-a", POLICY, WINDOW_START);
+      store.consume("key-a", shortPolicy, WINDOW_START);
 
-      // key-a is already older than staleAfterMs here, so if a sweep ran it
-      // would be evicted — but this is well inside one cleanup interval of
-      // the first consume, so the sweep must be skipped and key-a must
-      // survive alongside the new key.
-      store.consume("key-b", POLICY, WINDOW_START + 200);
+      // Well inside one cleanup interval of the first consume, so the sweep
+      // must be skipped and key-a must survive alongside the new key.
+      store.consume("key-b", shortPolicy, WINDOW_START + 200);
 
       expect(store.windowCount).toBe(2);
     });
 
-    it("keeps a key touched within the stale horizon across a sweep", () => {
-      const staleAfterMs = 500_000;
-      const store = new RateLimitStore(staleAfterMs);
+    it("keeps a key touched within its stale horizon across a sweep", () => {
+      const longPolicy = { limit: 3, windowMs: 250_000 };
+      const store = new RateLimitStore();
 
-      store.consume("live-key", POLICY, WINDOW_START);
+      store.consume("live-key", longPolicy, WINDOW_START);
 
       // Trigger a sweep well after the cleanup interval but before
-      // "live-key" (touched at WINDOW_START) crosses the stale horizon.
+      // "live-key" (touched at WINDOW_START) crosses its 500_000 stale
+      // horizon.
       const sweepTime = WINDOW_START + CLEANUP_INTERVAL_MS;
-      store.consume("other-key", POLICY, sweepTime);
+      store.consume("other-key", longPolicy, sweepTime);
 
       expect(store.windowCount).toBe(2);
     });

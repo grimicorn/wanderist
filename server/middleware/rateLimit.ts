@@ -1,16 +1,13 @@
 import type { H3Event } from "h3";
-import {
-  RATE_LIMIT_POLICIES,
-  RATE_LIMIT_CLEANUP_STALE_AFTER_MS,
-} from "../utils/rateLimitPolicies";
+import { RATE_LIMIT_POLICIES } from "../utils/rateLimitPolicies";
 import { RateLimitStore } from "../utils/rateLimitStore";
 import type { RateLimitResult } from "../utils/rateLimitStore";
 
 // This is the composition root: server/utils/rateLimitStore.ts stays a
 // generic, policy-agnostic counter; server/utils/rateLimitPolicies.ts stays
-// pure config; this is the one place that wires a store instance to the
-// policy map, sized by the policies' own longest window.
-const rateLimitStore = new RateLimitStore(RATE_LIMIT_CLEANUP_STALE_AFTER_MS);
+// pure config; this is the one place that wires a store instance up to run
+// against the policy map.
+const rateLimitStore = new RateLimitStore();
 
 // Netlify's edge sets this header to the caller's true IP and it cannot be
 // overridden by the client, unlike X-Forwarded-For, which an unauthenticated
@@ -39,7 +36,7 @@ function resolveClientIp(event: H3Event): string | null {
   if (netlifyClientIp) {
     return netlifyClientIp;
   }
-  return getRequestIP(event);
+  return getRequestIP(event) ?? null;
 }
 
 /**
@@ -48,14 +45,21 @@ function resolveClientIp(event: H3Event): string | null {
  * resolves to the authenticated user in practice. The IP fallback only
  * exists to guard a future policy entry on an unauthenticated route; if the
  * IP itself is unavailable, every such request shares one "anonymous" bucket
- * rather than going unmetered entirely.
+ * rather than going unmetered entirely — logged since it means the limit is
+ * no longer per-caller for whichever route hit this path.
  */
 function resolveIdentifier(event: H3Event): string {
   if (event.context.userId) {
     return `user:${event.context.userId}`;
   }
   const clientIp = resolveClientIp(event);
-  return clientIp ? `ip:${clientIp}` : "anonymous";
+  if (clientIp) {
+    return `ip:${clientIp}`;
+  }
+  console.warn(
+    `rateLimit: no user or IP for ${event.method} ${event.path}; using the shared anonymous bucket`,
+  );
+  return "anonymous";
 }
 
 function secondsUntil(epochMs: number, now: number): number {

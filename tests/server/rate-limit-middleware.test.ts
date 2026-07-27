@@ -67,7 +67,9 @@ describe("rate limit middleware", () => {
     vi.useFakeTimers();
     vi.setSystemTime(FIXED_NOW);
     mockConsume.mockReturnValue(ALLOWED_RESULT);
-    mockGetRequestIP.mockReturnValue(null);
+    // h3's real getRequestIP returns `string | undefined`, never `null` —
+    // matched here so the test exercises the actual runtime shape.
+    mockGetRequestIP.mockReturnValue(undefined);
     mockGetHeader.mockReturnValue(undefined);
   });
 
@@ -185,7 +187,7 @@ describe("rate limit middleware", () => {
 
   it("falls back to a shared anonymous bucket when no IP is resolvable", () => {
     mockGetHeader.mockReturnValue(undefined);
-    mockGetRequestIP.mockReturnValue(null);
+    mockGetRequestIP.mockReturnValue(undefined);
     const event = buildEvent("/api/search", "GET", undefined);
 
     rateLimitMiddleware(event as never);
@@ -194,6 +196,29 @@ describe("rate limit middleware", () => {
       limit: 60,
       windowMs: 60_000,
     });
+  });
+
+  it("does not limit a policied path under a different HTTP method", () => {
+    const event = buildEvent("/api/media", "GET", "user-1");
+
+    rateLimitMiddleware(event as never);
+
+    expect(mockConsume).not.toHaveBeenCalled();
+  });
+
+  it("applies the hourly Instagram import policy", () => {
+    const event = buildEvent(
+      "/api/connections/instagram/import",
+      "POST",
+      "user-1",
+    );
+
+    rateLimitMiddleware(event as never);
+
+    expect(mockConsume).toHaveBeenCalledWith(
+      "POST /api/connections/instagram/import:user:user-1",
+      { limit: 3, windowMs: 3_600_000 },
+    );
   });
 
   it("returns a 429 with Retry-After when the limit is exceeded", () => {
