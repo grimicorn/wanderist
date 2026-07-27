@@ -1,0 +1,142 @@
+import { defineStore } from "pinia";
+import { extractErrorMessage } from "~/utils/extractErrorMessage";
+
+export type GuideVisibility = "private" | "public";
+
+export interface Guide {
+  id: string;
+  userId: string;
+  title: string;
+  body: string | null;
+  readTimeMinutes: number;
+  likeCount: number;
+  visibility: GuideVisibility;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateGuideInput {
+  title: string;
+  body?: string;
+  readTimeMinutes?: number;
+  visibility?: GuideVisibility;
+}
+
+export type UpdateGuideInput = Partial<CreateGuideInput>;
+
+export const useGuidesStore = defineStore("guides", () => {
+  const { apiFetch } = useApiClient();
+
+  const guides = ref<Guide[]>([]);
+  const isLoading = ref(false);
+  // Distinct from isLoading: lets a consumer tell "haven't fetched yet" apart
+  // from "fetched and the list is genuinely empty", so a page doesn't flash
+  // an empty state before its first fetch resolves.
+  const hasLoaded = ref(false);
+  const error = ref<string | null>(null);
+  // Dedupes concurrent fetchGuides() calls into one request. Without this, a
+  // slow mount-triggered fetch overlapping a retry click — or a create/update/
+  // delete's markLoadSucceeded() refetch firing while the mount fetch is still
+  // in flight — starts a second, redundant request racing the first; whichever
+  // settles last wins, which can overwrite fresher state with a stale response.
+  let inFlightFetch: Promise<void> | null = null;
+
+  async function fetchGuides(): Promise<void> {
+    if (inFlightFetch) {
+      return inFlightFetch;
+    }
+
+    inFlightFetch = runFetchGuides().finally(() => {
+      inFlightFetch = null;
+    });
+
+    return inFlightFetch;
+  }
+
+  async function runFetchGuides(): Promise<void> {
+    isLoading.value = true;
+    error.value = null;
+
+    try {
+      guides.value = await apiFetch<Guide[]>("/api/guides");
+      // Set only on success: a failed fetch must not read as "loaded and
+      // genuinely empty" (see hasLoaded's comment above) — it should keep
+      // reading as "not loaded" so the page keeps showing the error instead
+      // of also rendering the empty state underneath it.
+      hasLoaded.value = true;
+    } catch (fetchError) {
+      error.value = extractErrorMessage(fetchError);
+      throw fetchError;
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  // A successful write only proves the single mutated guide reflects server
+  // state, not that `guides` holds the user's complete set. If the initial
+  // load never succeeded (hasLoaded still false), `guides` may be missing
+  // rows the server has — e.g. it's `[]` after a failed fetchGuides — and a
+  // create/update/delete here must not be allowed to make that incomplete
+  // list look authoritative. In that case, await a real refetch instead of
+  // trusting the local mutation. Once hasLoaded is already true, a write's
+  // optimistic mutation is enough and no refetch is needed — just clear any
+  // stale load error.
+  async function markLoadSucceeded(): Promise<void> {
+    if (!hasLoaded.value) {
+      await fetchGuides().catch(() => {
+        // fetchGuides already records the failure in `error`; nothing further
+        // to do here.
+      });
+      return;
+    }
+
+    error.value = null;
+  }
+
+  async function createGuide(input: CreateGuideInput): Promise<Guide> {
+    const created = await apiFetch<Guide>("/api/guides", {
+      method: "POST",
+      body: input,
+    });
+
+    guides.value = [created, ...guides.value];
+    await markLoadSucceeded();
+
+    return created;
+  }
+
+  async function updateGuide(
+    id: string,
+    input: UpdateGuideInput,
+  ): Promise<Guide> {
+    const updated = await apiFetch<Guide>(`/api/guides/${id}`, {
+      method: "PATCH",
+      body: input,
+    });
+
+    guides.value = guides.value.map((guide) =>
+      guide.id === id ? updated : guide,
+    );
+    await markLoadSucceeded();
+
+    return updated;
+  }
+
+  async function deleteGuide(id: string): Promise<void> {
+    await apiFetch(`/api/guides/${id}`, { method: "DELETE" });
+
+    guides.value = guides.value.filter((guide) => guide.id !== id);
+    await markLoadSucceeded();
+  }
+
+  return {
+    guides,
+    isLoading,
+    hasLoaded,
+    error,
+    fetchGuides,
+    createGuide,
+    updateGuide,
+    deleteGuide,
+  };
+});
