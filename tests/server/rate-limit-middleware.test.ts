@@ -61,6 +61,8 @@ const REJECTED_RESULT = {
   resetAt: FIXED_NOW + 30_000,
 };
 
+const ORIGINAL_NETLIFY_ENV = process.env.NETLIFY;
+
 describe("rate limit middleware", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -71,10 +73,18 @@ describe("rate limit middleware", () => {
     // matched here so the test exercises the actual runtime shape.
     mockGetRequestIP.mockReturnValue(undefined);
     mockGetHeader.mockReturnValue(undefined);
+    // Default to "not on Netlify" so the Netlify-only header path is opt-in
+    // per test, matching local/dev/CI where it's genuinely unset.
+    delete process.env.NETLIFY;
   });
 
   afterEach(() => {
     vi.useRealTimers();
+    if (ORIGINAL_NETLIFY_ENV === undefined) {
+      delete process.env.NETLIFY;
+    } else {
+      process.env.NETLIFY = ORIGINAL_NETLIFY_ENV;
+    }
   });
 
   it("skips routes with no configured policy", () => {
@@ -154,7 +164,8 @@ describe("rate limit middleware", () => {
     });
   });
 
-  it("prefers Netlify's client-IP header over getRequestIP when there is no authenticated user", () => {
+  it("prefers Netlify's client-IP header over getRequestIP when actually running on Netlify", () => {
+    process.env.NETLIFY = "true";
     mockGetHeader.mockReturnValue("198.51.100.9");
     mockGetRequestIP.mockReturnValue("10.0.0.1");
     const event = buildEvent("/api/search", "GET", undefined);
@@ -172,7 +183,23 @@ describe("rate limit middleware", () => {
     expect(mockGetRequestIP).not.toHaveBeenCalled();
   });
 
-  it("falls back to getRequestIP when the Netlify header is absent", () => {
+  it("ignores the Netlify client-IP header when not running on Netlify, since it isn't trustworthy off-platform", () => {
+    // process.env.NETLIFY is unset by default (see beforeEach).
+    mockGetHeader.mockReturnValue("198.51.100.9");
+    mockGetRequestIP.mockReturnValue("203.0.113.5");
+    const event = buildEvent("/api/search", "GET", undefined);
+
+    rateLimitMiddleware(event as never);
+
+    expect(mockGetHeader).not.toHaveBeenCalled();
+    expect(mockConsume).toHaveBeenCalledWith("GET /api/search:ip:203.0.113.5", {
+      limit: 60,
+      windowMs: 60_000,
+    });
+  });
+
+  it("falls back to getRequestIP when running on Netlify but the header is absent", () => {
+    process.env.NETLIFY = "true";
     mockGetHeader.mockReturnValue(undefined);
     mockGetRequestIP.mockReturnValue("203.0.113.5");
     const event = buildEvent("/api/search", "GET", undefined);

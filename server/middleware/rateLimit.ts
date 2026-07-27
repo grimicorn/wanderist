@@ -12,8 +12,13 @@ const rateLimitStore = new RateLimitStore();
 // Netlify's edge sets this header to the caller's true IP and it cannot be
 // overridden by the client, unlike X-Forwarded-For, which an unauthenticated
 // caller can set to an arbitrary value per request to land in a fresh bucket
-// every time and defeat the limit entirely.
+// every time and defeat the limit entirely. That's only true when a Netlify
+// edge actually sits in front of the request, though — trusting the header
+// unconditionally would let it be spoofed on any other host (local dev, a
+// container, a future non-Netlify deploy target), so it's gated on Netlify's
+// own runtime flag (set to "true" in every Netlify Functions/Edge context).
 const NETLIFY_CLIENT_IP_HEADER = "x-nf-client-connection-ip";
+const isRunningOnNetlify = (): boolean => process.env.NETLIFY === "true";
 
 // Runs after server/middleware/auth.ts (Nitro executes server/middleware/*
 // alphabetically, and "auth" sorts before "rateLimit"), so for every policied
@@ -26,13 +31,15 @@ function resolveRouteKey(event: H3Event): string {
 }
 
 /**
- * The caller's IP, preferring Netlify's own client-IP header (not
- * spoofable by the request) over the raw socket address that
- * `getRequestIP(event)` falls back to locally/in dev, where there's no
- * Netlify edge in front of the request.
+ * The caller's IP, preferring Netlify's own client-IP header (not spoofable
+ * by the request, but only trusted when Netlify's edge is actually in front
+ * of this request) over the raw socket address that `getRequestIP(event)`
+ * falls back to locally/in dev.
  */
 function resolveClientIp(event: H3Event): string | null {
-  const netlifyClientIp = getHeader(event, NETLIFY_CLIENT_IP_HEADER);
+  const netlifyClientIp = isRunningOnNetlify()
+    ? getHeader(event, NETLIFY_CLIENT_IP_HEADER)
+    : undefined;
   if (netlifyClientIp) {
     return netlifyClientIp;
   }

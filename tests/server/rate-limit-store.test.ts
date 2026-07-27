@@ -166,5 +166,27 @@ describe("RateLimitStore", () => {
 
       expect(store.windowCount).toBe(2);
     });
+
+    it("forces a sweep once the tracked-window count hits the cap, even inside the interval gate", () => {
+      // Mirrors the store's internal MAX_TRACKED_WINDOWS (not exported, same
+      // reasoning as CLEANUP_SAFETY_MULTIPLIER above). A tiny windowMs keeps
+      // every one of these keys well past its own stale horizon by the time
+      // the cap-triggering consume happens 30ms later.
+      const MAX_TRACKED_WINDOWS = 10_000;
+      const tinyPolicy = { limit: 3, windowMs: 10 };
+      const store = new RateLimitStore();
+
+      for (let index = 0; index < MAX_TRACKED_WINDOWS; index += 1) {
+        store.consume(`key-${index}`, tinyPolicy, WINDOW_START);
+      }
+      expect(store.windowCount).toBe(MAX_TRACKED_WINDOWS);
+
+      // Well inside CLEANUP_INTERVAL_MS of the keys above, so the time gate
+      // alone would skip a sweep — but the cap is now met, forcing one. All
+      // prior keys are long past their 20ms stale horizon, so only the new
+      // key should remain.
+      store.consume("one-more-key", tinyPolicy, WINDOW_START + 30);
+      expect(store.windowCount).toBe(1);
+    });
   });
 });

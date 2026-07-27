@@ -25,6 +25,10 @@ const EXPECTED_POLICY_KEYS = [
   "GET /api/search",
 ];
 
+// Nitro accepts a method-suffixed handler (search.get.ts) or a method-agnostic
+// one (search.ts) that handles every verb itself, at either the file or the
+// directory-index level — all four shapes are valid places a route could
+// legitimately live.
 function candidateHandlerPaths(method: string, apiPath: string): string[] {
   const routeSegment = apiPath.slice(API_PATH_PREFIX.length);
   const methodSuffix = method.toLowerCase();
@@ -32,6 +36,8 @@ function candidateHandlerPaths(method: string, apiPath: string): string[] {
   return [
     resolve(SERVER_API_DIR, `${routeSegment}.${methodSuffix}.ts`),
     resolve(SERVER_API_DIR, `${routeSegment}/index.${methodSuffix}.ts`),
+    resolve(SERVER_API_DIR, `${routeSegment}.ts`),
+    resolve(SERVER_API_DIR, `${routeSegment}/index.ts`),
   ];
 }
 

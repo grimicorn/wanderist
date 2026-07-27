@@ -35,6 +35,15 @@ const CLEANUP_INTERVAL_MS = 5 * 60_000;
 // store can never cause one to evict the other early.
 const CLEANUP_SAFETY_MULTIPLIER = 2;
 
+// Backstop against unbounded growth between time-gated sweeps — e.g. an
+// IP-keyed policy (see server/middleware/rateLimit.ts's anonymous-caller
+// fallback) facing many distinct callers in a burst, well before
+// CLEANUP_INTERVAL_MS naturally elapses. Once the map reaches this size, a
+// sweep runs on every consume() regardless of the interval gate, so growth
+// past the cap is bounded by how many keys are genuinely still live rather
+// than growing forever.
+const MAX_TRACKED_WINDOWS = 10_000;
+
 export interface RateLimitPolicy {
   limit: number;
   windowMs: number;
@@ -111,7 +120,8 @@ export class RateLimitStore {
 
   private cleanupStaleWindows(now: number): void {
     const cleanupIsDue = now - this.lastCleanupAt >= CLEANUP_INTERVAL_MS;
-    if (!cleanupIsDue) {
+    const capExceeded = this.windows.size >= MAX_TRACKED_WINDOWS;
+    if (!cleanupIsDue && !capExceeded) {
       return;
     }
     this.lastCleanupAt = now;
