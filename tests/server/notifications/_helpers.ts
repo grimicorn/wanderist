@@ -43,11 +43,11 @@ export function unwrapHandler(
  * Builds a mock `select().from().leftJoin().leftJoin().where().orderBy().limit()`
  * chain, matching fetchNotificationsForUser's actor-resolution join.
  *
- * Exposes the two `leftJoin` spies (rather than just `select`) so a test can
- * assert on the actual join target/condition, not just the canned rows — a
- * mock returning fixed rows regardless of the join key would otherwise pass
- * even if the query joined on the wrong column (e.g. the recipient's own id
- * instead of the actor's).
+ * Exposes every intermediate spy (rather than just `select`) so a test can
+ * assert on the actual join/filter conditions, not just the canned rows — a
+ * mock returning fixed rows regardless of the arguments passed to it would
+ * otherwise pass even if the query joined on the wrong column, scoped to the
+ * wrong user, or dropped the ordering/limit entirely.
  */
 export function makeSelectChain(rows: Record<string, unknown>[]) {
   const limit = vi.fn().mockResolvedValue(rows);
@@ -57,7 +57,11 @@ export function makeSelectChain(rows: Record<string, unknown>[]) {
   const firstLeftJoin = vi.fn().mockReturnValue({ leftJoin: secondLeftJoin });
   const from = vi.fn().mockReturnValue({ leftJoin: firstLeftJoin });
   const select = vi.fn().mockReturnValue({ from });
-  return { select, firstLeftJoin, secondLeftJoin };
+  return { select, firstLeftJoin, secondLeftJoin, where, orderBy, limit };
+}
+
+interface ParamChunk {
+  value: unknown;
 }
 
 function isColumnChunk(value: unknown): value is PgColumn {
@@ -69,6 +73,16 @@ function isColumnChunk(value: unknown): value is PgColumn {
   );
 }
 
+function isParamChunk(value: unknown): value is ParamChunk {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "value" in value &&
+    "encoder" in value &&
+    !("table" in value)
+  );
+}
+
 function isSqlChunk(value: unknown): value is SQL {
   return (
     typeof value === "object" &&
@@ -77,32 +91,35 @@ function isSqlChunk(value: unknown): value is SQL {
   );
 }
 
-function collectColumns(node: unknown, columns: PgColumn[]): void {
+function collectComparisonParts(node: unknown, parts: string[]): void {
   if (isColumnChunk(node)) {
-    columns.push(node);
+    parts.push(`${getTableName(node.table)}.${node.name}`);
+    return;
+  }
+  if (isParamChunk(node)) {
+    parts.push(`literal:${JSON.stringify(node.value)}`);
     return;
   }
   if (isSqlChunk(node)) {
     for (const chunk of node.queryChunks) {
-      collectColumns(chunk, columns);
+      collectComparisonParts(chunk, parts);
     }
   }
 }
 
 /**
- * Describes a drizzle `eq`/`and(eq, eq, ...)` condition as
- * `["table.column", "table.column", ...]` so tests can assert which columns
- * a join actually compares without needing a real database — a mock that
- * returns fixed rows regardless of the condition would otherwise pass even
- * if the join key were wrong (e.g. comparing the recipient's own id instead
- * of the actor's).
+ * Describes a drizzle `eq`/`and(eq, eq, ...)` condition as a flat list of
+ * `"table.column"` (compared columns) and `"literal:<value>"` (compared
+ * literals) entries, in comparison order, so tests can assert exactly what a
+ * join or where clause compares without needing a real database. Column-only
+ * comparison isn't enough on its own — e.g. `eq(userPreferences.publicProfile,
+ * true)` and `eq(userPreferences.publicProfile, false)` compare the same
+ * column, so the literal must be asserted too to catch a flipped gate.
  */
 export function describeEqCondition(condition: SQL): string[] {
-  const columns: PgColumn[] = [];
-  collectColumns(condition, columns);
-  return columns.map(
-    (column) => `${getTableName(column.table)}.${column.name}`,
-  );
+  const parts: string[] = [];
+  collectComparisonParts(condition, parts);
+  return parts;
 }
 
 export function makeInsertChain() {

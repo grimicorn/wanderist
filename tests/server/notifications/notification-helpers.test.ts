@@ -176,22 +176,45 @@ describe("fetchNotificationsForUser", () => {
     expect(
       describeEqCondition(selectChain.firstLeftJoin.mock.calls[0][1]),
     ).toEqual(["notifications.actor_id", "users.id"]);
+    // Asserts the literal `true`, not just the column, so flipping the gate
+    // to publicProfile = false (or dropping it) would fail this test.
     expect(
       describeEqCondition(selectChain.secondLeftJoin.mock.calls[0][1]),
     ).toEqual([
       "notifications.actor_id",
       "user_preferences.user_id",
       "user_preferences.public_profile",
+      "literal:true",
     ]);
   });
 
-  it("resolves an actor with a private profile (publicProfile false) to a known-but-nameless actor", async () => {
+  it("scopes the query to the requesting user and applies ordering and the limit (authz-boundary regression guard)", async () => {
+    const selectChain = makeSelectChain([]);
+    const database = selectChain as unknown as Parameters<
+      typeof fetchNotificationsForUser
+    >[0];
+
+    await fetchNotificationsForUser(database, "user-1", LIMIT);
+
+    // The join-key guard above proves the actor is resolved correctly; this
+    // guards the authz boundary itself — a dropped or inverted `where` would
+    // leak every user's notifications and still pass every other test here,
+    // since the mock returns canned rows regardless of the arguments.
+    expect(describeEqCondition(selectChain.where.mock.calls[0][0])).toEqual([
+      "notifications.user_id",
+      'literal:"user-1"',
+    ]);
+    expect(selectChain.orderBy).toHaveBeenCalledTimes(1);
+    expect(selectChain.limit).toHaveBeenCalledWith(LIMIT);
+  });
+
+  it("resolves an actor with a private profile (publicProfile false) to a null actor, same as legacy/deleted rows", async () => {
     // The userPreferences join is gated on publicProfile = true (see
     // fetchNotificationsForUser), so a private actor's row never matches it —
     // displayName/handle come back null even though actorId (and the users
-    // join for the deletedAt check) are still present. This still renders
-    // sensibly client-side (falls back to "Someone"), it just never leaks a
-    // private user's real name/handle.
+    // join for the deletedAt check) are still present. resolveActor collapses
+    // that to a null actor rather than an id-only one, so a private user's id
+    // never reaches the client and can't later be wired into a profile link.
     const selectChain = makeSelectChain([
       {
         id: "notif-private-actor",
@@ -212,11 +235,7 @@ describe("fetchNotificationsForUser", () => {
 
     const result = await fetchNotificationsForUser(database, "user-1", LIMIT);
 
-    expect(result[0]?.actor).toEqual({
-      id: "private-user",
-      displayName: null,
-      handle: null,
-    });
+    expect(result[0]?.actor).toBeNull();
   });
 
   it("renders a legacy notification (actorId never recorded) with a null actor", async () => {

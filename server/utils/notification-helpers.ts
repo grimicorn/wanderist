@@ -74,12 +74,20 @@ interface RawNotificationRow {
 
 /**
  * Resolves the acting-user reference on a notification row into a renderable
- * actor, or null when there is nothing to show. Null covers both legacy rows
- * (actorId was never set) and rows whose actor has since soft-deleted their
- * account — both fall back to the notification's own generic body text.
+ * actor, or null when there is nothing to show. Null covers legacy rows
+ * (actorId was never set), rows whose actor has since soft-deleted their
+ * account, and rows whose actor has a private (non-public) profile — all
+ * three fall back to the notification's own generic body text. Private
+ * profiles resolve to null rather than an id-only actor: there being nothing
+ * to display should mean nothing identifying is returned either, so a private
+ * user's id can't later be wired into a profile link and defeat the privacy
+ * gate on the userPreferences join above.
  */
 function resolveActor(row: RawNotificationRow): NotificationActor | null {
   if (!row.actorId || row.actorDeletedAt) {
+    return null;
+  }
+  if (!row.actorDisplayName && !row.actorHandle) {
     return null;
   }
   return {
@@ -120,8 +128,8 @@ export async function fetchNotificationsForUser(
     // so a private actor must not have their name/handle leaked here even
     // though the recipient can see *that* someone followed them. A private
     // actor's row still joins on `users` above (for the deletedAt check) but
-    // resolves to no displayName/handle, which resolveActor below renders as
-    // a nameless-but-known actor (falls back to "Someone" client-side).
+    // resolves to no displayName/handle, which resolveActor below treats the
+    // same as no actor at all (falls back to the generic body client-side).
     .leftJoin(
       userPreferences,
       and(

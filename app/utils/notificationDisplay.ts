@@ -15,6 +15,7 @@ const ICON_BY_TYPE: Record<string, string> = {
 
 const DEFAULT_ICON = "bell";
 const FALLBACK_ACTOR_LABEL = "Someone";
+const NEW_FOLLOWER_SUFFIX = " started following you";
 
 const MS_PER_MINUTE = 60 * 1000;
 const MS_PER_HOUR = 60 * MS_PER_MINUTE;
@@ -86,5 +87,5 @@ export function resolveNotificationText(notification: AppNotification): string {
   if (notification.type !== NEW_FOLLOWER_TYPE || !notification.actor) {
     return notification.body;
   }
-  return `${resolveNotificationActorLabel(notification.actor)} started following you`;
+  return `${resolveNotificationActorLabel(notification.actor)}${NEW_FOLLOWER_SUFFIX}`;
 }
