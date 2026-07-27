@@ -37,11 +37,17 @@ export function unwrapHandler(
   ) => Promise<unknown>;
 }
 
+/**
+ * Builds a mock `select().from().leftJoin().leftJoin().where().orderBy().limit()`
+ * chain, matching fetchNotificationsForUser's actor-resolution join.
+ */
 export function makeSelectChain(rows: Record<string, unknown>[]) {
   const limit = vi.fn().mockResolvedValue(rows);
   const orderBy = vi.fn().mockReturnValue({ limit });
   const where = vi.fn().mockReturnValue({ orderBy });
-  const from = vi.fn().mockReturnValue({ where });
+  const secondLeftJoin = vi.fn().mockReturnValue({ where });
+  const firstLeftJoin = vi.fn().mockReturnValue({ leftJoin: secondLeftJoin });
+  const from = vi.fn().mockReturnValue({ leftJoin: firstLeftJoin });
   const select = vi.fn().mockReturnValue({ from });
   return { select };
 }

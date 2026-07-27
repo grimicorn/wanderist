@@ -2,7 +2,10 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   resolveNotificationIcon,
   formatNotificationTime,
+  resolveNotificationActorLabel,
+  resolveNotificationText,
 } from "../notificationDisplay";
+import type { AppNotification } from "~/composables/useNotifications";
 
 describe("resolveNotificationIcon", () => {
   it("returns users icon for new_follower", () => {
@@ -80,5 +83,97 @@ describe("formatNotificationTime", () => {
     freezeNow();
     const createdAt = new Date(NOW - 14 * 24 * 60 * 60 * 1000).toISOString();
     expect(formatNotificationTime(createdAt)).toBe("2w");
+  });
+});
+
+describe("resolveNotificationActorLabel", () => {
+  it("returns the fallback label when there is no actor", () => {
+    expect(resolveNotificationActorLabel(null)).toBe("Someone");
+  });
+
+  it("prefers the actor's display name", () => {
+    expect(
+      resolveNotificationActorLabel({
+        id: "user-1",
+        displayName: "Elsa Farsdottir",
+        handle: "elsa_far",
+      }),
+    ).toBe("Elsa Farsdottir");
+  });
+
+  it("falls back to the handle when there is no display name", () => {
+    expect(
+      resolveNotificationActorLabel({
+        id: "user-1",
+        displayName: null,
+        handle: "elsa_far",
+      }),
+    ).toBe("@elsa_far");
+  });
+
+  it("falls back to the generic label when neither display name nor handle is set", () => {
+    expect(
+      resolveNotificationActorLabel({
+        id: "user-1",
+        displayName: null,
+        handle: null,
+      }),
+    ).toBe("Someone");
+  });
+});
+
+describe("resolveNotificationText", () => {
+  const baseNotification: AppNotification = {
+    id: "n-1",
+    type: "new_follower",
+    tone: "accent",
+    body: "Someone started following you",
+    isRead: false,
+    createdAt: new Date().toISOString(),
+    actor: null,
+  };
+
+  it("builds a name-identifying message for a new_follower notification with a resolved actor", () => {
+    const notification: AppNotification = {
+      ...baseNotification,
+      actor: {
+        id: "user-1",
+        displayName: "Elsa Farsdottir",
+        handle: "elsa_far",
+      },
+    };
+    expect(resolveNotificationText(notification)).toBe(
+      "Elsa Farsdottir started following you",
+    );
+  });
+
+  it("falls back to the stored body for a new_follower notification with no actor (legacy row)", () => {
+    expect(resolveNotificationText(baseNotification)).toBe(
+      "Someone started following you",
+    );
+  });
+
+  it("falls back to the stored body for a new_follower notification whose actor was deleted", () => {
+    // The server resolves a soft-deleted actor's account to null, same shape
+    // as a legacy row with no actor recorded.
+    expect(resolveNotificationText({ ...baseNotification, actor: null })).toBe(
+      "Someone started following you",
+    );
+  });
+
+  it("ignores the actor for notification types other than new_follower", () => {
+    const notification: AppNotification = {
+      ...baseNotification,
+      type: "like",
+      body: "elsa_far liked your entry",
+      actor: {
+        id: "user-1",
+        displayName: "Elsa Farsdottir",
+        handle: "elsa_far",
+      },
+    };
+    expect(resolveNotificationText(notification)).toBe(
+      "elsa_far liked your entry",
+    );
   });
 });
