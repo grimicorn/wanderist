@@ -22,3 +22,6 @@
 # so daily granularity is sufficient.
 [functions."purge-deleted-accounts"]
   schedule = "0 3 * * *"
+
+[context.production]
+  ignore = "if [ -n \"$INCOMING_HOOK_TITLE\" ]; then exit 1; else exit 0; fi"
