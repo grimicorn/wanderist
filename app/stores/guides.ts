@@ -24,6 +24,16 @@ export interface CreateGuideInput {
 
 export type UpdateGuideInput = Partial<CreateGuideInput>;
 
+function replaceLikeCount(
+  list: Guide[],
+  id: string,
+  likeCount: number,
+): Guide[] {
+  return list.map((guide) =>
+    guide.id === id ? { ...guide, likeCount } : guide,
+  );
+}
+
 export const useGuidesStore = defineStore("guides", () => {
   const { apiFetch } = useApiClient();
 
@@ -129,6 +139,29 @@ export const useGuidesStore = defineStore("guides", () => {
     await markLoadSucceeded();
   }
 
+  // Only the returned likeCount is spliced back in (not the whole row) so a
+  // concurrent edit to the same guide's other fields isn't clobbered by a
+  // like/unlike response that predates it — mirrors likeEntry in stores/entries.ts.
+  async function likeGuide(id: string): Promise<Guide> {
+    const updated = await apiFetch<Guide>(`/api/guides/${id}/like`, {
+      method: "POST",
+    });
+
+    guides.value = replaceLikeCount(guides.value, id, updated.likeCount);
+
+    return updated;
+  }
+
+  async function unlikeGuide(id: string): Promise<Guide> {
+    const updated = await apiFetch<Guide>(`/api/guides/${id}/like`, {
+      method: "DELETE",
+    });
+
+    guides.value = replaceLikeCount(guides.value, id, updated.likeCount);
+
+    return updated;
+  }
+
   return {
     guides,
     isLoading,
@@ -138,5 +171,7 @@ export const useGuidesStore = defineStore("guides", () => {
     createGuide,
     updateGuide,
     deleteGuide,
+    likeGuide,
+    unlikeGuide,
   };
 });

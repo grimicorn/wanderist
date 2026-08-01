@@ -373,4 +373,91 @@ describe("useGuidesStore", () => {
       expect(store.guides).toEqual([guide1]);
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // likeGuide
+  // ---------------------------------------------------------------------------
+
+  describe("likeGuide", () => {
+    it("increments likeCount in the list", async () => {
+      const guide = { id: "g-1", userId: "u-1", title: "Tokyo", likeCount: 0 };
+      const liked = { ...guide, likeCount: 1 };
+      mockApiFetch.mockResolvedValueOnce([guide]).mockResolvedValueOnce(liked);
+
+      const store = useGuidesStore();
+      await store.fetchGuides();
+
+      const result = await store.likeGuide("g-1");
+
+      expect(result).toEqual(liked);
+      expect(store.guides[0].likeCount).toBe(1);
+    });
+
+    it("calls POST /api/guides/:id/like", async () => {
+      const liked = { id: "g-1", userId: "u-1", title: "Tokyo", likeCount: 1 };
+      mockApiFetch.mockResolvedValue(liked);
+
+      const store = useGuidesStore();
+      await store.likeGuide("g-1");
+
+      expect(mockApiFetch).toHaveBeenCalledWith("/api/guides/g-1/like", {
+        method: "POST",
+      });
+    });
+
+    it("rethrows when the request fails", async () => {
+      mockApiFetch.mockRejectedValueOnce(new Error("Not found"));
+
+      const store = useGuidesStore();
+
+      await expect(store.likeGuide("missing")).rejects.toThrow("Not found");
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // unlikeGuide
+  // ---------------------------------------------------------------------------
+
+  describe("unlikeGuide", () => {
+    it("decrements likeCount in the list", async () => {
+      const guide = { id: "g-1", userId: "u-1", title: "Tokyo", likeCount: 1 };
+      const unliked = { ...guide, likeCount: 0 };
+      mockApiFetch
+        .mockResolvedValueOnce([guide])
+        .mockResolvedValueOnce(unliked);
+
+      const store = useGuidesStore();
+      await store.fetchGuides();
+
+      const result = await store.unlikeGuide("g-1");
+
+      expect(result).toEqual(unliked);
+      expect(store.guides[0].likeCount).toBe(0);
+    });
+
+    it("calls DELETE /api/guides/:id/like", async () => {
+      const unliked = {
+        id: "g-1",
+        userId: "u-1",
+        title: "Tokyo",
+        likeCount: 0,
+      };
+      mockApiFetch.mockResolvedValue(unliked);
+
+      const store = useGuidesStore();
+      await store.unlikeGuide("g-1");
+
+      expect(mockApiFetch).toHaveBeenCalledWith("/api/guides/g-1/like", {
+        method: "DELETE",
+      });
+    });
+
+    it("rethrows when the request fails", async () => {
+      mockApiFetch.mockRejectedValueOnce(new Error("Not found"));
+
+      const store = useGuidesStore();
+
+      await expect(store.unlikeGuide("missing")).rejects.toThrow("Not found");
+    });
+  });
 });

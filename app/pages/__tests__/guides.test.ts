@@ -351,4 +351,82 @@ describe("Guides page (/guides)", () => {
       expect(guidesStore.deleteGuide).toHaveBeenCalledWith("g-1");
     });
   });
+
+  describe("liking a guide", () => {
+    it("likes a guide on first click and marks it liked", async () => {
+      const guidesStore = useGuidesStore();
+      const likeSpy = vi
+        .spyOn(guidesStore, "likeGuide")
+        .mockResolvedValue({ ...SAMPLE_GUIDES[0], likeCount: 13 });
+
+      const wrapper = mount(GuidesPage, buildGlobalConfig(pinia));
+
+      await wrapper.findAll(".gcard__like")[0].trigger("click");
+      await flushPromises();
+
+      expect(likeSpy).toHaveBeenCalledWith("g-1");
+      expect(wrapper.findAll(".gcard__like")[0].classes()).toContain("liked");
+    });
+
+    it("unlikes a guide on the second click", async () => {
+      const guidesStore = useGuidesStore();
+      vi.spyOn(guidesStore, "likeGuide").mockResolvedValue({
+        ...SAMPLE_GUIDES[0],
+        likeCount: 13,
+      });
+      const unlikeSpy = vi
+        .spyOn(guidesStore, "unlikeGuide")
+        .mockResolvedValue({ ...SAMPLE_GUIDES[0], likeCount: 12 });
+
+      const wrapper = mount(GuidesPage, buildGlobalConfig(pinia));
+
+      await wrapper.findAll(".gcard__like")[0].trigger("click");
+      await flushPromises();
+      await wrapper.findAll(".gcard__like")[0].trigger("click");
+      await flushPromises();
+
+      expect(unlikeSpy).toHaveBeenCalledWith("g-1");
+      expect(wrapper.findAll(".gcard__like")[0].classes()).not.toContain(
+        "liked",
+      );
+    });
+
+    it("rolls back the liked state when the like request fails", async () => {
+      const guidesStore = useGuidesStore();
+      vi.spyOn(guidesStore, "likeGuide").mockRejectedValue(
+        new Error("Not found"),
+      );
+
+      const wrapper = mount(GuidesPage, buildGlobalConfig(pinia));
+
+      await wrapper.findAll(".gcard__like")[0].trigger("click");
+      await flushPromises();
+
+      expect(wrapper.findAll(".gcard__like")[0].classes()).not.toContain(
+        "liked",
+      );
+    });
+
+    // Distinguishes the rollback from a constant `false`: after a successful
+    // like, a failed unlike must restore the liked (true) state, not clear it.
+    it("keeps the guide liked when the unlike request fails", async () => {
+      const guidesStore = useGuidesStore();
+      vi.spyOn(guidesStore, "likeGuide").mockResolvedValue({
+        ...SAMPLE_GUIDES[0],
+        likeCount: 13,
+      });
+      vi.spyOn(guidesStore, "unlikeGuide").mockRejectedValue(
+        new Error("Not found"),
+      );
+
+      const wrapper = mount(GuidesPage, buildGlobalConfig(pinia));
+
+      await wrapper.findAll(".gcard__like")[0].trigger("click");
+      await flushPromises();
+      await wrapper.findAll(".gcard__like")[0].trigger("click");
+      await flushPromises();
+
+      expect(wrapper.findAll(".gcard__like")[0].classes()).toContain("liked");
+    });
+  });
 });

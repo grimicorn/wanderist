@@ -7,10 +7,16 @@
           <AppIcon name="clock" :size="12" />
           {{ guide.readTimeMinutes }} min read
         </span>
-        <span class="m">
+        <button
+          type="button"
+          class="gcard__like"
+          :class="{ liked: isLiked }"
+          :aria-label="isLiked ? 'Unlike guide' : 'Like guide'"
+          @click="emit('toggle-like', guide)"
+        >
           <AppIcon name="heart" :size="12" />
           {{ guide.likeCount }}
-        </span>
+        </button>
         <span class="tag" :class="visibilityTagClass">
           {{ guide.visibility }}
         </span>
@@ -60,11 +66,13 @@ const VISIBILITY_TAG_CLASS: Record<Guide["visibility"], string> = {
 const props = defineProps<{
   guide: Guide;
   deleting?: boolean;
+  isLiked?: boolean;
 }>();
 
 const emit = defineEmits<{
   edit: [guide: Guide];
   delete: [guide: Guide];
+  "toggle-like": [guide: Guide];
 }>();
 
 // Stays true across a failed delete so a retry is one click away — the
@@ -108,6 +116,25 @@ const visibilityTagClass = computed(
   display: inline-flex;
   align-items: center;
   gap: 5px;
+}
+.gcard__like {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: var(--faint);
+  cursor: pointer;
+}
+.gcard__like:not(.liked):hover {
+  color: var(--accent-ink);
+}
+/* --error-ink (not --error) so the liked heart keeps AA contrast in the dark
+   theme, where only --error-ink is redefined — see app/assets/css/main.css. */
+.gcard__like.liked {
+  color: var(--error-ink);
 }
 .gcard__acts {
   display: flex;

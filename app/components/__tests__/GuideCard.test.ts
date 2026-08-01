@@ -59,6 +59,39 @@ describe("GuideCard", () => {
     expect(wrapper.find(".tag--past").exists()).toBe(true);
   });
 
+  it("emits toggle-like with the guide when the like button is clicked", async () => {
+    const wrapper = mount(GuideCard, {
+      ...globalConfig,
+      props: { guide: SAMPLE_GUIDE },
+    });
+
+    await wrapper.find(".gcard__like").trigger("click");
+
+    expect(wrapper.emitted("toggle-like")?.[0]).toEqual([SAMPLE_GUIDE]);
+  });
+
+  it("applies the liked class and 'Unlike guide' label when isLiked is true", () => {
+    const wrapper = mount(GuideCard, {
+      ...globalConfig,
+      props: { guide: SAMPLE_GUIDE, isLiked: true },
+    });
+
+    const likeButton = wrapper.find(".gcard__like");
+    expect(likeButton.classes()).toContain("liked");
+    expect(likeButton.attributes("aria-label")).toBe("Unlike guide");
+  });
+
+  it("shows no liked class and a 'Like guide' label by default", () => {
+    const wrapper = mount(GuideCard, {
+      ...globalConfig,
+      props: { guide: SAMPLE_GUIDE },
+    });
+
+    const likeButton = wrapper.find(".gcard__like");
+    expect(likeButton.classes()).not.toContain("liked");
+    expect(likeButton.attributes("aria-label")).toBe("Like guide");
+  });
+
   it("emits edit with the guide when edit is clicked", async () => {
     const wrapper = mount(GuideCard, {
       ...globalConfig,

@@ -42,10 +42,12 @@
       :has-loaded="guidesStore.hasLoaded"
       :editing-guide-id="editingGuideId"
       :deleting-guide-ids="deletingGuideIds"
+      :liked-guide-ids="likedGuideIds"
       :is-saving-guide="isSavingGuide"
       :form-error="formError"
       @edit="startEditGuide"
       @delete="handleDeleteGuide"
+      @toggle-like="handleToggleLikeGuide"
       @submit-edit="handleUpdateGuide"
       @cancel-edit="cancelEditGuide"
     />
@@ -76,6 +78,11 @@ const isSavingGuide = ref(false);
 // delete of a different guide — each card's own in-flight state is looked up
 // independently.
 const deletingGuideIds = ref<Set<string>>(new Set());
+// Tracks which guides the user has liked this session so the heart can toggle
+// optimistically. Mirrors likedEntryIds in pages/journal.vue — the server
+// stores only a denormalised count, not per-user like state, so "have I liked
+// this?" lives on the client for the lifetime of the page.
+const likedGuideIds = ref<Set<string>>(new Set());
 const formError = ref<string | null>(null);
 const deleteError = ref<string | null>(null);
 
@@ -153,6 +160,28 @@ async function handleDeleteGuide(guide: Guide): Promise<void> {
     deleteError.value = extractErrorMessage(error);
   } finally {
     deletingGuideIds.value.delete(guide.id);
+  }
+}
+
+function setGuideLiked(guideId: string, liked: boolean): void {
+  if (liked) {
+    likedGuideIds.value.add(guideId);
+    return;
+  }
+  likedGuideIds.value.delete(guideId);
+}
+
+async function handleToggleLikeGuide(guide: Guide): Promise<void> {
+  const wasLiked = likedGuideIds.value.has(guide.id);
+  const persist = wasLiked ? guidesStore.unlikeGuide : guidesStore.likeGuide;
+
+  setGuideLiked(guide.id, !wasLiked);
+  try {
+    await persist(guide.id);
+  } catch {
+    // Rollback optimistic like state on failure so the heart matches what the
+    // server actually recorded (the store leaves likeCount untouched on error).
+    setGuideLiked(guide.id, wasLiked);
   }
 }
 
