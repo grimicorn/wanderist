@@ -138,6 +138,12 @@ jobs:
         # into $GITHUB_ENV so the create/delete branch actions below read them via
         # ${{ env.* }}. add-mask keeps the API key out of the logs (dotenvx values
         # are not auto-masked the way secrets.* are).
+        #
+        # DOTENV_PRIVATE_KEY_E2E must exist in BOTH secret stores: Actions AND
+        # Dependabot. Dependabot PRs run against the separate Dependabot secret
+        # store, so an Actions-only secret is empty there and dotenvx fails with
+        # DECRYPTION_FAILED. Add new encrypted-env keys to both (gh secret set
+        # <NAME> --app dependabot).
         run: |
           project_id="$(npx dotenvx get NEON_PROJECT_ID -f .env.e2e)"
           api_key="$(npx dotenvx get NEON_API_KEY -f .env.e2e)"
