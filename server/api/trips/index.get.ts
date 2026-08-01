@@ -1,4 +1,5 @@
-import { eq, and, desc, asc } from "drizzle-orm";
+import { eq, and, asc, desc } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 import { getDb } from "../../db/index";
 import { trips, TRIP_STATUS } from "../../db/schema";
 import { requireUser } from "../../utils/auth";
@@ -49,27 +50,76 @@ function parseSortOrder(value: unknown): SortOrder {
   return value as SortOrder;
 }
 
+const PAGE_SIZE = 20;
+
+// Bounds how deep an offset scan can go — well above the client's own
+// MAX_TRIPS_PAGES walk limit (see app/stores/trips.ts), so a legitimate walk
+// never hits this; it only stops a malicious/garbage page number (including
+// non-safe-integer values like `1e300`, which `Number.isInteger` admits but
+// would otherwise reach the query as a huge offset).
+const MAX_PAGE = 1000;
+
+function parsePageParam(value: unknown): number {
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > MAX_PAGE) {
+    return 1;
+  }
+  return parsed;
+}
+
+function buildFilters(userId: string, statusFilter: TripStatus | null): SQL[] {
+  const filters: SQL[] = [eq(trips.userId, userId)];
+
+  if (statusFilter) {
+    filters.push(eq(trips.status, statusFilter));
+  }
+
+  return filters;
+}
+
+async function fetchTripsPage(
+  database: ReturnType<typeof getDb>,
+  filters: SQL[],
+  sortOrder: SortOrder,
+  page: number,
+): Promise<(typeof trips.$inferSelect)[]> {
+  // `id` is a unique secondary sort key purely to break ties within a single
+  // query when multiple trips share a createdAt (e.g. a bulk import) —
+  // without it, which of the tied rows lands on which side of a page
+  // boundary is unspecified. It follows the same direction as the requested
+  // sort so page boundaries stay stable across a walk. This does not
+  // protect against a trip being created or deleted while a client is
+  // mid-walk across pages; see the PR description for why that's an
+  // accepted tradeoff.
+  const orderColumns =
+    sortOrder === "asc"
+      ? [asc(trips.createdAt), asc(trips.id)]
+      : [desc(trips.createdAt), desc(trips.id)];
+
+  return database
+    .select()
+    .from(trips)
+    .where(and(...filters))
+    .orderBy(...orderColumns)
+    .limit(PAGE_SIZE)
+    .offset((page - 1) * PAGE_SIZE);
+}
+
 export default defineEventHandler(async (event) => {
   const userId = requireUser(event);
+  const database = getDb();
   const query = getQuery(event);
 
   const statusFilter = parseStatusFilter(query.status);
   const sortOrder = parseSortOrder(query.sort);
+  const page = parsePageParam(query.page);
+  const filters = buildFilters(userId, statusFilter);
 
-  const database = getDb();
+  const rows = await fetchTripsPage(database, filters, sortOrder, page);
 
-  const whereConditions = statusFilter
-    ? and(eq(trips.userId, userId), eq(trips.status, statusFilter))
-    : eq(trips.userId, userId);
-
-  const orderBy =
-    sortOrder === "asc" ? asc(trips.createdAt) : desc(trips.createdAt);
-
-  const rows = await database
-    .select()
-    .from(trips)
-    .where(whereConditions)
-    .orderBy(orderBy);
-
-  return rows;
+  return {
+    trips: rows,
+    page,
+    hasMore: rows.length === PAGE_SIZE && page < MAX_PAGE,
+  };
 });

@@ -71,7 +71,10 @@ const SAMPLE_DETAIL: TripDetail = {
 describe("useTripsStore", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
-    vi.clearAllMocks();
+    // resetAllMocks (not clearAllMocks) so a mockImplementation left behind by
+    // one test (e.g. the "hasMore never turns false" case below) can't leak
+    // into the next test — only call history is cleared otherwise.
+    vi.resetAllMocks();
   });
 
   // ---------------------------------------------------------------------------
@@ -80,7 +83,11 @@ describe("useTripsStore", () => {
 
   describe("fetchTrips", () => {
     it("populates tripList from the API response", async () => {
-      mockApiFetch.mockResolvedValue([SAMPLE_TRIP]);
+      mockApiFetch.mockResolvedValue({
+        trips: [SAMPLE_TRIP],
+        page: 1,
+        hasMore: false,
+      });
 
       const store = useTripsStore();
       await store.fetchTrips();
@@ -88,8 +95,17 @@ describe("useTripsStore", () => {
       expect(store.tripList).toEqual([SAMPLE_TRIP]);
     });
 
+    it("calls /api/trips with page=1 when no filters", async () => {
+      mockApiFetch.mockResolvedValue({ trips: [], page: 1, hasMore: false });
+
+      const store = useTripsStore();
+      await store.fetchTrips();
+
+      expect(mockApiFetch).toHaveBeenCalledWith("/api/trips?page=1");
+    });
+
     it("passes a status filter as a query param when provided", async () => {
-      mockApiFetch.mockResolvedValue([]);
+      mockApiFetch.mockResolvedValue({ trips: [], page: 1, hasMore: false });
 
       const store = useTripsStore();
       await store.fetchTrips({ status: "ongoing" });
@@ -100,17 +116,197 @@ describe("useTripsStore", () => {
     });
 
     it("does not append a status param when status is 'All'", async () => {
-      mockApiFetch.mockResolvedValue([]);
+      mockApiFetch.mockResolvedValue({ trips: [], page: 1, hasMore: false });
 
       const store = useTripsStore();
       await store.fetchTrips({ status: "All" });
 
-      expect(mockApiFetch).toHaveBeenCalledWith("/api/trips");
+      expect(mockApiFetch).toHaveBeenCalledWith("/api/trips?page=1");
+    });
+
+    it("walks every page and concatenates the results while hasMore is true", async () => {
+      const pageOne = Array.from({ length: 20 }, (_, index) => ({
+        ...SAMPLE_TRIP,
+        id: `trip-${index}`,
+      }));
+      const pageTwo = [{ ...SAMPLE_TRIP, id: "trip-last" }];
+
+      mockApiFetch
+        .mockResolvedValueOnce({ trips: pageOne, page: 1, hasMore: true })
+        .mockResolvedValueOnce({ trips: pageTwo, page: 2, hasMore: false });
+
+      const store = useTripsStore();
+      await store.fetchTrips();
+
+      expect(store.tripList).toEqual([...pageOne, ...pageTwo]);
+      expect(mockApiFetch).toHaveBeenCalledTimes(2);
+      expect(mockApiFetch).toHaveBeenNthCalledWith(1, "/api/trips?page=1");
+      expect(mockApiFetch).toHaveBeenNthCalledWith(2, "/api/trips?page=2");
+    });
+
+    it("carries the status and sort filters through every page of the walk", async () => {
+      const pageOne = Array.from({ length: 20 }, (_, index) => ({
+        ...SAMPLE_TRIP,
+        id: `trip-${index}`,
+      }));
+      const pageTwo = [{ ...SAMPLE_TRIP, id: "trip-last" }];
+
+      mockApiFetch
+        .mockResolvedValueOnce({ trips: pageOne, page: 1, hasMore: true })
+        .mockResolvedValueOnce({ trips: pageTwo, page: 2, hasMore: false });
+
+      const store = useTripsStore();
+      await store.fetchTrips({ status: "ongoing", sort: "asc" });
+
+      expect(mockApiFetch).toHaveBeenNthCalledWith(
+        1,
+        "/api/trips?page=1&status=ongoing&sort=asc",
+      );
+      expect(mockApiFetch).toHaveBeenNthCalledWith(
+        2,
+        "/api/trips?page=2&status=ongoing&sort=asc",
+      );
+    });
+
+    it("stops after a single request when the first page reports hasMore: false", async () => {
+      mockApiFetch.mockResolvedValueOnce({
+        trips: [SAMPLE_TRIP],
+        page: 1,
+        hasMore: false,
+      });
+
+      const store = useTripsStore();
+      await store.fetchTrips();
+
+      expect(store.tripList).toEqual([SAMPLE_TRIP]);
+      expect(mockApiFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it("makes one extra (empty) request when the trip count is an exact multiple of PAGE_SIZE", async () => {
+      // The server's hasMore heuristic (rows.length === PAGE_SIZE) can't tell
+      // "exactly a full page" from "more rows exist" — an accepted tradeoff
+      // shared with the places store's identical pattern. This pins down
+      // that the walk still terminates correctly, just with one wasted round
+      // trip, rather than looping or losing data.
+      const fullPage = Array.from({ length: 20 }, (_, index) => ({
+        ...SAMPLE_TRIP,
+        id: `trip-${index}`,
+      }));
+
+      mockApiFetch
+        .mockResolvedValueOnce({ trips: fullPage, page: 1, hasMore: true })
+        .mockResolvedValueOnce({ trips: [], page: 2, hasMore: false });
+
+      const store = useTripsStore();
+      await store.fetchTrips();
+
+      expect(store.tripList).toEqual(fullPage);
+      expect(mockApiFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it("fails loud instead of returning a truncated list when hasMore never turns false", async () => {
+      // A misbehaving API that always reports more pages must not be allowed
+      // to hand the UI a partial "all trips" list dressed up as complete.
+      mockApiFetch.mockImplementation(async () => ({
+        trips: [SAMPLE_TRIP],
+        page: 1,
+        hasMore: true,
+      }));
+
+      const store = useTripsStore();
+
+      await expect(store.fetchTrips()).rejects.toThrow(/exceeded .* pages/);
+      expect(store.listError).toMatch(/exceeded .* pages/);
+      expect(store.tripList).toEqual([]);
+      expect(store.isLoadingList).toBe(false);
+      // Pins the cap itself (MAX_TRIPS_PAGES in app/stores/trips.ts) so a
+      // regression that gives up early, or loops forever, would fail here
+      // rather than only matching on the error message.
+      expect(mockApiFetch).toHaveBeenCalledTimes(500);
+    });
+
+    it("fails loud instead of looping forever when a page reports an empty trips array with hasMore: true", async () => {
+      // The real server can never emit this shape (`hasMore` is derived from
+      // `rows.length === PAGE_SIZE`, so an empty page always pairs with
+      // `hasMore: false`), but nothing stops a buggy/malformed API from doing
+      // it. This is just the "hasMore never turns false" case with an empty
+      // page each time — same fail-loud contract, pinned separately so a
+      // regression that special-cases an empty page (e.g. an early return
+      // that quietly treats it as "done") would fail here.
+      mockApiFetch.mockImplementation(async () => ({
+        trips: [],
+        page: 1,
+        hasMore: true,
+      }));
+
+      const store = useTripsStore();
+
+      await expect(store.fetchTrips()).rejects.toThrow(/exceeded .* pages/);
+      expect(store.listError).toMatch(/exceeded .* pages/);
+      expect(store.tripList).toEqual([]);
+      expect(mockApiFetch).toHaveBeenCalledTimes(500);
+    });
+
+    it("fails loud when a page response is malformed (missing trips array)", async () => {
+      mockApiFetch.mockResolvedValueOnce({ page: 1, hasMore: false });
+
+      const store = useTripsStore();
+
+      await expect(store.fetchTrips()).rejects.toThrow(/Malformed/);
+      expect(store.listError).toMatch(/Malformed/);
+    });
+
+    it("fails loud when a page response is malformed (non-boolean hasMore)", async () => {
+      mockApiFetch.mockResolvedValueOnce({
+        trips: [SAMPLE_TRIP],
+        page: 1,
+        hasMore: undefined,
+      });
+
+      const store = useTripsStore();
+
+      await expect(store.fetchTrips()).rejects.toThrow(/Malformed/);
+      expect(store.listError).toMatch(/Malformed/);
+    });
+
+    it("preserves the previous tripList and surfaces the error when a page fails mid-walk", async () => {
+      mockApiFetch.mockResolvedValueOnce({
+        trips: [SAMPLE_TRIP],
+        page: 1,
+        hasMore: false,
+      });
+      const store = useTripsStore();
+      await store.fetchTrips();
+      expect(store.tripList).toEqual([SAMPLE_TRIP]);
+
+      const pageOne = Array.from({ length: 20 }, (_, index) => ({
+        ...SAMPLE_TRIP,
+        id: `trip-${index}`,
+      }));
+      mockApiFetch
+        .mockResolvedValueOnce({ trips: pageOne, page: 1, hasMore: true })
+        .mockRejectedValueOnce(new Error("Network error on page 2"));
+
+      await expect(store.fetchTrips()).rejects.toThrow(
+        "Network error on page 2",
+      );
+
+      expect(store.listError).toBe("Network error on page 2");
+      expect(store.tripList).toEqual([SAMPLE_TRIP]);
+      expect(store.isLoadingList).toBe(false);
     });
 
     it("sets isLoadingList to true during the request and false after", async () => {
-      let resolveLoad!: (value: Trip[]) => void;
-      const pending = new Promise<Trip[]>((resolve) => {
+      let resolveLoad!: (value: {
+        trips: Trip[];
+        page: number;
+        hasMore: boolean;
+      }) => void;
+      const pending = new Promise<{
+        trips: Trip[];
+        page: number;
+        hasMore: boolean;
+      }>((resolve) => {
         resolveLoad = resolve;
       });
       mockApiFetch.mockReturnValue(pending);
@@ -120,7 +316,7 @@ describe("useTripsStore", () => {
 
       expect(store.isLoadingList).toBe(true);
 
-      resolveLoad([]);
+      resolveLoad({ trips: [], page: 1, hasMore: false });
       await fetchPromise;
 
       expect(store.isLoadingList).toBe(false);
@@ -137,7 +333,11 @@ describe("useTripsStore", () => {
 
     it("clears listError before each new fetch", async () => {
       mockApiFetch.mockRejectedValueOnce(new Error("first error"));
-      mockApiFetch.mockResolvedValueOnce([]);
+      mockApiFetch.mockResolvedValueOnce({
+        trips: [],
+        page: 1,
+        hasMore: false,
+      });
 
       const store = useTripsStore();
       await store.fetchTrips().catch(() => {});
