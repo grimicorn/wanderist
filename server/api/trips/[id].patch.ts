@@ -8,8 +8,13 @@ import {
   setIfDefined,
 } from "../../utils/validation";
 import { requireTripId, loadOwnedTrip } from "../../utils/trip-helpers";
+import {
+  deleteMediaIfUnreferenced,
+  assertCoverImageOwned,
+} from "../../utils/coverImageCleanup";
 
 type Trip = typeof trips.$inferSelect;
+type Database = ReturnType<typeof getDb>;
 type TripPatchFields = Partial<typeof trips.$inferInsert>;
 
 const VALID_STATUSES = [
@@ -39,6 +44,34 @@ function parseName(body: Record<string, unknown>): string | undefined {
   return trimmed;
 }
 
+function parseCoverImageId(
+  body: Record<string, unknown>,
+): string | null | undefined {
+  // null explicitly clears the cover; optionalString would collapse it to
+  // undefined (meaning "absent"), so handle it before delegating type-checking.
+  if (body.coverImageId === null) {
+    return null;
+  }
+
+  const value = optionalString(body.coverImageId, "coverImageId");
+
+  if (value === undefined) {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+
+  if (trimmed === "") {
+    throw createError({
+      statusCode: 400,
+      statusMessage:
+        "coverImageId must be a non-empty string or null when provided",
+    });
+  }
+
+  return trimmed;
+}
+
 function buildPatchFields(body: Record<string, unknown>): TripPatchFields {
   const fields: TripPatchFields = {};
 
@@ -59,6 +92,7 @@ function buildPatchFields(body: Record<string, unknown>): TripPatchFields {
     parseOptionalDate(body.startDate, "startDate"),
   );
   setIfDefined(fields, "endDate", parseOptionalDate(body.endDate, "endDate"));
+  setIfDefined(fields, "coverImageId", parseCoverImageId(body));
 
   return fields;
 }
@@ -94,6 +128,50 @@ function requireNonEmptyPatch(fields: TripPatchFields): void {
   }
 }
 
+// Returns the media id the patch replaced (so it can be cleaned up), or null
+// when the cover did not change or there was no previous cover to release.
+function replacedCoverMediaId(
+  existing: Trip,
+  patchFields: TripPatchFields,
+): string | null {
+  const nextCoverImageId = patchFields.coverImageId;
+  const previousCoverImageId = existing.coverImageId;
+
+  if (nextCoverImageId === undefined) {
+    return null;
+  }
+
+  if (nextCoverImageId === previousCoverImageId) {
+    return null;
+  }
+
+  return previousCoverImageId ?? null;
+}
+
+// Best-effort: a failed cover cleanup must not fail an otherwise-successful
+// trip update. The old media is only orphaned, not corrupt, so we log and move
+// on rather than surfacing a 500 to the user.
+async function cleanupReplacedCover(
+  database: Database,
+  existing: Trip,
+  patchFields: TripPatchFields,
+): Promise<void> {
+  const mediaId = replacedCoverMediaId(existing, patchFields);
+
+  if (mediaId === null) {
+    return;
+  }
+
+  try {
+    await deleteMediaIfUnreferenced(database, existing.userId, mediaId);
+  } catch (cleanupError) {
+    console.error(
+      `trip patch: cover image cleanup failed for ${mediaId}`,
+      cleanupError,
+    );
+  }
+}
+
 export default defineEventHandler(async (event): Promise<Trip> => {
   const tripId = requireTripId(event);
 
@@ -107,11 +185,24 @@ export default defineEventHandler(async (event): Promise<Trip> => {
 
   const database = getDb();
 
+  const nextCoverImageId = patchFields.coverImageId;
+  if (typeof nextCoverImageId === "string") {
+    await assertCoverImageOwned(database, existing.userId, nextCoverImageId);
+  }
+
   const [updated] = await database
     .update(trips)
     .set(patchFields)
     .where(eq(trips.id, tripId))
     .returning();
+
+  // The trip could be deleted between the ownership load and this update; skip
+  // cleanup (which would delete media for an update that never landed) and 404.
+  if (!updated) {
+    throw createError({ statusCode: 404, statusMessage: "Trip not found" });
+  }
+
+  await cleanupReplacedCover(database, existing, patchFields);
 
   return updated;
 });
