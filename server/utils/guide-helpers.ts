@@ -5,8 +5,53 @@
  * POST /api/guides and PATCH /api/guides/:id can't drift out of sync on what
  * counts as a valid read time or how an empty body is stored.
  */
+import { eq } from "drizzle-orm";
 import { optionalString } from "./db-helpers";
 import { parseOptionalInt } from "./validation";
+import type { getDb } from "../db/index";
+import { guides, VISIBILITY } from "../db/schema";
+
+type Database = ReturnType<typeof getDb>;
+type Guide = typeof guides.$inferSelect;
+
+/**
+ * Loads a single guide by id and enforces read visibility: the owner can read
+ * their guide at any visibility, anyone else can read it only when it is
+ * public. A private guide requested by a non-owner throws 404 (not 403) so the
+ * endpoint never leaks that a private guide with that id exists — mirroring how
+ * loadOwnedOrThrow hides other users' rows behind a 404.
+ *
+ * Takes a pre-built database instance (rather than calling getDb itself) so the
+ * visibility rule can be unit-tested in isolation without mocking the db
+ * singleton, matching the discover-queries utilities.
+ */
+export async function loadReadableGuide(
+  database: Database,
+  id: string,
+  userId: string,
+): Promise<Guide> {
+  const rows = await database
+    .select()
+    .from(guides)
+    .where(eq(guides.id, id))
+    .limit(1);
+
+  const guide = rows[0];
+
+  if (!guide) {
+    throw createError({ statusCode: 404, statusMessage: "Guide not found" });
+  }
+
+  if (guide.userId === userId) {
+    return guide;
+  }
+
+  if (guide.visibility === VISIBILITY.PUBLIC) {
+    return guide;
+  }
+
+  throw createError({ statusCode: 404, statusMessage: "Guide not found" });
+}
 
 // A guide with a 0-minute read time isn't meaningful; the schema's default of
 // 5 already implies "at least 1", this just enforces it on explicit input.

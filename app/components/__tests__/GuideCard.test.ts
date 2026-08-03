@@ -19,6 +19,10 @@ const globalConfig = {
   global: {
     stubs: {
       AppIcon: { template: "<svg data-icon />" },
+      NuxtLink: {
+        template: '<a :href="to"><slot /></a>',
+        props: ["to"],
+      },
     },
   },
 };
@@ -41,6 +45,14 @@ describe("GuideCard", () => {
     expect(wrapper.find(".gcard__name").text()).toBe("Tokyo on foot");
     expect(wrapper.text()).toContain("8 min read");
     expect(wrapper.text()).toContain("12");
+  });
+
+  it("links the title to the guide's detail page", () => {
+    const wrapper = mount(GuideCard, {
+      ...globalConfig,
+      props: { guide: SAMPLE_GUIDE },
+    });
+    expect(wrapper.find(".gcard__name").attributes("href")).toBe("/guides/g-1");
   });
 
   it("tags a public guide with the ongoing style", () => {

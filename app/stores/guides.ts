@@ -38,6 +38,13 @@ export const useGuidesStore = defineStore("guides", () => {
   const { apiFetch } = useApiClient();
 
   const guides = ref<Guide[]>([]);
+  // Holds the single guide shown on the detail page (/guides/[id]). Kept
+  // separate from the `guides` list because a guide can be opened from explore
+  // without ever loading the owner's full list, and the detail fetch returns a
+  // guide the list may not contain (e.g. someone else's public guide).
+  const currentGuide = ref<Guide | null>(null);
+  const isLoadingGuide = ref(false);
+  const guideError = ref<string | null>(null);
   const isLoading = ref(false);
   // Distinct from isLoading: lets a consumer tell "haven't fetched yet" apart
   // from "fetched and the list is genuinely empty", so a page doesn't flash
@@ -79,6 +86,23 @@ export const useGuidesStore = defineStore("guides", () => {
       throw fetchError;
     } finally {
       isLoading.value = false;
+    }
+  }
+
+  async function fetchGuideById(id: string): Promise<void> {
+    isLoadingGuide.value = true;
+    guideError.value = null;
+
+    try {
+      currentGuide.value = await apiFetch<Guide>(`/api/guides/${id}`);
+    } catch (fetchError) {
+      // Clear any stale guide so the detail page shows its not-found state
+      // rather than the previously-open guide when a fetch fails.
+      currentGuide.value = null;
+      guideError.value = extractErrorMessage(fetchError);
+      throw fetchError;
+    } finally {
+      isLoadingGuide.value = false;
     }
   }
 
@@ -164,10 +188,14 @@ export const useGuidesStore = defineStore("guides", () => {
 
   return {
     guides,
+    currentGuide,
+    isLoadingGuide,
+    guideError,
     isLoading,
     hasLoaded,
     error,
     fetchGuides,
+    fetchGuideById,
     createGuide,
     updateGuide,
     deleteGuide,

@@ -39,6 +39,10 @@ function buildGlobalConfig(pinia: ReturnType<typeof createPinia>) {
         AppIcon: { template: "<svg data-icon />" },
         InputText: inputStub,
         InputTextarea: textareaStub,
+        NuxtLink: {
+          template: '<a :href="to"><slot /></a>',
+          props: ["to"],
+        },
       },
     },
   };
