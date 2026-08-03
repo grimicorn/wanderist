@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { ref } from "vue";
+import { ref, reactive, nextTick, unref } from "vue";
 import { mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import GuideDetailPage from "../guides/[id].vue";
@@ -7,13 +7,15 @@ import { nuxtLinkStub } from "~/components/__tests__/input-stubs";
 import { useGuidesStore } from "~/stores/guides";
 import type { Guide } from "~/stores/guides";
 
-// Override the global useRoute stub to provide a guide id for these tests.
-vi.stubGlobal("useRoute", () => ({ params: { id: "guide-1" }, query: {} }));
+// Override the global useRoute stub with a REACTIVE params object so a test can
+// change the guide id and assert the page's watched ref tracks it.
+const routeParams = reactive({ id: "guide-1" });
+vi.stubGlobal("useRoute", () => ({ params: routeParams, query: {} }));
 
 // The global useAsyncData stub never invokes its handler, so by default the
 // page's fetch wiring is dead under test. Override it to run the handler once
 // and record its options so tests can assert the guide is requested by its
-// route param and that the refetch-on-id-change watcher is wired.
+// route param and that the refetch-on-id-change watcher targets the id.
 let lastAsyncDataOptions: { watch?: unknown[] } | undefined;
 vi.stubGlobal(
   "useAsyncData",
@@ -57,6 +59,7 @@ describe("Guide Detail page (/guides/[id])", () => {
   let pinia: ReturnType<typeof createPinia>;
 
   beforeEach(() => {
+    routeParams.id = "guide-1";
     pinia = createPinia();
     setActivePinia(pinia);
 
@@ -94,11 +97,18 @@ describe("Guide Detail page (/guides/[id])", () => {
     expect(guidesStore.fetchGuideById).toHaveBeenCalledWith("guide-1");
   });
 
-  it("watches the guide id so it refetches on in-page navigation", () => {
+  it("watches the guide id so it refetches on in-page navigation", async () => {
     mount(GuideDetailPage, buildGlobalConfig(pinia));
-    // Without the watch, navigating between two guides reuses the component and
-    // keeps showing the previous guide.
-    expect(lastAsyncDataOptions?.watch).toHaveLength(1);
+
+    // The watched ref must be the guide id (not, say, the loaded guide) so the
+    // component refetches when navigating between two guides reuses it.
+    const watchedGuideId = lastAsyncDataOptions?.watch?.[0];
+    expect(unref(watchedGuideId)).toBe("guide-1");
+
+    routeParams.id = "guide-2";
+    await nextTick();
+
+    expect(unref(watchedGuideId)).toBe("guide-2");
   });
 
   it("shows the loading state while the guide is loading", () => {

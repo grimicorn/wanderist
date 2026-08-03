@@ -1,7 +1,7 @@
 import { getDb } from "../../db/index";
 import { requireUser } from "../../utils/auth";
 import { requireRouterParam } from "../../utils/db-helpers";
-import { loadReadableGuide } from "../../utils/guide-helpers";
+import { loadReadableGuide } from "../../utils/guide-queries";
 
 export default defineEventHandler(async (event) => {
   const id = requireRouterParam(event, "id");

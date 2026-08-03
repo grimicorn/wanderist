@@ -192,12 +192,6 @@ export const useGuidesStore = defineStore("guides", () => {
     await markLoadSucceeded();
   }
 
-  // Only the returned likeCount is spliced back in (not the whole row) so a
-  // concurrent edit to the same guide's other fields isn't clobbered by a
-  // like/unlike response that predates it — mirrors likeEntry in stores/entries.ts.
-  // Splice only likeCount into the open detail guide (never the whole row) for
-  // the same reason replaceLikeCount does it in the list: a like/unlike response
-  // that predates a concurrent edit must not clobber the guide's other fields.
   function syncCurrentGuideLikeCount(id: string, likeCount: number): void {
     if (currentGuide.value?.id !== id) {
       return;
@@ -205,6 +199,10 @@ export const useGuidesStore = defineStore("guides", () => {
     currentGuide.value = { ...currentGuide.value, likeCount };
   }
 
+  // Only the returned likeCount is spliced back in (not the whole row) so a
+  // concurrent edit to the same guide's other fields isn't clobbered by a
+  // like/unlike response that predates it — mirrors likeEntry in stores/entries.ts.
+  // syncCurrentGuideLikeCount applies the same splice to the open detail guide.
   async function likeGuide(id: string): Promise<Guide> {
     const updated = await apiFetch<Guide>(`/api/guides/${id}/like`, {
       method: "POST",
