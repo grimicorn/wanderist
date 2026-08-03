@@ -60,7 +60,7 @@
           {{ searchError }}
         </div>
         <div v-else-if="query && !searchIsLoading" class="cmdk__empty">
-          No matches for &ldquo;{{ query }}&rdquo;. Try a place, trip or
+          No matches for &ldquo;{{ query }}&rdquo;. Try a place, trip, guide or
           @handle.
         </div>
       </div>

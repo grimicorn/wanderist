@@ -232,9 +232,11 @@ describe("AppCommandPalette", () => {
     await flushPromises();
     await wrapper.vm.$nextTick();
 
-    const labels = wrapper.findAll(".cmdk__glabel").map((el) => el.text());
-    expect(labels).toContain("Guides");
-    expect(wrapper.find(".cmdk__t").text()).toContain("48 hours in Kyoto");
+    const guidesGroup = wrapper
+      .findAll(".cmdk__group")
+      .find((group) => group.find(".cmdk__glabel").text() === "Guides");
+    expect(guidesGroup).toBeDefined();
+    expect(guidesGroup?.find(".cmdk__t").text()).toContain("48 hours in Kyoto");
   });
 
   it("shows empty state when query is set but API returns no results", async () => {

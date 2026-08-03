@@ -272,11 +272,11 @@ describe("Explore page (/explore)", () => {
     const wrapper = mount(ExplorePage, globalConfig);
     await wrapper.vm.$nextTick();
 
-    const labels = wrapper
-      .findAll(".xsearch-group__label")
-      .map((el) => el.text());
-    expect(labels).toContain("Guides");
-    expect(wrapper.find(".xsearch-item__title").text()).toContain(
+    const guidesGroup = wrapper
+      .findAll(".xsearch-group")
+      .find((group) => group.find(".xsearch-group__label").text() === "Guides");
+    expect(guidesGroup).toBeDefined();
+    expect(guidesGroup?.find(".xsearch-item__title").text()).toContain(
       "48 hours in Kyoto",
     );
   });
