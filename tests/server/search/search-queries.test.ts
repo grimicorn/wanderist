@@ -15,9 +15,12 @@ vi.mock("drizzle-orm", async (importOriginal) => {
     eq: vi.fn(original.eq),
     or: vi.fn(original.or),
     and: vi.fn(original.and),
+    isNull: vi.fn(original.isNull),
   };
 });
 
+import { isNull } from "drizzle-orm";
+import { users } from "../../../server/db/schema";
 import { getDb } from "../../../server/db/index";
 import {
   searchPlaces,
@@ -159,6 +162,18 @@ describe("searchPeople", () => {
     );
 
     expect(result).toEqual(expectedRows);
+  });
+
+  it("excludes soft-deleted accounts so profile links never 404", async () => {
+    const chain = makeQueryChain([]);
+    mockGetDb.mockReturnValue(chain as unknown as ReturnType<typeof getDb>);
+
+    await searchPeople(
+      mockGetDb() as unknown as ReturnType<typeof getDb>,
+      "%elsa%",
+    );
+
+    expect(isNull).toHaveBeenCalledWith(users.deletedAt);
   });
 
   it("does NOT scope people results to a userId (public profiles only)", async () => {
