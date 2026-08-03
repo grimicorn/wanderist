@@ -1,9 +1,11 @@
 /**
- * Shared validation for guide route handlers.
+ * Shared helpers for guide route handlers.
  *
  * Centralises the readTimeMinutes floor check and body normalisation so
  * POST /api/guides and PATCH /api/guides/:id can't drift out of sync on what
- * counts as a valid read time or how an empty body is stored.
+ * counts as a valid read time or how an empty body is stored, plus the
+ * read-visibility loader (loadReadableGuide) that GET /api/guides/:id uses to
+ * decide who may read a guide.
  */
 import { eq } from "drizzle-orm";
 import { optionalString } from "./db-helpers";
@@ -38,19 +40,18 @@ export async function loadReadableGuide(
 
   const guide = rows[0];
 
-  if (!guide) {
+  // A single guard covers both "no such guide" and "not allowed to read it" so
+  // a non-owner can't tell a private guide apart from a missing one. Keeping
+  // the condition inline (rather than a boolean const) lets the `=== undefined`
+  // branch narrow `guide` to non-null for the return below.
+  if (
+    guide === undefined ||
+    (guide.userId !== userId && guide.visibility !== VISIBILITY.PUBLIC)
+  ) {
     throw createError({ statusCode: 404, statusMessage: "Guide not found" });
   }
 
-  if (guide.userId === userId) {
-    return guide;
-  }
-
-  if (guide.visibility === VISIBILITY.PUBLIC) {
-    return guide;
-  }
-
-  throw createError({ statusCode: 404, statusMessage: "Guide not found" });
+  return guide;
 }
 
 // A guide with a 0-minute read time isn't meaningful; the schema's default of

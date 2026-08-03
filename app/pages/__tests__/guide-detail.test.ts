@@ -1,12 +1,27 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { ref } from "vue";
 import { mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import GuideDetailPage from "../guides/[id].vue";
+import { nuxtLinkStub } from "~/components/__tests__/input-stubs";
 import { useGuidesStore } from "~/stores/guides";
 import type { Guide } from "~/stores/guides";
 
 // Override the global useRoute stub to provide a guide id for these tests.
 vi.stubGlobal("useRoute", () => ({ params: { id: "guide-1" }, query: {} }));
+
+// The global useAsyncData stub never invokes its handler, so by default the
+// page's fetch wiring is dead under test. Override it to run the handler once
+// so a test can assert the guide is actually requested by its route param.
+vi.stubGlobal("useAsyncData", (_key: unknown, handler: () => unknown) => {
+  handler();
+  return {
+    data: ref(null),
+    pending: ref(false),
+    error: ref(null),
+    refresh: vi.fn(),
+  };
+});
 
 const SAMPLE_GUIDE: Guide = {
   id: "guide-1",
@@ -26,10 +41,7 @@ function buildGlobalConfig(pinia: ReturnType<typeof createPinia>) {
       plugins: [pinia],
       stubs: {
         AppIcon: { template: "<svg data-icon />" },
-        NuxtLink: {
-          template: '<a :href="to"><slot /></a>',
-          props: ["to"],
-        },
+        NuxtLink: nuxtLinkStub,
       },
     },
   };
@@ -68,6 +80,29 @@ describe("Guide Detail page (/guides/[id])", () => {
   it("renders the read time", () => {
     const wrapper = mount(GuideDetailPage, buildGlobalConfig(pinia));
     expect(wrapper.text()).toContain("8 min read");
+  });
+
+  it("requests the guide named by the route param", () => {
+    const guidesStore = useGuidesStore();
+    mount(GuideDetailPage, buildGlobalConfig(pinia));
+    expect(guidesStore.fetchGuideById).toHaveBeenCalledWith("guide-1");
+  });
+
+  it("shows the loading state while the guide is loading", () => {
+    const guidesStore = useGuidesStore();
+    guidesStore.isLoadingGuide = true;
+
+    const wrapper = mount(GuideDetailPage, buildGlobalConfig(pinia));
+    expect(wrapper.text()).toContain("Loading guide…");
+  });
+
+  it("surfaces the store error message when a load fails", () => {
+    const guidesStore = useGuidesStore();
+    guidesStore.currentGuide = null;
+    guidesStore.guideError = "Something went wrong";
+
+    const wrapper = mount(GuideDetailPage, buildGlobalConfig(pinia));
+    expect(wrapper.text()).toContain("Something went wrong");
   });
 
   it("shows the not-found state when no guide is loaded", () => {

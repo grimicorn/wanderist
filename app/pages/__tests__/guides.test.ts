@@ -4,7 +4,11 @@ import { createPinia, setActivePinia } from "pinia";
 import GuidesPage from "../guides/index.vue";
 import { useGuidesStore } from "~/stores/guides";
 import type { Guide } from "~/stores/guides";
-import { inputStub, textareaStub } from "~/components/__tests__/input-stubs";
+import {
+  inputStub,
+  textareaStub,
+  nuxtLinkStub,
+} from "~/components/__tests__/input-stubs";
 
 const SAMPLE_GUIDES: Guide[] = [
   {
@@ -39,10 +43,7 @@ function buildGlobalConfig(pinia: ReturnType<typeof createPinia>) {
         AppIcon: { template: "<svg data-icon />" },
         InputText: inputStub,
         InputTextarea: textareaStub,
-        NuxtLink: {
-          template: '<a :href="to"><slot /></a>',
-          props: ["to"],
-        },
+        NuxtLink: nuxtLinkStub,
       },
     },
   };

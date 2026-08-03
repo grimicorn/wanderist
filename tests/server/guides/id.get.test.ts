@@ -24,10 +24,18 @@ vi.mock("../../../server/db/index", () => ({
   getDb: vi.fn(),
 }));
 
+vi.mock("drizzle-orm", async (importOriginal) => {
+  const original = await importOriginal<typeof import("drizzle-orm")>();
+  return { ...original, eq: vi.fn(original.eq) };
+});
+
+import { eq } from "drizzle-orm";
 import { requireRouterParam } from "../../../server/utils/db-helpers";
 import { requireUser } from "../../../server/utils/auth";
 import { getDb } from "../../../server/db/index";
+import { guides } from "../../../server/db/schema";
 
+const mockEq = vi.mocked(eq);
 const mockRequireRouterParam = vi.mocked(requireRouterParam);
 const mockRequireUser = vi.mocked(requireUser);
 const mockGetDb = vi.mocked(getDb);
@@ -37,7 +45,7 @@ function makeDbWithGuide(rows: Record<string, unknown>[]) {
   const whereMock = vi.fn().mockReturnValue({ limit: limitMock });
   const fromMock = vi.fn().mockReturnValue({ where: whereMock });
   const selectMock = vi.fn().mockReturnValue({ from: fromMock });
-  return { select: selectMock };
+  return { select: selectMock, _where: whereMock, _limit: limitMock };
 }
 
 const OWNER_ID = "user-owner";
@@ -73,9 +81,8 @@ describe("GET /api/guides/:id", () => {
   it("returns a private guide to its owner, including the body", async () => {
     const guide = makeGuide({ visibility: "private", userId: OWNER_ID });
     mockRequireUser.mockReturnValue(OWNER_ID);
-    mockGetDb.mockReturnValue(
-      makeDbWithGuide([guide]) as unknown as ReturnType<typeof getDb>,
-    );
+    const mockDb = makeDbWithGuide([guide]);
+    mockGetDb.mockReturnValue(mockDb as unknown as ReturnType<typeof getDb>);
 
     const result = await runHandler();
 
@@ -83,6 +90,12 @@ describe("GET /api/guides/:id", () => {
     expect((result as { body: string }).body).toBe(
       "Start in Yanaka at sunrise.",
     );
+    // The lookup must filter on the guide id and take a single row — a
+    // regression to the wrong column or a dropped limit fails here rather
+    // than silently returning someone else's guide.
+    expect(mockEq).toHaveBeenCalledWith(guides.id, "guide-1");
+    expect(mockDb._where).toHaveBeenCalledTimes(1);
+    expect(mockDb._limit).toHaveBeenCalledWith(1);
   });
 
   it("returns a public guide to a non-owner", async () => {

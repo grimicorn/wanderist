@@ -89,20 +89,37 @@ export const useGuidesStore = defineStore("guides", () => {
     }
   }
 
+  // Tracks the id of the most recent fetchGuideById call so a slower earlier
+  // request (e.g. navigating /guides/a -> /guides/b before a's response lands)
+  // can't overwrite the newer guide, blank it out on a late failure, or clear
+  // the loading flag while b is still in flight. Mirrors the inFlightFetch
+  // guard fetchGuides uses for the same class of race.
+  let latestRequestedGuideId: string | null = null;
+
   async function fetchGuideById(id: string): Promise<void> {
+    latestRequestedGuideId = id;
     isLoadingGuide.value = true;
     guideError.value = null;
 
     try {
-      currentGuide.value = await apiFetch<Guide>(`/api/guides/${id}`);
+      const guide = await apiFetch<Guide>(`/api/guides/${id}`);
+      if (latestRequestedGuideId !== id) {
+        return;
+      }
+      currentGuide.value = guide;
     } catch (fetchError) {
+      if (latestRequestedGuideId !== id) {
+        throw fetchError;
+      }
       // Clear any stale guide so the detail page shows its not-found state
       // rather than the previously-open guide when a fetch fails.
       currentGuide.value = null;
       guideError.value = extractErrorMessage(fetchError);
       throw fetchError;
     } finally {
-      isLoadingGuide.value = false;
+      if (latestRequestedGuideId === id) {
+        isLoadingGuide.value = false;
+      }
     }
   }
 
@@ -151,6 +168,11 @@ export const useGuidesStore = defineStore("guides", () => {
     guides.value = guides.value.map((guide) =>
       guide.id === id ? updated : guide,
     );
+    // Keep the open detail page (which renders from currentGuide, not the
+    // list) in sync so an edit doesn't leave it showing pre-edit content.
+    if (currentGuide.value?.id === id) {
+      currentGuide.value = updated;
+    }
     await markLoadSucceeded();
 
     return updated;
@@ -160,6 +182,11 @@ export const useGuidesStore = defineStore("guides", () => {
     await apiFetch(`/api/guides/${id}`, { method: "DELETE" });
 
     guides.value = guides.value.filter((guide) => guide.id !== id);
+    // Drop the open detail page's guide if it was the one deleted, so it can't
+    // keep rendering a row that no longer exists.
+    if (currentGuide.value?.id === id) {
+      currentGuide.value = null;
+    }
     await markLoadSucceeded();
   }
 

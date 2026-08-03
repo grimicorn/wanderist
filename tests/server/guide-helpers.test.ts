@@ -15,9 +15,40 @@ Object.assign(globalThis, {
 const {
   parseReadTimeMinutes,
   parseOptionalGuideBody,
+  loadReadableGuide,
   MIN_READ_TIME_MINUTES,
   MAX_READ_TIME_MINUTES,
 } = await import("../../server/utils/guide-helpers");
+
+type FakeDatabase = Parameters<typeof loadReadableGuide>[0];
+
+// Minimal stand-in for the query chain loadReadableGuide walks
+// (select().from().where().limit()), resolving to the given rows. Lets the
+// visibility rule be exercised in isolation without a real database.
+function fakeDbReturning(rows: Record<string, unknown>[]): FakeDatabase {
+  const chain = {
+    from: () => chain,
+    where: () => chain,
+    limit: () => Promise.resolve(rows),
+  };
+  return { select: () => chain } as unknown as FakeDatabase;
+}
+
+const OWNER_ID = "user-owner";
+const OTHER_ID = "user-other";
+
+function guideRow(overrides: Record<string, unknown>) {
+  return {
+    id: "guide-1",
+    userId: OWNER_ID,
+    title: "Tokyo on foot",
+    body: "Start in Yanaka at sunrise.",
+    readTimeMinutes: 8,
+    likeCount: 3,
+    visibility: "private",
+    ...overrides,
+  };
+}
 
 describe("parseReadTimeMinutes", () => {
   it("returns undefined when the value is absent", () => {
@@ -106,5 +137,37 @@ describe("parseOptionalGuideBody", () => {
     expect(() => parseOptionalGuideBody(42)).toThrow(
       expect.objectContaining({ statusCode: 400 }),
     );
+  });
+});
+
+describe("loadReadableGuide", () => {
+  it("returns a private guide to its owner", async () => {
+    const guide = guideRow({ visibility: "private", userId: OWNER_ID });
+
+    await expect(
+      loadReadableGuide(fakeDbReturning([guide]), "guide-1", OWNER_ID),
+    ).resolves.toEqual(guide);
+  });
+
+  it("returns a public guide to a non-owner", async () => {
+    const guide = guideRow({ visibility: "public", userId: OWNER_ID });
+
+    await expect(
+      loadReadableGuide(fakeDbReturning([guide]), "guide-1", OTHER_ID),
+    ).resolves.toEqual(guide);
+  });
+
+  it("throws 404 for a private guide requested by a non-owner", async () => {
+    const guide = guideRow({ visibility: "private", userId: OWNER_ID });
+
+    await expect(
+      loadReadableGuide(fakeDbReturning([guide]), "guide-1", OTHER_ID),
+    ).rejects.toEqual(expect.objectContaining({ statusCode: 404 }));
+  });
+
+  it("throws 404 when the guide does not exist", async () => {
+    await expect(
+      loadReadableGuide(fakeDbReturning([]), "missing", OWNER_ID),
+    ).rejects.toEqual(expect.objectContaining({ statusCode: 404 }));
   });
 });

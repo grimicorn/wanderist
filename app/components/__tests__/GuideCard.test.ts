@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { mount } from "@vue/test-utils";
 import GuideCard from "../GuideCard.vue";
+import { nuxtLinkStub } from "./input-stubs";
 import type { Guide } from "~/stores/guides";
 
 const SAMPLE_GUIDE: Guide = {
@@ -19,10 +20,7 @@ const globalConfig = {
   global: {
     stubs: {
       AppIcon: { template: "<svg data-icon />" },
-      NuxtLink: {
-        template: '<a :href="to"><slot /></a>',
-        props: ["to"],
-      },
+      NuxtLink: nuxtLinkStub,
     },
   },
 };

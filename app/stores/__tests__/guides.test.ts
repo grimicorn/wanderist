@@ -129,6 +129,70 @@ describe("useGuidesStore", () => {
   });
 
   // ---------------------------------------------------------------------------
+  // fetchGuideById
+  // ---------------------------------------------------------------------------
+
+  describe("fetchGuideById", () => {
+    const guide = { id: "g-1", userId: "u-1", title: "Tokyo on foot" };
+
+    it("populates currentGuide on success", async () => {
+      mockApiFetch.mockResolvedValueOnce(guide);
+      const store = useGuidesStore();
+
+      await store.fetchGuideById("g-1");
+
+      expect(store.currentGuide).toEqual(guide);
+      expect(store.isLoadingGuide).toBe(false);
+      expect(store.guideError).toBeNull();
+    });
+
+    it("calls GET /api/guides/:id", async () => {
+      mockApiFetch.mockResolvedValue(guide);
+      const store = useGuidesStore();
+
+      await store.fetchGuideById("g-1");
+
+      expect(mockApiFetch).toHaveBeenCalledWith("/api/guides/g-1");
+    });
+
+    it("sets guideError, clears currentGuide, and rethrows on failure", async () => {
+      mockApiFetch.mockRejectedValue(new Error("Not Found"));
+      const store = useGuidesStore();
+
+      await expect(store.fetchGuideById("g-1")).rejects.toThrow("Not Found");
+
+      expect(store.currentGuide).toBeNull();
+      expect(store.guideError).toBe("Not Found");
+      expect(store.isLoadingGuide).toBe(false);
+    });
+
+    it("drops a stale response so an older request can't overwrite a newer guide", async () => {
+      const slowGuide = { ...guide, id: "g-slow", title: "Slow" };
+      const fastGuide = { ...guide, id: "g-fast", title: "Fast" };
+
+      let resolveSlow: (value: typeof slowGuide) => void;
+      mockApiFetch
+        .mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              resolveSlow = resolve;
+            }),
+        )
+        .mockResolvedValueOnce(fastGuide);
+
+      const store = useGuidesStore();
+      const slow = store.fetchGuideById("g-slow");
+      await store.fetchGuideById("g-fast");
+
+      // The slower first request lands last but must not clobber g-fast.
+      resolveSlow!(slowGuide);
+      await slow;
+
+      expect(store.currentGuide).toEqual(fastGuide);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
   // createGuide
   // ---------------------------------------------------------------------------
 
@@ -326,6 +390,24 @@ describe("useGuidesStore", () => {
       ).rejects.toThrow("boom");
       expect(store.guides).toEqual([guide1]);
     });
+
+    it("syncs the open detail guide when it is the one edited", async () => {
+      const original = { id: "g-1", userId: "u-1", title: "Tokyo on foot" };
+      const updated = { id: "g-1", userId: "u-1", title: "Tokyo, revised" };
+
+      mockApiFetch
+        .mockResolvedValueOnce(original)
+        .mockResolvedValueOnce(updated)
+        // markLoadSucceeded refetches the list because fetchGuideById never
+        // set hasLoaded — give that call a clean empty response.
+        .mockResolvedValue([]);
+
+      const store = useGuidesStore();
+      await store.fetchGuideById("g-1");
+      await store.updateGuide("g-1", { title: "Tokyo, revised" });
+
+      expect(store.currentGuide).toEqual(updated);
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -371,6 +453,23 @@ describe("useGuidesStore", () => {
 
       await expect(store.deleteGuide("g-1")).rejects.toThrow("boom");
       expect(store.guides).toEqual([guide1]);
+    });
+
+    it("clears the open detail guide when it is the one deleted", async () => {
+      const guide1 = { id: "g-1", userId: "u-1", title: "Tokyo on foot" };
+
+      mockApiFetch
+        .mockResolvedValueOnce(guide1)
+        .mockResolvedValueOnce({ success: true })
+        // markLoadSucceeded refetches the list because fetchGuideById never
+        // set hasLoaded — give that call a clean empty response.
+        .mockResolvedValue([]);
+
+      const store = useGuidesStore();
+      await store.fetchGuideById("g-1");
+      await store.deleteGuide("g-1");
+
+      expect(store.currentGuide).toBeNull();
     });
   });
 
