@@ -1,10 +1,10 @@
 import { requireUser } from "../utils/auth";
-import { runSearch } from "../utils/search-queries";
+import { runSearch, type SearchResults } from "../utils/search-queries";
 
 const MIN_QUERY_LENGTH = 1;
 const MAX_QUERY_LENGTH = 100;
 
-const EMPTY_RESULTS = {
+const EMPTY_RESULTS: SearchResults = {
   places: [],
   trips: [],
   entries: [],

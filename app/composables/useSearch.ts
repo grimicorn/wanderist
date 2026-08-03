@@ -1,6 +1,6 @@
 /**
  * useSearch — calls GET /api/search?q= and returns grouped, UI-ready result
- * items. All four groups (places, trips, entries, people) map to the same
+ * items. All five groups (places, trips, entries, guides, people) map to the same
  * SearchItem shape that AppCommandPalette, explore, and map already use.
  */
 

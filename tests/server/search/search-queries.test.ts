@@ -20,6 +20,7 @@ vi.mock("drizzle-orm", async (importOriginal) => {
 
 import { eq } from "drizzle-orm";
 import { getDb } from "../../../server/db/index";
+import { entries, guides } from "../../../server/db/schema";
 import {
   searchPlaces,
   searchTrips,
@@ -40,6 +41,21 @@ function makeQueryChain(rows: Record<string, unknown>[]) {
     .mockReturnValue({ where: whereFn, innerJoin: innerJoinFn });
   const selectFn = vi.fn().mockReturnValue({ from: fromFn });
   return { select: selectFn, _where: whereFn, _limit: limitFn };
+}
+
+// Table-aware chain: each `.from(table)` resolves the rows registered for that
+// table, so a mis-wired runSearch (e.g. guides receiving the entries query)
+// surfaces as a mismatched group rather than silently passing.
+function makeTableQueryChain(
+  rowsByTable: Map<unknown, Record<string, unknown>[]>,
+) {
+  const fromFn = vi.fn((table: unknown) => {
+    const limitFn = vi.fn().mockResolvedValue(rowsByTable.get(table) ?? []);
+    const whereFn = vi.fn().mockReturnValue({ limit: limitFn });
+    const innerJoinFn = vi.fn().mockReturnValue({ where: whereFn });
+    return { where: whereFn, innerJoin: innerJoinFn };
+  });
+  return { select: vi.fn().mockReturnValue({ from: fromFn }) };
 }
 
 describe("searchPlaces", () => {
@@ -169,8 +185,8 @@ describe("searchGuides", () => {
       "%kyoto%",
     );
 
-    // A userId argument is required, so guide search is always owner-scoped.
-    expect(eq).toHaveBeenCalledWith(expect.anything(), "user-1");
+    // Assert the exact column so removing the userId filter fails this test.
+    expect(eq).toHaveBeenCalledWith(guides.userId, "user-1");
   });
 
   it("returns an empty array when no guides match", async () => {
@@ -248,13 +264,22 @@ describe("runSearch", () => {
 
   it("includes matching guides in the combined results, scoped to the owner", async () => {
     const guideRows = [{ id: "g-1", title: "48 hours in Kyoto" }];
-    const chain = makeQueryChain(guideRows);
+    const entryRows = [{ id: "e-1", title: "Harbor at 4am" }];
+    const chain = makeTableQueryChain(
+      new Map([
+        [guides, guideRows],
+        [entries, entryRows],
+      ]),
+    );
     mockGetDb.mockReturnValue(chain as unknown as ReturnType<typeof getDb>);
 
     const result = await runSearch("user-1", "kyoto");
 
+    // Distinct rows per table prove guides are wired to the guides query, not
+    // accidentally reading another group's rows.
     expect(result.guides).toEqual(guideRows);
-    expect(eq).toHaveBeenCalledWith(expect.anything(), "user-1");
+    expect(result.entries).toEqual(entryRows);
+    expect(eq).toHaveBeenCalledWith(guides.userId, "user-1");
   });
 
   it("escapes SQL LIKE special characters in the query to prevent injection", async () => {

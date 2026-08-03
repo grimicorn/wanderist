@@ -120,6 +120,8 @@ export async function searchGuides(
   userId: string,
   pattern: string,
 ): Promise<GuideResult[]> {
+  // Guide results are intentionally scoped to the requesting user (own guides
+  // only); surfacing other users' public guides for discovery is out of scope.
   return database
     .select({
       id: guides.id,
