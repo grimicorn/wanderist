@@ -5,7 +5,7 @@ stubNitroGlobals();
 
 // requireRouterParam is stubbed (it reads the event's route params); the
 // visibility rule under test lives in the real loadReadableGuide from
-// guide-helpers.ts, so it is intentionally NOT mocked — a regression there
+// guide-queries.ts, so it is intentionally NOT mocked — a regression there
 // fails these tests.
 vi.mock("../../../server/utils/db-helpers", async (importOriginal) => {
   const actual =

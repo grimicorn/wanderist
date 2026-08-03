@@ -59,9 +59,12 @@ const isLoading = computed(() => guidesStore.isLoadingGuide);
 const guide = computed(() => guidesStore.currentGuide);
 const guideError = computed(() => guidesStore.guideError);
 
+// No .catch: like trips/[id].vue, a failed load rejects so Nuxt sets a real
+// error status on SSR; the store still records guideError / nulls currentGuide,
+// so the template renders its not-found / error state on the client.
 useAsyncData(
   () => `guide-detail-${guideId.value}`,
-  () => guidesStore.fetchGuideById(guideId.value).catch(() => undefined),
+  () => guidesStore.fetchGuideById(guideId.value),
   { watch: [guideId] },
 );
 
@@ -125,9 +128,8 @@ useHead(
 .gdetail__back {
   margin-top: 16px;
 }
-/* Local copy of GuidesList.vue's .empty-note — that rule is `scoped` to its own
-   component, so the loading / not-found / empty-body states here need their own
-   styling for the text to read as muted rather than raw body copy. */
+/* Scoped per component, matching GuidesList.vue and explore.vue (the codebase's
+   established pattern for this muted state text) rather than a global rule. */
 .empty-note {
   font-size: 12.5px;
   color: var(--faint);

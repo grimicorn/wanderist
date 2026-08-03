@@ -217,6 +217,29 @@ describe("useGuidesStore", () => {
       expect(store.currentGuide).toEqual(loadedGuide);
       expect(store.guideError).toBeNull();
     });
+
+    it("keeps isLoadingGuide true when an older request settles while a newer one is still in flight", async () => {
+      let resolveFirst: (value: typeof guide) => void;
+      mockApiFetch
+        .mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              resolveFirst = resolve;
+            }),
+        )
+        // The second request never settles, so the spinner must stay on.
+        .mockImplementationOnce(() => new Promise(() => {}));
+
+      const store = useGuidesStore();
+      const first = store.fetchGuideById("g-1");
+      store.fetchGuideById("g-2");
+
+      resolveFirst!(guide);
+      await first;
+
+      expect(store.isLoadingGuide).toBe(true);
+      expect(store.currentGuide).toBeNull();
+    });
   });
 
   // ---------------------------------------------------------------------------
