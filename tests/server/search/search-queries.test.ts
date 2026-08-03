@@ -18,7 +18,7 @@ vi.mock("drizzle-orm", async (importOriginal) => {
   };
 });
 
-import { eq } from "drizzle-orm";
+import { eq, ilike } from "drizzle-orm";
 import { getDb } from "../../../server/db/index";
 import { entries, guides } from "../../../server/db/schema";
 import {
@@ -187,6 +187,20 @@ describe("searchGuides", () => {
 
     // Assert the exact column so removing the userId filter fails this test.
     expect(eq).toHaveBeenCalledWith(guides.userId, "user-1");
+  });
+
+  it("matches against both the title and body columns", async () => {
+    const chain = makeQueryChain([]);
+    mockGetDb.mockReturnValue(chain as unknown as ReturnType<typeof getDb>);
+
+    await searchGuides(
+      mockGetDb() as unknown as ReturnType<typeof getDb>,
+      "user-1",
+      "%kyoto%",
+    );
+
+    expect(ilike).toHaveBeenCalledWith(guides.title, "%kyoto%");
+    expect(ilike).toHaveBeenCalledWith(guides.body, "%kyoto%");
   });
 
   it("returns an empty array when no guides match", async () => {

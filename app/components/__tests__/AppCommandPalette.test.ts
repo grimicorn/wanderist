@@ -205,6 +205,38 @@ describe("AppCommandPalette", () => {
     expect(labels).toContain("Trips");
   });
 
+  it("renders the Guides group when API returns guide results", async () => {
+    const wrapper = mount(AppCommandPalette, {
+      props: { open: true },
+      ...globalConfig,
+    });
+
+    mockSearch.mockImplementation(() => {
+      mockResults.value = {
+        places: [],
+        trips: [],
+        entries: [],
+        guides: [
+          {
+            id: "g-1",
+            title: "48 hours in Kyoto",
+            icon: "layers",
+            href: "/guides",
+          },
+        ],
+        people: [],
+      };
+    });
+
+    await wrapper.find(".cmdk__input").setValue("kyoto");
+    await flushPromises();
+    await wrapper.vm.$nextTick();
+
+    const labels = wrapper.findAll(".cmdk__glabel").map((el) => el.text());
+    expect(labels).toContain("Guides");
+    expect(wrapper.find(".cmdk__t").text()).toContain("48 hours in Kyoto");
+  });
+
   it("shows empty state when query is set but API returns no results", async () => {
     const wrapper = mount(AppCommandPalette, {
       props: { open: true },

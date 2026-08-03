@@ -252,6 +252,35 @@ describe("Explore page (/explore)", () => {
     expect(wrapper.find(".xsearch input").exists()).toBe(true);
   });
 
+  it("renders the Guides group in hero search results", async () => {
+    heroSearchQuery.value = "kyoto";
+    heroSearchResults.value = {
+      places: [],
+      trips: [],
+      entries: [],
+      guides: [
+        {
+          id: "g-1",
+          title: "48 hours in Kyoto",
+          icon: "layers",
+          href: "/guides",
+        },
+      ],
+      people: [],
+    };
+
+    const wrapper = mount(ExplorePage, globalConfig);
+    await wrapper.vm.$nextTick();
+
+    const labels = wrapper
+      .findAll(".xsearch-group__label")
+      .map((el) => el.text());
+    expect(labels).toContain("Guides");
+    expect(wrapper.find(".xsearch-item__title").text()).toContain(
+      "48 hours in Kyoto",
+    );
+  });
+
   it("renders 5 search chips", () => {
     const wrapper = mount(ExplorePage, globalConfig);
     expect(wrapper.findAll(".xchip")).toHaveLength(5);
