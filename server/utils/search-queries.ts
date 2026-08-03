@@ -1,6 +1,13 @@
 import { ilike, eq, or, and } from "drizzle-orm";
 import { getDb } from "../db/index";
-import { places, trips, entries, users, userPreferences } from "../db/schema";
+import {
+  places,
+  trips,
+  entries,
+  guides,
+  users,
+  userPreferences,
+} from "../db/schema";
 
 const SEARCH_RESULT_LIMIT = 5;
 
@@ -23,6 +30,11 @@ export interface EntryResult {
   title: string;
 }
 
+export interface GuideResult {
+  id: string;
+  title: string;
+}
+
 export interface PersonResult {
   id: string;
   displayName: string | null;
@@ -33,6 +45,7 @@ export interface SearchResults {
   places: PlaceResult[];
   trips: TripResult[];
   entries: EntryResult[];
+  guides: GuideResult[];
   people: PersonResult[];
 }
 
@@ -102,6 +115,26 @@ export async function searchEntries(
     .limit(SEARCH_RESULT_LIMIT);
 }
 
+export async function searchGuides(
+  database: ReturnType<typeof getDb>,
+  userId: string,
+  pattern: string,
+): Promise<GuideResult[]> {
+  return database
+    .select({
+      id: guides.id,
+      title: guides.title,
+    })
+    .from(guides)
+    .where(
+      and(
+        eq(guides.userId, userId),
+        or(ilike(guides.title, pattern), ilike(guides.body, pattern)),
+      ),
+    )
+    .limit(SEARCH_RESULT_LIMIT);
+}
+
 export async function searchPeople(
   database: ReturnType<typeof getDb>,
   pattern: string,
@@ -135,17 +168,20 @@ export async function runSearch(
   const database = getDb();
   const pattern = buildSearchPattern(rawQuery);
 
-  const [placesRows, tripsRows, entriesRows, peopleRows] = await Promise.all([
-    searchPlaces(database, userId, pattern),
-    searchTrips(database, userId, pattern),
-    searchEntries(database, userId, pattern),
-    searchPeople(database, pattern),
-  ]);
+  const [placesRows, tripsRows, entriesRows, guidesRows, peopleRows] =
+    await Promise.all([
+      searchPlaces(database, userId, pattern),
+      searchTrips(database, userId, pattern),
+      searchEntries(database, userId, pattern),
+      searchGuides(database, userId, pattern),
+      searchPeople(database, pattern),
+    ]);
 
   return {
     places: placesRows,
     trips: tripsRows,
     entries: entriesRows,
+    guides: guidesRows,
     people: peopleRows,
   };
 }

@@ -4,7 +4,13 @@ import { runSearch } from "../utils/search-queries";
 const MIN_QUERY_LENGTH = 1;
 const MAX_QUERY_LENGTH = 100;
 
-const EMPTY_RESULTS = { places: [], trips: [], entries: [], people: [] };
+const EMPTY_RESULTS = {
+  places: [],
+  trips: [],
+  entries: [],
+  guides: [],
+  people: [],
+};
 
 function isValidQuery(value: unknown): value is string {
   if (typeof value !== "string") {

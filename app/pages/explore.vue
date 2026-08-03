@@ -55,6 +55,7 @@
             (heroSearchResults.places.length ||
               heroSearchResults.trips.length ||
               heroSearchResults.entries.length ||
+              heroSearchResults.guides.length ||
               heroSearchResults.people.length)
           "
           class="xsearch-results"
@@ -365,6 +366,7 @@ const heroSearchResultGroups = computed(() => ({
   places: { label: "Places", items: heroSearchResults.value.places },
   trips: { label: "Trips", items: heroSearchResults.value.trips },
   entries: { label: "Journal", items: heroSearchResults.value.entries },
+  guides: { label: "Guides", items: heroSearchResults.value.guides },
   people: { label: "People", items: heroSearchResults.value.people },
 }));
 

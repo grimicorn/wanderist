@@ -11,7 +11,13 @@ const linkStub = { template: "<a><slot /></a>", props: ["to"] };
 
 // Reactive search state shared across tests
 const mockQuery = ref("");
-const mockResults = ref({ places: [], trips: [], entries: [], people: [] });
+const mockResults = ref({
+  places: [],
+  trips: [],
+  entries: [],
+  guides: [],
+  people: [],
+});
 const mockIsLoading = ref(false);
 const mockError = ref<string | null>(null);
 const mockSearch = vi.fn();
@@ -41,7 +47,13 @@ describe("AppCommandPalette", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     mockQuery.value = "";
-    mockResults.value = { places: [], trips: [], entries: [], people: [] };
+    mockResults.value = {
+      places: [],
+      trips: [],
+      entries: [],
+      guides: [],
+      people: [],
+    };
     mockIsLoading.value = false;
     mockError.value = null;
     mockOpenNewEntry.mockReset();
@@ -146,6 +158,7 @@ describe("AppCommandPalette", () => {
         ],
         trips: [],
         entries: [],
+        guides: [],
         people: [],
       };
     });
@@ -178,6 +191,7 @@ describe("AppCommandPalette", () => {
           },
         ],
         entries: [],
+        guides: [],
         people: [],
       };
     });

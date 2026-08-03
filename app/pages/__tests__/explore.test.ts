@@ -59,6 +59,7 @@ const heroSearchResults = ref<SearchGroups>({
   places: [],
   trips: [],
   entries: [],
+  guides: [],
   people: [],
 });
 const mockHeroSearch = vi.fn();
@@ -234,6 +235,7 @@ describe("Explore page (/explore)", () => {
       places: [],
       trips: [],
       entries: [],
+      guides: [],
       people: [],
     };
   });

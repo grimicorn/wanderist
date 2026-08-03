@@ -18,11 +18,13 @@ vi.mock("drizzle-orm", async (importOriginal) => {
   };
 });
 
+import { eq } from "drizzle-orm";
 import { getDb } from "../../../server/db/index";
 import {
   searchPlaces,
   searchTrips,
   searchEntries,
+  searchGuides,
   searchPeople,
   runSearch,
 } from "../../../server/utils/search-queries";
@@ -137,6 +139,54 @@ describe("searchEntries", () => {
   });
 });
 
+describe("searchGuides", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("returns guides matching the pattern for the given user", async () => {
+    const expectedRows = [{ id: "g-1", title: "48 hours in Kyoto" }];
+    const chain = makeQueryChain(expectedRows);
+    mockGetDb.mockReturnValue(chain as unknown as ReturnType<typeof getDb>);
+
+    const result = await searchGuides(
+      mockGetDb() as unknown as ReturnType<typeof getDb>,
+      "user-1",
+      "%kyoto%",
+    );
+
+    expect(result).toEqual(expectedRows);
+    expect(chain.select).toHaveBeenCalledTimes(1);
+  });
+
+  it("scopes guides to the given user (eq on userId)", async () => {
+    const chain = makeQueryChain([]);
+    mockGetDb.mockReturnValue(chain as unknown as ReturnType<typeof getDb>);
+
+    await searchGuides(
+      mockGetDb() as unknown as ReturnType<typeof getDb>,
+      "user-1",
+      "%kyoto%",
+    );
+
+    // A userId argument is required, so guide search is always owner-scoped.
+    expect(eq).toHaveBeenCalledWith(expect.anything(), "user-1");
+  });
+
+  it("returns an empty array when no guides match", async () => {
+    const chain = makeQueryChain([]);
+    mockGetDb.mockReturnValue(chain as unknown as ReturnType<typeof getDb>);
+
+    const result = await searchGuides(
+      mockGetDb() as unknown as ReturnType<typeof getDb>,
+      "user-1",
+      "%nomatch%",
+    );
+
+    expect(result).toEqual([]);
+  });
+});
+
 describe("searchPeople", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -183,7 +233,7 @@ describe("runSearch", () => {
     vi.clearAllMocks();
   });
 
-  it("returns grouped results for all four categories", async () => {
+  it("returns grouped results for all five categories", async () => {
     const chain = makeQueryChain([]);
     mockGetDb.mockReturnValue(chain as unknown as ReturnType<typeof getDb>);
 
@@ -192,7 +242,19 @@ describe("runSearch", () => {
     expect(result).toHaveProperty("places");
     expect(result).toHaveProperty("trips");
     expect(result).toHaveProperty("entries");
+    expect(result).toHaveProperty("guides");
     expect(result).toHaveProperty("people");
+  });
+
+  it("includes matching guides in the combined results, scoped to the owner", async () => {
+    const guideRows = [{ id: "g-1", title: "48 hours in Kyoto" }];
+    const chain = makeQueryChain(guideRows);
+    mockGetDb.mockReturnValue(chain as unknown as ReturnType<typeof getDb>);
+
+    const result = await runSearch("user-1", "kyoto");
+
+    expect(result.guides).toEqual(guideRows);
+    expect(eq).toHaveBeenCalledWith(expect.anything(), "user-1");
   });
 
   it("escapes SQL LIKE special characters in the query to prevent injection", async () => {
