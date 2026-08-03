@@ -111,6 +111,17 @@ describe("Guide Detail page (/guides/[id])", () => {
     expect(unref(watchedGuideId)).toBe("guide-2");
   });
 
+  it("does not render a stale guide whose id no longer matches the route", async () => {
+    const wrapper = mount(GuideDetailPage, buildGlobalConfig(pinia));
+    expect(wrapper.find(".gdetail__head h1").text()).toBe("Tokyo on foot");
+
+    // Navigate to a different id before the refetch replaces currentGuide.
+    routeParams.id = "guide-2";
+    await nextTick();
+
+    expect(wrapper.find(".gdetail__head h1").exists()).toBe(false);
+  });
+
   it("shows the loading state while the guide is loading", () => {
     const guidesStore = useGuidesStore();
     guidesStore.isLoadingGuide = true;

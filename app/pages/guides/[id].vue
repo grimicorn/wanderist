@@ -56,7 +56,14 @@ const guideId = computed(() => String(route.params.id));
 const guidesStore = useGuidesStore();
 
 const isLoading = computed(() => guidesStore.isLoadingGuide);
-const guide = computed(() => guidesStore.currentGuide);
+// Guard against the render window during in-page navigation (g-1 -> g-2): the
+// route id updates reactively before the refetch flips isLoadingGuide, so only
+// show currentGuide once it actually matches the id in the URL.
+const guide = computed(() =>
+  guidesStore.currentGuide?.id === guideId.value
+    ? guidesStore.currentGuide
+    : null,
+);
 const guideError = computed(() => guidesStore.guideError);
 
 // No .catch: like trips/[id].vue, a failed load rejects so Nuxt sets a real

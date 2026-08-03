@@ -561,18 +561,6 @@ describe("useGuidesStore", () => {
 
       await expect(store.likeGuide("missing")).rejects.toThrow("Not found");
     });
-
-    it("syncs the open detail guide's likeCount", async () => {
-      const guide = { id: "g-1", userId: "u-1", title: "Tokyo", likeCount: 0 };
-      const liked = { ...guide, likeCount: 1 };
-      mockApiFetch.mockResolvedValueOnce(guide).mockResolvedValueOnce(liked);
-
-      const store = useGuidesStore();
-      await store.fetchGuideById("g-1");
-      await store.likeGuide("g-1");
-
-      expect(store.currentGuide?.likeCount).toBe(1);
-    });
   });
 
   // ---------------------------------------------------------------------------
@@ -619,18 +607,6 @@ describe("useGuidesStore", () => {
       const store = useGuidesStore();
 
       await expect(store.unlikeGuide("missing")).rejects.toThrow("Not found");
-    });
-
-    it("syncs the open detail guide's likeCount", async () => {
-      const guide = { id: "g-1", userId: "u-1", title: "Tokyo", likeCount: 1 };
-      const unliked = { ...guide, likeCount: 0 };
-      mockApiFetch.mockResolvedValueOnce(guide).mockResolvedValueOnce(unliked);
-
-      const store = useGuidesStore();
-      await store.fetchGuideById("g-1");
-      await store.unlikeGuide("g-1");
-
-      expect(store.currentGuide?.likeCount).toBe(0);
     });
   });
 });
