@@ -10,6 +10,12 @@ export interface Guide {
   body: string | null;
   readTimeMinutes: number;
   likeCount: number;
+  // Whether the current user has liked this guide, server-derived from the
+  // guide_likes join table (survives a reload, unlike the old session Set).
+  // Optional because the list read path and the like/unlike responses populate
+  // it, but create/update responses don't — a freshly created or edited guide's
+  // like state is read from the page's liked set, not this field.
+  likedByCurrentUser?: boolean;
   visibility: GuideVisibility;
   createdAt: string;
   updatedAt: string;
@@ -24,13 +30,15 @@ export interface CreateGuideInput {
 
 export type UpdateGuideInput = Partial<CreateGuideInput>;
 
-function replaceLikeCount(
-  list: Guide[],
-  id: string,
-  likeCount: number,
-): Guide[] {
+function replaceLikeState(list: Guide[], updated: Guide): Guide[] {
   return list.map((guide) =>
-    guide.id === id ? { ...guide, likeCount } : guide,
+    guide.id === updated.id
+      ? {
+          ...guide,
+          likeCount: updated.likeCount,
+          likedByCurrentUser: updated.likedByCurrentUser,
+        }
+      : guide,
   );
 }
 
@@ -139,7 +147,7 @@ export const useGuidesStore = defineStore("guides", () => {
     await markLoadSucceeded();
   }
 
-  // Only the returned likeCount is spliced back in (not the whole row) so a
+  // Only the like fields are spliced back in (not the whole row) so a
   // concurrent edit to the same guide's other fields isn't clobbered by a
   // like/unlike response that predates it — mirrors likeEntry in stores/entries.ts.
   async function likeGuide(id: string): Promise<Guide> {
@@ -147,7 +155,7 @@ export const useGuidesStore = defineStore("guides", () => {
       method: "POST",
     });
 
-    guides.value = replaceLikeCount(guides.value, id, updated.likeCount);
+    guides.value = replaceLikeState(guides.value, updated);
 
     return updated;
   }
@@ -157,7 +165,7 @@ export const useGuidesStore = defineStore("guides", () => {
       method: "DELETE",
     });
 
-    guides.value = replaceLikeCount(guides.value, id, updated.likeCount);
+    guides.value = replaceLikeState(guides.value, updated);
 
     return updated;
   }
