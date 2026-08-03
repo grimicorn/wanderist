@@ -24,6 +24,17 @@ export interface CreateGuideInput {
 
 export type UpdateGuideInput = Partial<CreateGuideInput>;
 
+export interface FetchGuidesResult {
+  guides: Guide[];
+  page: number;
+  hasMore: boolean;
+}
+
+// Safety net against an infinite loop if the API ever reports `hasMore: true`
+// forever (e.g. a server bug) — no user has anywhere near this many guides,
+// so hitting this cap always indicates a bug, not a real result set.
+const MAX_GUIDES_PAGES = 500;
+
 function replaceLikeCount(
   list: Guide[],
   id: string,
@@ -63,12 +74,54 @@ export const useGuidesStore = defineStore("guides", () => {
     return inFlightFetch;
   }
 
+  // GET /api/guides is paginated server-side to keep each query bounded (see
+  // server/api/guides/index.get.ts), but every UI consumer still needs the
+  // full list. Rather than invent a partial-list contract for those callers,
+  // this walks every page and concatenates the results, so the store's public
+  // `guides` list keeps behaving like "all of the user's guides". Mirrors
+  // fetchAllTripsPages in stores/trips.ts.
+  async function fetchAllGuidesPages(): Promise<Guide[]> {
+    const allGuides: Guide[] = [];
+    let page = 1;
+    let hasMore = true;
+
+    while (hasMore) {
+      if (page > MAX_GUIDES_PAGES) {
+        // Bailing out here would silently hand every consumer a truncated
+        // list dressed up as the full one — fail loud instead so the UI
+        // surfaces the failure via the existing error handling below.
+        throw new Error(
+          `fetchGuides exceeded ${MAX_GUIDES_PAGES} pages — the API kept reporting hasMore: true`,
+        );
+      }
+
+      const result = await apiFetch<FetchGuidesResult>(
+        `/api/guides?page=${page}`,
+      );
+
+      if (
+        !Array.isArray(result?.guides) ||
+        typeof result?.hasMore !== "boolean"
+      ) {
+        throw new Error(
+          "Malformed /api/guides response: expected { guides: Guide[], hasMore: boolean }",
+        );
+      }
+
+      allGuides.push(...result.guides);
+      hasMore = result.hasMore;
+      page += 1;
+    }
+
+    return allGuides;
+  }
+
   async function runFetchGuides(): Promise<void> {
     isLoading.value = true;
     error.value = null;
 
     try {
-      guides.value = await apiFetch<Guide[]>("/api/guides");
+      guides.value = await fetchAllGuidesPages();
       // Set only on success: a failed fetch must not read as "loaded and
       // genuinely empty" (see hasLoaded's comment above) — it should keep
       // reading as "not loaded" so the page keeps showing the error instead
