@@ -12,16 +12,22 @@ vi.stubGlobal("useRoute", () => ({ params: { id: "guide-1" }, query: {} }));
 
 // The global useAsyncData stub never invokes its handler, so by default the
 // page's fetch wiring is dead under test. Override it to run the handler once
-// so a test can assert the guide is actually requested by its route param.
-vi.stubGlobal("useAsyncData", (_key: unknown, handler: () => unknown) => {
-  handler();
-  return {
-    data: ref(null),
-    pending: ref(false),
-    error: ref(null),
-    refresh: vi.fn(),
-  };
-});
+// and record its options so tests can assert the guide is requested by its
+// route param and that the refetch-on-id-change watcher is wired.
+let lastAsyncDataOptions: { watch?: unknown[] } | undefined;
+vi.stubGlobal(
+  "useAsyncData",
+  (_key: unknown, handler: () => unknown, options?: { watch?: unknown[] }) => {
+    lastAsyncDataOptions = options;
+    handler();
+    return {
+      data: ref(null),
+      pending: ref(false),
+      error: ref(null),
+      refresh: vi.fn(),
+    };
+  },
+);
 
 const SAMPLE_GUIDE: Guide = {
   id: "guide-1",
@@ -86,6 +92,13 @@ describe("Guide Detail page (/guides/[id])", () => {
     const guidesStore = useGuidesStore();
     mount(GuideDetailPage, buildGlobalConfig(pinia));
     expect(guidesStore.fetchGuideById).toHaveBeenCalledWith("guide-1");
+  });
+
+  it("watches the guide id so it refetches on in-page navigation", () => {
+    mount(GuideDetailPage, buildGlobalConfig(pinia));
+    // Without the watch, navigating between two guides reuses the component and
+    // keeps showing the previous guide.
+    expect(lastAsyncDataOptions?.watch).toHaveLength(1);
   });
 
   it("shows the loading state while the guide is loading", () => {

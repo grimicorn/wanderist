@@ -107,6 +107,9 @@ const visibilityTagClass = computed(
   font-weight: 600;
   color: inherit;
   text-decoration: none;
+  /* Without this the link, as a flex item of the column body, stretches to the
+     full card width and its hover/click area spills far past the title. */
+  align-self: flex-start;
 }
 .gcard__name:hover {
   color: var(--accent-ink);

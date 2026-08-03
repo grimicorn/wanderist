@@ -89,26 +89,28 @@ export const useGuidesStore = defineStore("guides", () => {
     }
   }
 
-  // Tracks the id of the most recent fetchGuideById call so a slower earlier
-  // request (e.g. navigating /guides/a -> /guides/b before a's response lands)
-  // can't overwrite the newer guide, blank it out on a late failure, or clear
-  // the loading flag while b is still in flight. Mirrors the inFlightFetch
-  // guard fetchGuides uses for the same class of race.
-  let latestRequestedGuideId: string | null = null;
+  // Monotonic token identifying the most recent fetchGuideById call. Keying on
+  // a per-call token (not the id) means even two in-flight requests for the
+  // SAME id — e.g. /guides/a -> /guides/b -> /guides/a via back/forward — are
+  // distinguished, so a slower earlier request can't overwrite the newer
+  // guide, blank it out on a late failure, or clear the loading flag while the
+  // newer one is still in flight. Same intent as fetchGuides' inFlightFetch
+  // guard, for a fetch that legitimately reruns per id.
+  let latestGuideRequestId = 0;
 
   async function fetchGuideById(id: string): Promise<void> {
-    latestRequestedGuideId = id;
+    const requestId = ++latestGuideRequestId;
     isLoadingGuide.value = true;
     guideError.value = null;
 
     try {
       const guide = await apiFetch<Guide>(`/api/guides/${id}`);
-      if (latestRequestedGuideId !== id) {
+      if (requestId !== latestGuideRequestId) {
         return;
       }
       currentGuide.value = guide;
     } catch (fetchError) {
-      if (latestRequestedGuideId !== id) {
+      if (requestId !== latestGuideRequestId) {
         throw fetchError;
       }
       // Clear any stale guide so the detail page shows its not-found state
@@ -117,7 +119,7 @@ export const useGuidesStore = defineStore("guides", () => {
       guideError.value = extractErrorMessage(fetchError);
       throw fetchError;
     } finally {
-      if (latestRequestedGuideId === id) {
+      if (requestId === latestGuideRequestId) {
         isLoadingGuide.value = false;
       }
     }
@@ -193,12 +195,23 @@ export const useGuidesStore = defineStore("guides", () => {
   // Only the returned likeCount is spliced back in (not the whole row) so a
   // concurrent edit to the same guide's other fields isn't clobbered by a
   // like/unlike response that predates it — mirrors likeEntry in stores/entries.ts.
+  // Splice only likeCount into the open detail guide (never the whole row) for
+  // the same reason replaceLikeCount does it in the list: a like/unlike response
+  // that predates a concurrent edit must not clobber the guide's other fields.
+  function syncCurrentGuideLikeCount(id: string, likeCount: number): void {
+    if (currentGuide.value?.id !== id) {
+      return;
+    }
+    currentGuide.value = { ...currentGuide.value, likeCount };
+  }
+
   async function likeGuide(id: string): Promise<Guide> {
     const updated = await apiFetch<Guide>(`/api/guides/${id}/like`, {
       method: "POST",
     });
 
     guides.value = replaceLikeCount(guides.value, id, updated.likeCount);
+    syncCurrentGuideLikeCount(id, updated.likeCount);
 
     return updated;
   }
@@ -209,6 +222,7 @@ export const useGuidesStore = defineStore("guides", () => {
     });
 
     guides.value = replaceLikeCount(guides.value, id, updated.likeCount);
+    syncCurrentGuideLikeCount(id, updated.likeCount);
 
     return updated;
   }

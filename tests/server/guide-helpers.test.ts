@@ -22,14 +22,17 @@ const {
 
 type FakeDatabase = Parameters<typeof loadReadableGuide>[0];
 
-// Minimal stand-in for the query chain loadReadableGuide walks
-// (select().from().where().limit()), resolving to the given rows. Lets the
-// visibility rule be exercised in isolation without a real database.
-function fakeDbReturning(rows: Record<string, unknown>[]): FakeDatabase {
+// Minimal stand-in for the query chains loadReadableGuide walks. It may issue
+// up to two queries — the guide lookup, then (for a non-owner) the author's
+// discoverability check — so each `.limit()` returns the next queued response.
+// Lets the visibility rule be exercised in isolation without a real database.
+function fakeDbSequence(responses: Record<string, unknown>[][]): FakeDatabase {
+  let call = 0;
   const chain = {
     from: () => chain,
+    innerJoin: () => chain,
     where: () => chain,
-    limit: () => Promise.resolve(rows),
+    limit: () => Promise.resolve(responses[call++] ?? []),
   };
   return { select: () => chain } as unknown as FakeDatabase;
 }
@@ -141,19 +144,27 @@ describe("parseOptionalGuideBody", () => {
 });
 
 describe("loadReadableGuide", () => {
-  it("returns a private guide to its owner", async () => {
+  // A row from the author-discoverability query — its presence means the author
+  // is live, public, and on explore.
+  const discoverableOwner = [{ userId: OWNER_ID }];
+
+  it("returns a private guide to its owner without a discoverability check", async () => {
     const guide = guideRow({ visibility: "private", userId: OWNER_ID });
 
     await expect(
-      loadReadableGuide(fakeDbReturning([guide]), "guide-1", OWNER_ID),
+      loadReadableGuide(fakeDbSequence([[guide]]), "guide-1", OWNER_ID),
     ).resolves.toEqual(guide);
   });
 
-  it("returns a public guide to a non-owner", async () => {
+  it("returns a public guide to a non-owner when the author is discoverable", async () => {
     const guide = guideRow({ visibility: "public", userId: OWNER_ID });
 
     await expect(
-      loadReadableGuide(fakeDbReturning([guide]), "guide-1", OTHER_ID),
+      loadReadableGuide(
+        fakeDbSequence([[guide], discoverableOwner]),
+        "guide-1",
+        OTHER_ID,
+      ),
     ).resolves.toEqual(guide);
   });
 
@@ -161,13 +172,22 @@ describe("loadReadableGuide", () => {
     const guide = guideRow({ visibility: "private", userId: OWNER_ID });
 
     await expect(
-      loadReadableGuide(fakeDbReturning([guide]), "guide-1", OTHER_ID),
+      loadReadableGuide(fakeDbSequence([[guide]]), "guide-1", OTHER_ID),
+    ).rejects.toEqual(expect.objectContaining({ statusCode: 404 }));
+  });
+
+  it("throws 404 for a public guide whose author is not discoverable (deleted / private / off-explore)", async () => {
+    const guide = guideRow({ visibility: "public", userId: OWNER_ID });
+
+    // Empty second response = the author fails the discoverability predicate.
+    await expect(
+      loadReadableGuide(fakeDbSequence([[guide], []]), "guide-1", OTHER_ID),
     ).rejects.toEqual(expect.objectContaining({ statusCode: 404 }));
   });
 
   it("throws 404 when the guide does not exist", async () => {
     await expect(
-      loadReadableGuide(fakeDbReturning([]), "missing", OWNER_ID),
+      loadReadableGuide(fakeDbSequence([[]]), "missing", OWNER_ID),
     ).rejects.toEqual(expect.objectContaining({ statusCode: 404 }));
   });
 });

@@ -125,4 +125,12 @@ useHead(
 .gdetail__back {
   margin-top: 16px;
 }
+/* Local copy of GuidesList.vue's .empty-note — that rule is `scoped` to its own
+   component, so the loading / not-found / empty-body states here need their own
+   styling for the text to read as muted rather than raw body copy. */
+.empty-note {
+  font-size: 12.5px;
+  color: var(--faint);
+  padding: 12px 0;
+}
 </style>

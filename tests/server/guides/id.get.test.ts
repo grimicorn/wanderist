@@ -40,11 +40,19 @@ const mockRequireRouterParam = vi.mocked(requireRouterParam);
 const mockRequireUser = vi.mocked(requireUser);
 const mockGetDb = vi.mocked(getDb);
 
-function makeDbWithGuide(rows: Record<string, unknown>[]) {
-  const limitMock = vi.fn().mockResolvedValue(rows);
-  const whereMock = vi.fn().mockReturnValue({ limit: limitMock });
-  const fromMock = vi.fn().mockReturnValue({ where: whereMock });
-  const selectMock = vi.fn().mockReturnValue({ from: fromMock });
+// The handler may issue up to two queries (the guide lookup, then a non-owner
+// author-discoverability check that uses innerJoin), so each `.limit()` returns
+// the next queued response.
+function makeDb(responses: Record<string, unknown>[][]) {
+  let call = 0;
+  const limitMock = vi.fn(() => Promise.resolve(responses[call++] ?? []));
+  const whereMock = vi.fn(() => ({ limit: limitMock }));
+  const innerJoinMock = vi.fn(() => ({ where: whereMock }));
+  const fromMock = vi.fn(() => ({
+    where: whereMock,
+    innerJoin: innerJoinMock,
+  }));
+  const selectMock = vi.fn(() => ({ from: fromMock }));
   return { select: selectMock, _where: whereMock, _limit: limitMock };
 }
 
@@ -81,7 +89,7 @@ describe("GET /api/guides/:id", () => {
   it("returns a private guide to its owner, including the body", async () => {
     const guide = makeGuide({ visibility: "private", userId: OWNER_ID });
     mockRequireUser.mockReturnValue(OWNER_ID);
-    const mockDb = makeDbWithGuide([guide]);
+    const mockDb = makeDb([[guide]]);
     mockGetDb.mockReturnValue(mockDb as unknown as ReturnType<typeof getDb>);
 
     const result = await runHandler();
@@ -98,11 +106,14 @@ describe("GET /api/guides/:id", () => {
     expect(mockDb._limit).toHaveBeenCalledWith(1);
   });
 
-  it("returns a public guide to a non-owner", async () => {
+  it("returns a public guide to a non-owner when the author is discoverable", async () => {
     const guide = makeGuide({ visibility: "public", userId: OWNER_ID });
     mockRequireUser.mockReturnValue(OTHER_ID);
+    // Second response is non-empty: the author passes the discoverability check.
     mockGetDb.mockReturnValue(
-      makeDbWithGuide([guide]) as unknown as ReturnType<typeof getDb>,
+      makeDb([[guide], [{ userId: OWNER_ID }]]) as unknown as ReturnType<
+        typeof getDb
+      >,
     );
 
     const result = await runHandler();
@@ -114,7 +125,18 @@ describe("GET /api/guides/:id", () => {
     const guide = makeGuide({ visibility: "private", userId: OWNER_ID });
     mockRequireUser.mockReturnValue(OTHER_ID);
     mockGetDb.mockReturnValue(
-      makeDbWithGuide([guide]) as unknown as ReturnType<typeof getDb>,
+      makeDb([[guide]]) as unknown as ReturnType<typeof getDb>,
+    );
+
+    await expect(runHandler()).rejects.toMatchObject({ statusCode: 404 });
+  });
+
+  it("hides a public guide whose author is not discoverable with a 404", async () => {
+    const guide = makeGuide({ visibility: "public", userId: OWNER_ID });
+    mockRequireUser.mockReturnValue(OTHER_ID);
+    // Empty second response: the author is deleted / private / off-explore.
+    mockGetDb.mockReturnValue(
+      makeDb([[guide], []]) as unknown as ReturnType<typeof getDb>,
     );
 
     await expect(runHandler()).rejects.toMatchObject({ statusCode: 404 });
@@ -123,7 +145,7 @@ describe("GET /api/guides/:id", () => {
   it("throws 404 when the guide does not exist", async () => {
     mockRequireUser.mockReturnValue(OWNER_ID);
     mockGetDb.mockReturnValue(
-      makeDbWithGuide([]) as unknown as ReturnType<typeof getDb>,
+      makeDb([[]]) as unknown as ReturnType<typeof getDb>,
     );
 
     await expect(runHandler()).rejects.toMatchObject({ statusCode: 404 });

@@ -190,6 +190,33 @@ describe("useGuidesStore", () => {
 
       expect(store.currentGuide).toEqual(fastGuide);
     });
+
+    it("does not clobber a newer same-id request when an older one fails late", async () => {
+      const loadedGuide = { ...guide, title: "Loaded" };
+
+      let rejectFirst: (reason: Error) => void;
+      mockApiFetch
+        .mockImplementationOnce(
+          () =>
+            new Promise((_resolve, reject) => {
+              rejectFirst = reject;
+            }),
+        )
+        .mockResolvedValueOnce(loadedGuide);
+
+      const store = useGuidesStore();
+      // Two in-flight requests for the SAME id (e.g. back/forward to /guides/g-1).
+      const first = store.fetchGuideById("g-1");
+      await store.fetchGuideById("g-1");
+
+      // The first (now superseded) request rejects after the second succeeded.
+      rejectFirst!(new Error("late failure"));
+      await expect(first).rejects.toThrow("late failure");
+
+      // The late failure must not blank the guide or surface an error.
+      expect(store.currentGuide).toEqual(loadedGuide);
+      expect(store.guideError).toBeNull();
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -511,6 +538,18 @@ describe("useGuidesStore", () => {
 
       await expect(store.likeGuide("missing")).rejects.toThrow("Not found");
     });
+
+    it("syncs the open detail guide's likeCount", async () => {
+      const guide = { id: "g-1", userId: "u-1", title: "Tokyo", likeCount: 0 };
+      const liked = { ...guide, likeCount: 1 };
+      mockApiFetch.mockResolvedValueOnce(guide).mockResolvedValueOnce(liked);
+
+      const store = useGuidesStore();
+      await store.fetchGuideById("g-1");
+      await store.likeGuide("g-1");
+
+      expect(store.currentGuide?.likeCount).toBe(1);
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -557,6 +596,18 @@ describe("useGuidesStore", () => {
       const store = useGuidesStore();
 
       await expect(store.unlikeGuide("missing")).rejects.toThrow("Not found");
+    });
+
+    it("syncs the open detail guide's likeCount", async () => {
+      const guide = { id: "g-1", userId: "u-1", title: "Tokyo", likeCount: 1 };
+      const unliked = { ...guide, likeCount: 0 };
+      mockApiFetch.mockResolvedValueOnce(guide).mockResolvedValueOnce(unliked);
+
+      const store = useGuidesStore();
+      await store.fetchGuideById("g-1");
+      await store.unlikeGuide("g-1");
+
+      expect(store.currentGuide?.likeCount).toBe(0);
     });
   });
 });
