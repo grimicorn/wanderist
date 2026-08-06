@@ -30,6 +30,7 @@ vi.mock("../../server/utils/tokenCrypto", () => ({
 
 const {
   INSTAGRAM_REFRESH_THRESHOLD_DAYS,
+  InstagramTokenExpiredError,
   isInstagramTokenNearExpiry,
   isInstagramTokenExpired,
   expiryFromResponse,
@@ -37,7 +38,6 @@ const {
   ensureFreshInstagramToken,
 } = await import("../../server/utils/instagramToken");
 import { MS_PER_DAY } from "../../server/utils/accountLifecycle";
-import { connectedAccounts } from "../../server/db/schema";
 
 // ---------------------------------------------------------------------------
 // Pure predicates
@@ -86,13 +86,22 @@ describe("isInstagramTokenExpired", () => {
 });
 
 describe("expiryFromResponse", () => {
+  const now = new Date("2026-08-01T00:00:00.000Z");
+
   it("adds expires_in seconds to now", () => {
-    const now = new Date("2026-08-01T00:00:00.000Z");
     const expiry = expiryFromResponse(
       { access_token: "t", token_type: "bearer", expires_in: 3600 },
       now,
     );
-    expect(expiry.getTime()).toBe(now.getTime() + 3600 * 1000);
+    expect(expiry).toEqual(new Date(now.getTime() + 3600 * 1000));
+  });
+
+  it("returns null when expires_in is missing rather than an Invalid Date", () => {
+    const expiry = expiryFromResponse(
+      { access_token: "t", token_type: "bearer" } as never,
+      now,
+    );
+    expect(expiry).toBeNull();
   });
 });
 
@@ -119,24 +128,42 @@ describe("persistRefreshedInstagramToken", () => {
     vi.clearAllMocks();
   });
 
-  it("stores the encrypted new token + derived expiry scoped to the user", async () => {
+  it("stores the encrypted new token + derived expiry scoped to the account", async () => {
     const { db, update, set, where } = makeUpdatableDb();
     const now = new Date("2026-08-01T00:00:00.000Z");
 
     const expiresAt = await persistRefreshedInstagramToken(
       db,
-      "user-1",
+      "ig-A",
       { access_token: "fresh-token", token_type: "bearer", expires_in: 5000 },
       now,
     );
 
-    expect(update).toHaveBeenCalledWith(connectedAccounts);
+    expect(update).toHaveBeenCalledTimes(1);
     expect(set).toHaveBeenCalledWith({
       accessToken: "encrypted:fresh-token",
       expiresAt: new Date(now.getTime() + 5000 * 1000),
     });
     expect(where).toHaveBeenCalledTimes(1);
     expect(expiresAt).toEqual(new Date(now.getTime() + 5000 * 1000));
+  });
+
+  it("persists a null expiry when the response omits expires_in", async () => {
+    const { db, set } = makeUpdatableDb();
+    const now = new Date("2026-08-01T00:00:00.000Z");
+
+    const expiresAt = await persistRefreshedInstagramToken(
+      db,
+      "ig-A",
+      { access_token: "fresh-token", token_type: "bearer" } as never,
+      now,
+    );
+
+    expect(set).toHaveBeenCalledWith({
+      accessToken: "encrypted:fresh-token",
+      expiresAt: null,
+    });
+    expect(expiresAt).toBeNull();
   });
 });
 
@@ -156,7 +183,7 @@ describe("ensureFreshInstagramToken", () => {
     const token = await ensureFreshInstagramToken(
       db,
       "user-1",
-      { accessToken: "encrypted:current-token", expiresAt },
+      { externalId: "ig-A", accessToken: "encrypted:current-token", expiresAt },
       now,
     );
 
@@ -179,7 +206,7 @@ describe("ensureFreshInstagramToken", () => {
     const token = await ensureFreshInstagramToken(
       db,
       "user-1",
-      { accessToken: "encrypted:old-token", expiresAt },
+      { externalId: "ig-A", accessToken: "encrypted:old-token", expiresAt },
       now,
     );
 
@@ -201,7 +228,11 @@ describe("ensureFreshInstagramToken", () => {
     const token = await ensureFreshInstagramToken(
       db,
       "user-1",
-      { accessToken: "encrypted:old-token", expiresAt: null },
+      {
+        externalId: "ig-A",
+        accessToken: "encrypted:old-token",
+        expiresAt: null,
+      },
       now,
     );
 
@@ -210,7 +241,8 @@ describe("ensureFreshInstagramToken", () => {
     expect(token).toBe("new-token");
   });
 
-  it("falls back to the current token when refresh fails but it has not expired", async () => {
+  it("logs and falls back to the current token when refresh fails but it has not expired", async () => {
+    const consoleSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const { db, update } = makeUpdatableDb();
     const expiresAt = new Date(now.getTime() + 2 * MS_PER_DAY);
     mockRefreshLongLivedToken.mockRejectedValue(new Error("429 rate limited"));
@@ -218,15 +250,17 @@ describe("ensureFreshInstagramToken", () => {
     const token = await ensureFreshInstagramToken(
       db,
       "user-1",
-      { accessToken: "encrypted:still-valid", expiresAt },
+      { externalId: "ig-A", accessToken: "encrypted:still-valid", expiresAt },
       now,
     );
 
     expect(token).toBe("still-valid");
     expect(update).not.toHaveBeenCalled();
+    expect(consoleSpy).toHaveBeenCalled();
+    consoleSpy.mockRestore();
   });
 
-  it("rethrows when refresh fails and the token is already expired", async () => {
+  it("throws InstagramTokenExpiredError when refresh fails and the token is already expired", async () => {
     const { db } = makeUpdatableDb();
     const expiresAt = new Date(now.getTime() - MS_PER_DAY);
     mockRefreshLongLivedToken.mockRejectedValue(new Error("400 expired"));
@@ -235,9 +269,9 @@ describe("ensureFreshInstagramToken", () => {
       ensureFreshInstagramToken(
         db,
         "user-1",
-        { accessToken: "encrypted:dead", expiresAt },
+        { externalId: "ig-A", accessToken: "encrypted:dead", expiresAt },
         now,
       ),
-    ).rejects.toThrow("400 expired");
+    ).rejects.toBeInstanceOf(InstagramTokenExpiredError);
   });
 });

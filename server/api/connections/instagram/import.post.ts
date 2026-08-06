@@ -34,10 +34,36 @@ import {
   filterGeotaggedMedia,
   type InstagramMediaItem,
 } from "../../../utils/instagramClient";
-import { ensureFreshInstagramToken } from "../../../utils/instagramToken";
+import {
+  ensureFreshInstagramToken,
+  InstagramTokenExpiredError,
+  type StoredInstagramToken,
+} from "../../../utils/instagramToken";
 import { assertInstagramSyncAllowed } from "../../../utils/planLimits";
 
 type DbClient = ReturnType<typeof getDb>;
+
+// Refresh-on-use: renews and persists the token before it lapses so an active
+// importer's connection self-heals without waiting for the scheduled job. An
+// already-expired token Instagram refuses to refresh becomes a 422 "reconnect"
+// response rather than an opaque 500.
+async function resolveFreshAccessToken(
+  database: DbClient,
+  userId: string,
+  stored: StoredInstagramToken,
+): Promise<string> {
+  try {
+    return await ensureFreshInstagramToken(database, userId, stored);
+  } catch (error) {
+    if (error instanceof InstagramTokenExpiredError) {
+      throw createError({
+        statusCode: 422,
+        statusMessage: "Instagram connection expired, please reconnect",
+      });
+    }
+    throw error;
+  }
+}
 
 function buildEntryTitle(item: InstagramMediaItem): string {
   if (item.caption) {
@@ -204,6 +230,7 @@ export default defineEventHandler(async (event) => {
 
   const connectionRows = await database
     .select({
+      externalId: connectedAccounts.externalId,
       accessToken: connectedAccounts.accessToken,
       expiresAt: connectedAccounts.expiresAt,
     })
@@ -224,9 +251,8 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  // Refresh-on-use: renews and persists the token before it lapses, so an
-  // active importer's connection self-heals without a scheduled job.
-  const accessToken = await ensureFreshInstagramToken(database, userId, {
+  const accessToken = await resolveFreshAccessToken(database, userId, {
+    externalId: connection.externalId,
     accessToken: connection.accessToken,
     expiresAt: connection.expiresAt,
   });

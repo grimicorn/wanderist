@@ -34,10 +34,26 @@ export const handler = async () => {
       `refresh-instagram-tokens: refreshed ${result.refreshedCount} token(s)`,
       result.refreshedUserIds,
     );
+    if (result.capReached) {
+      console.warn(
+        "refresh-instagram-tokens: batch limit reached — remaining tokens will be handled on the next run",
+      );
+    }
     if (result.failures.length > 0) {
       console.warn(
         `refresh-instagram-tokens: ${result.failures.length} token(s) failed to refresh`,
         result.failures,
+      );
+    }
+
+    // A run where every attempted account failed and none succeeded is a
+    // systemic failure (rotated app secret, endpoint change, missing
+    // encryption key) masquerading as a quiet success. Throw so Netlify marks
+    // the invocation failed instead of recording a green run that renewed
+    // nothing.
+    if (result.refreshedCount === 0 && result.failures.length > 0) {
+      throw new Error(
+        `refresh-instagram-tokens: all ${result.failures.length} refresh attempt(s) failed`,
       );
     }
 

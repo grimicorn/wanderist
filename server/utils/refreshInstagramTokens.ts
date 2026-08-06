@@ -12,7 +12,7 @@
  * plain mocked db chain, with the Instagram client and token crypto mocked at
  * their module boundaries — the same pattern as server/utils/purgeAccounts.ts.
  */
-import { and, eq, isNull, lt, or } from "drizzle-orm";
+import { and, eq, gt, isNotNull, isNull, lt, or } from "drizzle-orm";
 import type { createDb } from "../db/index";
 import { connectedAccounts, CONNECTED_ACCOUNT_PROVIDER } from "../db/schema";
 import { refreshLongLivedToken } from "./instagramClient";
@@ -24,6 +24,12 @@ import {
 } from "./instagramToken";
 import { MS_PER_DAY } from "./accountLifecycle";
 
+// Cap the rows processed per run so a large backlog can't blow past Netlify's
+// scheduled-function time limit mid-loop. Rows are ordered by soonest expiry,
+// so the most urgent tokens are always handled first; a hit cap is logged
+// (never silently swallowed) and the remainder is picked up next run.
+export const INSTAGRAM_REFRESH_BATCH_LIMIT = 500;
+
 export interface InstagramRefreshFailure {
   userId: string;
   error: string;
@@ -33,55 +39,69 @@ export interface InstagramRefreshResult {
   refreshedUserIds: string[];
   refreshedCount: number;
   failures: InstagramRefreshFailure[];
+  capReached: boolean;
 }
 
 /**
  * The instant a token must expire before to be considered "due" for a
  * scheduled refresh: within INSTAGRAM_REFRESH_THRESHOLD_DAYS of now.
  */
-function refreshCutoff(now: Date): Date {
+export function refreshCutoff(now: Date): Date {
   return new Date(
     now.getTime() + INSTAGRAM_REFRESH_THRESHOLD_DAYS * MS_PER_DAY,
   );
 }
 
+/**
+ * Rows due for a scheduled refresh: an Instagram row with a stored token whose
+ * expiry is either unknown (null — a pre-refresh connection to backfill) or
+ * still in the future but within the threshold window. Already-expired rows are
+ * excluded: Instagram cannot refresh a lapsed token, so re-selecting them every
+ * run would only produce endless failing API calls.
+ */
+function dueAccountsCondition(now: Date) {
+  return and(
+    eq(connectedAccounts.provider, CONNECTED_ACCOUNT_PROVIDER.INSTAGRAM),
+    isNotNull(connectedAccounts.accessToken),
+    or(
+      isNull(connectedAccounts.expiresAt),
+      and(
+        gt(connectedAccounts.expiresAt, now),
+        lt(connectedAccounts.expiresAt, refreshCutoff(now)),
+      ),
+    ),
+  );
+}
+
 async function refreshOne(
   db: InstagramTokenDb,
-  account: { userId: string; accessToken: string },
+  account: { externalId: string; accessToken: string },
   now: Date,
 ): Promise<void> {
   const currentToken = decryptToken(account.accessToken);
   const refreshed = await refreshLongLivedToken({ accessToken: currentToken });
-  await persistRefreshedInstagramToken(db, account.userId, refreshed, now);
+  await persistRefreshedInstagramToken(db, account.externalId, refreshed, now);
 }
 
 /**
- * Refreshes every Instagram token due for renewal (expired-unknown/null or
- * within the threshold window). One account's failure never aborts the batch:
- * failures are collected and returned so the caller can surface partial
- * results rather than swallowing them.
+ * Refreshes every Instagram token due for renewal. One account's failure never
+ * aborts the batch: failures are collected and returned so the caller can
+ * surface partial results rather than swallowing them.
  */
 export async function refreshExpiringInstagramTokens(
   db: InstagramTokenDb,
   now: Date = new Date(),
 ): Promise<InstagramRefreshResult> {
-  const cutoff = refreshCutoff(now);
-
   const dueAccounts = await db
     .select({
       userId: connectedAccounts.userId,
+      externalId: connectedAccounts.externalId,
       accessToken: connectedAccounts.accessToken,
     })
     .from(connectedAccounts)
-    .where(
-      and(
-        eq(connectedAccounts.provider, CONNECTED_ACCOUNT_PROVIDER.INSTAGRAM),
-        or(
-          isNull(connectedAccounts.expiresAt),
-          lt(connectedAccounts.expiresAt, cutoff),
-        ),
-      ),
-    );
+    .where(dueAccountsCondition(now))
+    .orderBy(connectedAccounts.expiresAt)
+    .limit(INSTAGRAM_REFRESH_BATCH_LIMIT);
 
   const refreshedUserIds: string[] = [];
   const failures: InstagramRefreshFailure[] = [];
@@ -94,7 +114,7 @@ export async function refreshExpiringInstagramTokens(
     try {
       await refreshOne(
         db,
-        { userId: account.userId, accessToken: account.accessToken },
+        { externalId: account.externalId, accessToken: account.accessToken },
         now,
       );
       refreshedUserIds.push(account.userId);
@@ -108,5 +128,6 @@ export async function refreshExpiringInstagramTokens(
     refreshedUserIds,
     refreshedCount: refreshedUserIds.length,
     failures,
+    capReached: dueAccounts.length === INSTAGRAM_REFRESH_BATCH_LIMIT,
   };
 }

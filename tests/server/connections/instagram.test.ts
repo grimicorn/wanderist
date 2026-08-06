@@ -33,6 +33,7 @@ const {
   mockEncryptToken,
   mockDecryptToken,
   mockEnsureFreshInstagramToken,
+  MockInstagramTokenExpiredError,
   mockPutMediaBlob,
   mockGetCookie,
   mockSetCookie,
@@ -105,6 +106,7 @@ const {
     mockEncryptToken: vi.fn().mockReturnValue("encrypted-token"),
     mockDecryptToken: vi.fn().mockReturnValue("long-token"),
     mockEnsureFreshInstagramToken: vi.fn().mockResolvedValue("long-token"),
+    MockInstagramTokenExpiredError: class extends Error {},
     mockPutMediaBlob: vi.fn().mockResolvedValue(undefined),
     mockGetCookie: vi.fn(),
     mockSetCookie: vi.fn(),
@@ -152,6 +154,7 @@ vi.mock("../../../server/utils/tokenCrypto", () => ({
 
 vi.mock("../../../server/utils/instagramToken", () => ({
   ensureFreshInstagramToken: mockEnsureFreshInstagramToken,
+  InstagramTokenExpiredError: MockInstagramTokenExpiredError,
 }));
 
 vi.mock("../../../server/utils/planLimits", () => ({
@@ -552,7 +555,7 @@ describe("POST /api/connections/instagram/import", () => {
     mockEnsureUser.mockResolvedValue("user-1");
     // Connection lookup uses .where().limit() — return the connected account row.
     mockDbSelectLimit.mockResolvedValue([
-      { accessToken: "encrypted-token", expiresAt: null },
+      { externalId: "ig-123", accessToken: "encrypted-token", expiresAt: null },
     ]);
     // Dedupe query uses .where() directly (no .limit) — default to no already-imported IDs.
     mockDbSelectWhere.mockImplementation(() => {
@@ -605,9 +608,20 @@ describe("POST /api/connections/instagram/import", () => {
     expect(mockEnsureFreshInstagramToken).toHaveBeenCalledWith(
       expect.anything(),
       "user-1",
-      { accessToken: "encrypted-token", expiresAt: null },
+      { externalId: "ig-123", accessToken: "encrypted-token", expiresAt: null },
     );
     expect(mockFetchInstagramMedia).toHaveBeenCalledWith("long-token");
+  });
+
+  it("returns 422 when the stored token is expired and cannot be refreshed", async () => {
+    mockEnsureFreshInstagramToken.mockRejectedValue(
+      new MockInstagramTokenExpiredError("expired"),
+    );
+
+    await expect(call(importHandler, makeEvent())).rejects.toMatchObject({
+      statusCode: 422,
+    });
+    expect(mockFetchInstagramMedia).not.toHaveBeenCalled();
   });
 
   it("calls fetchInstagramImage for each new geotagged item", async () => {

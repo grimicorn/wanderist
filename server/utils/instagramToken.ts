@@ -30,7 +30,23 @@ export type InstagramTokenDb = ReturnType<typeof createDb>;
 // lapses, while avoiding a refresh on every single import.
 export const INSTAGRAM_REFRESH_THRESHOLD_DAYS = 10;
 
+/**
+ * Thrown when a stored token is already past expiry and Instagram refuses to
+ * refresh it. Callers translate this into a "reconnect your account" response
+ * rather than an opaque 500 — it is a user action, not a server fault.
+ */
+export class InstagramTokenExpiredError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = "InstagramTokenExpiredError";
+  }
+}
+
 export interface StoredInstagramToken {
+  // The Instagram-assigned account id; with `provider` it uniquely identifies
+  // the connected_accounts row, so the refresh writes back to exactly one row
+  // even when a user has connected more than one Instagram account.
+  externalId: string;
   // Ciphertext as stored in connected_accounts.accessToken.
   accessToken: string;
   expiresAt: Date | null;
@@ -69,26 +85,33 @@ export function isInstagramTokenExpired(
 
 /**
  * Absolute expiry for a freshly refreshed token, derived from the API's
- * `expires_in` (seconds from now).
+ * `expires_in` (seconds from now). Returns null when the response omits
+ * `expires_in` — mirroring the connect path's guard so a missing value can
+ * never produce an Invalid Date write.
  */
 export function expiryFromResponse(
   response: InstagramLongLivedTokenResponse,
   now: Date,
-): Date {
+): Date | null {
+  if (typeof response.expires_in !== "number") {
+    return null;
+  }
   return new Date(now.getTime() + response.expires_in * 1000);
 }
 
 /**
- * Writes a refreshed token + its new expiry to the user's Instagram row.
+ * Writes a refreshed token + its new expiry to the Instagram row identified by
+ * `(provider, externalId)` — the table's unique key — so a user with multiple
+ * connected Instagram accounts has only the refreshed account's row updated.
  * Shared by the on-use path and the scheduled batch job so both persist
  * identically.
  */
 export async function persistRefreshedInstagramToken(
   db: InstagramTokenDb,
-  userId: string,
+  externalId: string,
   response: InstagramLongLivedTokenResponse,
   now: Date,
-): Promise<Date> {
+): Promise<Date | null> {
   const expiresAt = expiryFromResponse(response, now);
   await db
     .update(connectedAccounts)
@@ -98,8 +121,8 @@ export async function persistRefreshedInstagramToken(
     })
     .where(
       and(
-        eq(connectedAccounts.userId, userId),
         eq(connectedAccounts.provider, CONNECTED_ACCOUNT_PROVIDER.INSTAGRAM),
+        eq(connectedAccounts.externalId, externalId),
       ),
     );
   return expiresAt;
@@ -110,10 +133,10 @@ export async function persistRefreshedInstagramToken(
  * persisting first when the stored token is near expiry.
  *
  * Failure handling: if the refresh call fails but the current token has not
- * yet expired, we fall back to the current token (the next run retries the
- * refresh) rather than blocking the import. If the current token is already
- * expired, the refresh failure is fatal and re-thrown — calling Instagram with
- * a dead token would only fail later and more opaquely.
+ * yet expired, we log and fall back to the current token (the next run retries
+ * the refresh) rather than blocking the import. If the current token is already
+ * expired, the failure is fatal and surfaced as InstagramTokenExpiredError —
+ * calling Instagram with a dead token would only fail later and more opaquely.
  */
 export async function ensureFreshInstagramToken(
   db: InstagramTokenDb,
@@ -126,16 +149,23 @@ export async function ensureFreshInstagramToken(
     return currentToken;
   }
 
+  let refreshed: InstagramLongLivedTokenResponse;
   try {
-    const refreshed = await refreshLongLivedToken({
-      accessToken: currentToken,
-    });
-    await persistRefreshedInstagramToken(db, userId, refreshed, now);
-    return refreshed.access_token;
+    refreshed = await refreshLongLivedToken({ accessToken: currentToken });
   } catch (error) {
     if (isInstagramTokenExpired(stored.expiresAt, now)) {
-      throw error;
+      throw new InstagramTokenExpiredError(
+        "Instagram token expired and could not be refreshed",
+        { cause: error },
+      );
     }
+    console.warn(
+      "ensureFreshInstagramToken: refresh failed, using existing token",
+      { userId, error },
+    );
     return currentToken;
   }
+
+  await persistRefreshedInstagramToken(db, stored.externalId, refreshed, now);
+  return refreshed.access_token;
 }

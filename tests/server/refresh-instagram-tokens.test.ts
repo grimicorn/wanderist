@@ -27,16 +27,24 @@ vi.mock("../../server/utils/tokenCrypto", () => ({
   decryptToken: mockDecryptToken,
 }));
 
-const { refreshExpiringInstagramTokens } =
-  await import("../../server/utils/refreshInstagramTokens");
+const {
+  refreshExpiringInstagramTokens,
+  refreshCutoff,
+  INSTAGRAM_REFRESH_BATCH_LIMIT,
+} = await import("../../server/utils/refreshInstagramTokens");
+import { INSTAGRAM_REFRESH_THRESHOLD_DAYS } from "../../server/utils/instagramToken";
+import { MS_PER_DAY } from "../../server/utils/accountLifecycle";
 
 interface DueAccount {
   userId: string;
+  externalId: string;
   accessToken: string | null;
 }
 
 function makeDb(dueAccounts: DueAccount[]) {
-  const selectWhere = vi.fn().mockResolvedValue(dueAccounts);
+  const limit = vi.fn().mockResolvedValue(dueAccounts);
+  const orderBy = vi.fn(() => ({ limit }));
+  const selectWhere = vi.fn(() => ({ orderBy }));
   const selectFrom = vi.fn(() => ({ where: selectWhere }));
   const select = vi.fn(() => ({ from: selectFrom }));
 
@@ -50,9 +58,24 @@ function makeDb(dueAccounts: DueAccount[]) {
     >[0],
     select,
     selectWhere,
+    orderBy,
+    limit,
     update,
   };
 }
+
+// ---------------------------------------------------------------------------
+// refreshCutoff — the one predicate that decides which tokens are "due"
+// ---------------------------------------------------------------------------
+
+describe("refreshCutoff", () => {
+  it("is now plus the refresh threshold", () => {
+    const now = new Date("2026-08-01T00:00:00.000Z");
+    expect(refreshCutoff(now)).toEqual(
+      new Date(now.getTime() + INSTAGRAM_REFRESH_THRESHOLD_DAYS * MS_PER_DAY),
+    );
+  });
+});
 
 describe("refreshExpiringInstagramTokens", () => {
   beforeEach(() => {
@@ -64,10 +87,19 @@ describe("refreshExpiringInstagramTokens", () => {
     });
   });
 
+  it("orders by soonest expiry and caps the batch", async () => {
+    const { db, orderBy, limit } = makeDb([]);
+
+    await refreshExpiringInstagramTokens(db);
+
+    expect(orderBy).toHaveBeenCalledTimes(1);
+    expect(limit).toHaveBeenCalledWith(INSTAGRAM_REFRESH_BATCH_LIMIT);
+  });
+
   it("refreshes every due account and reports their ids", async () => {
     const { db, update } = makeDb([
-      { userId: "user-1", accessToken: "encrypted:t1" },
-      { userId: "user-2", accessToken: "encrypted:t2" },
+      { userId: "user-1", externalId: "ig-1", accessToken: "encrypted:t1" },
+      { userId: "user-2", externalId: "ig-2", accessToken: "encrypted:t2" },
     ]);
 
     const result = await refreshExpiringInstagramTokens(db);
@@ -78,6 +110,7 @@ describe("refreshExpiringInstagramTokens", () => {
       refreshedUserIds: ["user-1", "user-2"],
       refreshedCount: 2,
       failures: [],
+      capReached: false,
     });
   });
 
@@ -91,13 +124,18 @@ describe("refreshExpiringInstagramTokens", () => {
       refreshedUserIds: [],
       refreshedCount: 0,
       failures: [],
+      capReached: false,
     });
   });
 
   it("collects a per-account failure and keeps going with the rest", async () => {
     const { db } = makeDb([
-      { userId: "user-ok", accessToken: "encrypted:ok" },
-      { userId: "user-bad", accessToken: "encrypted:bad" },
+      { userId: "user-ok", externalId: "ig-ok", accessToken: "encrypted:ok" },
+      {
+        userId: "user-bad",
+        externalId: "ig-bad",
+        accessToken: "encrypted:bad",
+      },
     ]);
     mockRefreshLongLivedToken
       .mockResolvedValueOnce({
@@ -116,15 +154,20 @@ describe("refreshExpiringInstagramTokens", () => {
     ]);
   });
 
-  it("records a failure without calling the API when a row has no token", async () => {
-    const { db } = makeDb([{ userId: "user-empty", accessToken: null }]);
+  it("flags capReached when the batch fills to the limit", async () => {
+    const full: DueAccount[] = Array.from(
+      { length: INSTAGRAM_REFRESH_BATCH_LIMIT },
+      (_unused, index) => ({
+        userId: `user-${index}`,
+        externalId: `ig-${index}`,
+        accessToken: `encrypted:t${index}`,
+      }),
+    );
+    const { db } = makeDb(full);
 
     const result = await refreshExpiringInstagramTokens(db);
 
-    expect(mockRefreshLongLivedToken).not.toHaveBeenCalled();
-    expect(result.failures).toEqual([
-      { userId: "user-empty", error: "No stored token" },
-    ]);
-    expect(result.refreshedCount).toBe(0);
+    expect(result.capReached).toBe(true);
+    expect(result.refreshedCount).toBe(INSTAGRAM_REFRESH_BATCH_LIMIT);
   });
 });

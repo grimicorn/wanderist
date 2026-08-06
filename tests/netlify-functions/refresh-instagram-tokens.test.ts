@@ -42,6 +42,7 @@ describe("refresh-instagram-tokens scheduled function", () => {
       refreshedUserIds: ["user-1"],
       refreshedCount: 1,
       failures: [],
+      capReached: false,
     };
     mockRefreshExpiringInstagramTokens.mockResolvedValue(result);
 
@@ -59,12 +60,29 @@ describe("refresh-instagram-tokens scheduled function", () => {
       refreshedUserIds: ["user-1"],
       refreshedCount: 1,
       failures: [{ userId: "user-2", error: "400 revoked" }],
+      capReached: false,
     });
 
     const response = await handler();
 
     expect(response.statusCode).toBe(200);
     expect(consoleSpy).toHaveBeenCalled();
+    consoleSpy.mockRestore();
+  });
+
+  it("throws when every attempted account failed, so a systemic failure is recorded", async () => {
+    const consoleSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    mockRefreshExpiringInstagramTokens.mockResolvedValue({
+      refreshedUserIds: [],
+      refreshedCount: 0,
+      failures: [
+        { userId: "user-1", error: "400 revoked" },
+        { userId: "user-2", error: "400 revoked" },
+      ],
+      capReached: false,
+    });
+
+    await expect(handler()).rejects.toThrow(/all 2 refresh/);
     consoleSpy.mockRestore();
   });
 
