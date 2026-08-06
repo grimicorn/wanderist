@@ -18,12 +18,20 @@
  *
  * Per-account refresh failures (a token already dead, a user who revoked
  * access) are expected and non-fatal: they are collected into the result and
- * logged, and the run still succeeds. Only an unexpected error (e.g. the DB
- * query itself throwing) is re-thrown so Netlify's run history records the
- * invocation as failed — mirroring purge-deleted-accounts.mts.
+ * logged. Two things are treated as real failures and re-thrown so Netlify's
+ * run history records the invocation as failed: an unexpected error (e.g. the
+ * DB query itself throwing), and a systemic pattern where a meaningful number
+ * of accounts were attempted and every one failed (a rotated app secret or
+ * missing encryption key, not a lone revoked account) — see the throw below.
+ * Mirrors purge-deleted-accounts.mts.
  */
 import { createDb } from "../../server/db/index";
 import { refreshExpiringInstagramTokens } from "../../server/utils/refreshInstagramTokens";
+
+// A run is treated as systemically broken (rather than a stray revoked
+// account) only when at least this many accounts were attempted and none
+// succeeded. A single failing account never reds the daily run.
+const SYSTEMIC_FAILURE_MIN = 3;
 
 export const handler = async () => {
   try {
@@ -46,12 +54,16 @@ export const handler = async () => {
       );
     }
 
-    // A run where every attempted account failed and none succeeded is a
+    // A run where several accounts were attempted and every one failed is a
     // systemic failure (rotated app secret, endpoint change, missing
     // encryption key) masquerading as a quiet success. Throw so Netlify marks
-    // the invocation failed instead of recording a green run that renewed
-    // nothing.
-    if (result.refreshedCount === 0 && result.failures.length > 0) {
+    // the invocation failed. Guarded by SYSTEMIC_FAILURE_MIN so a lone revoked
+    // account — which fails every run until its token naturally lapses — never
+    // reds the daily run.
+    if (
+      result.refreshedCount === 0 &&
+      result.failures.length >= SYSTEMIC_FAILURE_MIN
+    ) {
       throw new Error(
         `refresh-instagram-tokens: all ${result.failures.length} refresh attempt(s) failed`,
       );

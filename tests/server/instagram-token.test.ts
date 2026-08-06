@@ -10,17 +10,29 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { mockRefreshLongLivedToken, mockEncryptToken, mockDecryptToken } =
-  vi.hoisted(() => ({
-    mockRefreshLongLivedToken: vi.fn(),
-    mockEncryptToken: vi.fn((plaintext: string) => `encrypted:${plaintext}`),
-    mockDecryptToken: vi.fn((ciphertext: string) =>
-      ciphertext.replace(/^encrypted:/, ""),
-    ),
-  }));
+const {
+  mockRefreshLongLivedToken,
+  mockEncryptToken,
+  mockDecryptToken,
+  MockInstagramApiError,
+} = vi.hoisted(() => ({
+  mockRefreshLongLivedToken: vi.fn(),
+  mockEncryptToken: vi.fn((plaintext: string) => `encrypted:${plaintext}`),
+  mockDecryptToken: vi.fn((ciphertext: string) =>
+    ciphertext.replace(/^encrypted:/, ""),
+  ),
+  MockInstagramApiError: class extends Error {
+    status: number;
+    constructor(message: string, status: number) {
+      super(message);
+      this.status = status;
+    }
+  },
+}));
 
 vi.mock("../../server/utils/instagramClient", () => ({
   refreshLongLivedToken: mockRefreshLongLivedToken,
+  InstagramApiError: MockInstagramApiError,
 }));
 
 vi.mock("../../server/utils/tokenCrypto", () => ({
@@ -38,6 +50,7 @@ const {
   ensureFreshInstagramToken,
 } = await import("../../server/utils/instagramToken");
 import { MS_PER_DAY } from "../../server/utils/accountLifecycle";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 // ---------------------------------------------------------------------------
 // Pure predicates
@@ -98,7 +111,7 @@ describe("expiryFromResponse", () => {
 
   it("returns null when expires_in is missing rather than an Invalid Date", () => {
     const expiry = expiryFromResponse(
-      { access_token: "t", token_type: "bearer" } as never,
+      { access_token: "t", token_type: "bearer" },
       now,
     );
     expect(expiry).toBeNull();
@@ -155,7 +168,7 @@ describe("persistRefreshedInstagramToken", () => {
     const expiresAt = await persistRefreshedInstagramToken(
       db,
       "ig-A",
-      { access_token: "fresh-token", token_type: "bearer" } as never,
+      { access_token: "fresh-token", token_type: "bearer" },
       now,
     );
 
@@ -164,6 +177,24 @@ describe("persistRefreshedInstagramToken", () => {
       expiresAt: null,
     });
     expect(expiresAt).toBeNull();
+  });
+
+  it("scopes the update to (provider, external_id), not the user", async () => {
+    const { db, where } = makeUpdatableDb();
+
+    await persistRefreshedInstagramToken(
+      db,
+      "ig-A",
+      { access_token: "fresh-token", token_type: "bearer", expires_in: 5000 },
+      new Date("2026-08-01T00:00:00.000Z"),
+    );
+
+    const condition = where.mock.calls[0]?.[0];
+    const { sql, params } = new PgDialect().sqlToQuery(condition as never);
+    expect(sql).toContain('"provider"');
+    expect(sql).toContain('"external_id"');
+    expect(sql).not.toContain('"user_id"');
+    expect(params).toContain("ig-A");
   });
 });
 
@@ -273,5 +304,40 @@ describe("ensureFreshInstagramToken", () => {
         now,
       ),
     ).rejects.toBeInstanceOf(InstagramTokenExpiredError);
+  });
+
+  it("throws InstagramTokenExpiredError on a 400 even when the stored expiry is unknown", async () => {
+    const { db } = makeUpdatableDb();
+    mockRefreshLongLivedToken.mockRejectedValue(
+      new MockInstagramApiError("session expired", 400),
+    );
+
+    await expect(
+      ensureFreshInstagramToken(
+        db,
+        "user-1",
+        { externalId: "ig-A", accessToken: "encrypted:dead", expiresAt: null },
+        now,
+      ),
+    ).rejects.toBeInstanceOf(InstagramTokenExpiredError);
+  });
+
+  it("falls back on a transient 429 while the token is still valid", async () => {
+    const consoleSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { db } = makeUpdatableDb();
+    const expiresAt = new Date(now.getTime() + 2 * MS_PER_DAY);
+    mockRefreshLongLivedToken.mockRejectedValue(
+      new MockInstagramApiError("rate limited", 429),
+    );
+
+    const token = await ensureFreshInstagramToken(
+      db,
+      "user-1",
+      { externalId: "ig-A", accessToken: "encrypted:still-valid", expiresAt },
+      now,
+    );
+
+    expect(token).toBe("still-valid");
+    consoleSpy.mockRestore();
   });
 });

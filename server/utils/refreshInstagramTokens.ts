@@ -24,11 +24,12 @@ import {
 } from "./instagramToken";
 import { MS_PER_DAY } from "./accountLifecycle";
 
-// Cap the rows processed per run so a large backlog can't blow past Netlify's
-// scheduled-function time limit mid-loop. Rows are ordered by soonest expiry,
-// so the most urgent tokens are always handled first; a hit cap is logged
-// (never silently swallowed) and the remainder is picked up next run.
-export const INSTAGRAM_REFRESH_BATCH_LIMIT = 500;
+// Cap the rows processed per run. Refreshes are sequential network calls, so
+// this bounds how many run per invocation (not wall-clock time): rows are
+// ordered by soonest expiry so the most urgent are always handled first, a hit
+// cap is logged (never silently swallowed), and the daily cron drains any
+// remainder over subsequent runs well inside the 10-day threshold window.
+export const INSTAGRAM_REFRESH_BATCH_LIMIT = 100;
 
 export interface InstagramRefreshFailure {
   userId: string;
@@ -59,7 +60,7 @@ export function refreshCutoff(now: Date): Date {
  * excluded: Instagram cannot refresh a lapsed token, so re-selecting them every
  * run would only produce endless failing API calls.
  */
-function dueAccountsCondition(now: Date) {
+export function dueAccountsCondition(now: Date) {
   return and(
     eq(connectedAccounts.provider, CONNECTED_ACCOUNT_PROVIDER.INSTAGRAM),
     isNotNull(connectedAccounts.accessToken),

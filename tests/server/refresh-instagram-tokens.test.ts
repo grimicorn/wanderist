@@ -30,10 +30,12 @@ vi.mock("../../server/utils/tokenCrypto", () => ({
 const {
   refreshExpiringInstagramTokens,
   refreshCutoff,
+  dueAccountsCondition,
   INSTAGRAM_REFRESH_BATCH_LIMIT,
 } = await import("../../server/utils/refreshInstagramTokens");
 import { INSTAGRAM_REFRESH_THRESHOLD_DAYS } from "../../server/utils/instagramToken";
 import { MS_PER_DAY } from "../../server/utils/accountLifecycle";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 interface DueAccount {
   userId: string;
@@ -74,6 +76,26 @@ describe("refreshCutoff", () => {
     expect(refreshCutoff(now)).toEqual(
       new Date(now.getTime() + INSTAGRAM_REFRESH_THRESHOLD_DAYS * MS_PER_DAY),
     );
+  });
+});
+
+describe("dueAccountsCondition", () => {
+  it("selects Instagram rows with a token and a null or in-window expiry, excluding already-expired", () => {
+    const now = new Date("2026-08-01T00:00:00.000Z");
+    const { sql, params } = new PgDialect().sqlToQuery(
+      dueAccountsCondition(now) as never,
+    );
+
+    expect(sql).toContain('"provider"');
+    expect(sql).toContain('"access_token" is not null');
+    expect(sql).toContain('"expires_at" is null');
+    // Bounded on both sides: still in the future (>) and within the window (<).
+    expect(sql).toContain('"expires_at" > ');
+    expect(sql).toContain('"expires_at" < ');
+    // Drizzle serializes timestamp params to ISO strings.
+    const paramStrings = params.map(String);
+    expect(paramStrings).toContain(now.toISOString());
+    expect(paramStrings).toContain(refreshCutoff(now).toISOString());
   });
 });
 

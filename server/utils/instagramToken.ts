@@ -18,6 +18,7 @@ import type { createDb } from "../db/index";
 import { connectedAccounts, CONNECTED_ACCOUNT_PROVIDER } from "../db/schema";
 import {
   refreshLongLivedToken,
+  InstagramApiError,
   type InstagramLongLivedTokenResponse,
 } from "./instagramClient";
 import { decryptToken, encryptToken } from "./tokenCrypto";
@@ -29,6 +30,10 @@ export type InstagramTokenDb = ReturnType<typeof createDb>;
 // enough that an account syncing even monthly is always renewed before it
 // lapses, while avoiding a refresh on every single import.
 export const INSTAGRAM_REFRESH_THRESHOLD_DAYS = 10;
+
+// Instagram answers 400/401 when a token is expired or the user revoked
+// access — unrecoverable by refresh, so the connection must be re-established.
+const UNRECOVERABLE_REFRESH_STATUSES = new Set([400, 401]);
 
 /**
  * Thrown when a stored token is already past expiry and Instagram refuses to
@@ -129,14 +134,36 @@ export async function persistRefreshedInstagramToken(
 }
 
 /**
+ * A refresh failure is unrecoverable when Instagram itself rejected the token
+ * (400/401 — expired or revoked), or when our own stored expiry is already
+ * past. Either way the user must reconnect; the caller turns this into a
+ * "reconnect" response rather than retrying a dead token. Transient failures
+ * (429/5xx/network) on a still-valid token are recoverable — fall back and
+ * retry next run.
+ */
+function isRefreshUnrecoverable(
+  error: unknown,
+  expiresAt: Date | null,
+  now: Date,
+): boolean {
+  if (
+    error instanceof InstagramApiError &&
+    UNRECOVERABLE_REFRESH_STATUSES.has(error.status)
+  ) {
+    return true;
+  }
+  return isInstagramTokenExpired(expiresAt, now);
+}
+
+/**
  * Returns a usable plaintext Instagram token for the user, refreshing and
  * persisting first when the stored token is near expiry.
  *
- * Failure handling: if the refresh call fails but the current token has not
- * yet expired, we log and fall back to the current token (the next run retries
- * the refresh) rather than blocking the import. If the current token is already
- * expired, the failure is fatal and surfaced as InstagramTokenExpiredError —
- * calling Instagram with a dead token would only fail later and more opaquely.
+ * Failure handling: a transient refresh failure on a still-valid token is
+ * logged and the current token is returned (the next run retries). A failure
+ * that means the token is dead — Instagram answered 400/401, or the stored
+ * expiry is already past — is surfaced as InstagramTokenExpiredError so the
+ * caller can prompt a reconnect instead of calling Instagram with a dead token.
  */
 export async function ensureFreshInstagramToken(
   db: InstagramTokenDb,
@@ -153,7 +180,7 @@ export async function ensureFreshInstagramToken(
   try {
     refreshed = await refreshLongLivedToken({ accessToken: currentToken });
   } catch (error) {
-    if (isInstagramTokenExpired(stored.expiresAt, now)) {
+    if (isRefreshUnrecoverable(error, stored.expiresAt, now)) {
       throw new InstagramTokenExpiredError(
         "Instagram token expired and could not be refreshed",
         { cause: error },
