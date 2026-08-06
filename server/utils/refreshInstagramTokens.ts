@@ -12,13 +12,15 @@
  * plain mocked db chain, with the Instagram client and token crypto mocked at
  * their module boundaries — the same pattern as server/utils/purgeAccounts.ts.
  */
-import { and, eq, gt, isNotNull, isNull, lt, or } from "drizzle-orm";
+import { and, eq, gt, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import type { createDb } from "../db/index";
 import { connectedAccounts, CONNECTED_ACCOUNT_PROVIDER } from "../db/schema";
 import { refreshLongLivedToken } from "./instagramClient";
 import { decryptToken } from "./tokenCrypto";
 import {
   INSTAGRAM_REFRESH_THRESHOLD_DAYS,
+  isUnrecoverableRefreshError,
+  markInstagramTokenExpired,
   persistRefreshedInstagramToken,
   type InstagramTokenDb,
 } from "./instagramToken";
@@ -34,6 +36,10 @@ export const INSTAGRAM_REFRESH_BATCH_LIMIT = 100;
 export interface InstagramRefreshFailure {
   userId: string;
   error: string;
+  // True when the failure is Instagram rejecting the token (400/401 — the user
+  // must reconnect), false for transient/infrastructure failures the caller
+  // should treat as a real problem.
+  unrecoverable: boolean;
 }
 
 export interface InstagramRefreshResult {
@@ -101,7 +107,10 @@ export async function refreshExpiringInstagramTokens(
     })
     .from(connectedAccounts)
     .where(dueAccountsCondition(now))
-    .orderBy(connectedAccounts.expiresAt)
+    // NULLS FIRST: null-expiry rows are pre-refresh/legacy connections of
+    // unknown urgency, so handle them ahead of dated rows rather than letting
+    // Postgres' default (NULLS LAST on ASC) push them to the back of the batch.
+    .orderBy(sql`${connectedAccounts.expiresAt} asc nulls first`)
     .limit(INSTAGRAM_REFRESH_BATCH_LIMIT);
 
   const refreshedUserIds: string[] = [];
@@ -109,7 +118,11 @@ export async function refreshExpiringInstagramTokens(
 
   for (const account of dueAccounts) {
     if (!account.accessToken) {
-      failures.push({ userId: account.userId, error: "No stored token" });
+      failures.push({
+        userId: account.userId,
+        error: "No stored token",
+        unrecoverable: true,
+      });
       continue;
     }
     try {
@@ -121,7 +134,13 @@ export async function refreshExpiringInstagramTokens(
       refreshedUserIds.push(account.userId);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
-      failures.push({ userId: account.userId, error: message });
+      const unrecoverable = isUnrecoverableRefreshError(error);
+      if (unrecoverable) {
+        // Instagram rejected the token — stamp it expired so it drops out of
+        // the due window next run instead of failing forever.
+        await markInstagramTokenExpired(db, account.externalId, now);
+      }
+      failures.push({ userId: account.userId, error: message, unrecoverable });
     }
   }
 

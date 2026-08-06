@@ -9,17 +9,29 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { mockRefreshLongLivedToken, mockEncryptToken, mockDecryptToken } =
-  vi.hoisted(() => ({
-    mockRefreshLongLivedToken: vi.fn(),
-    mockEncryptToken: vi.fn((plaintext: string) => `encrypted:${plaintext}`),
-    mockDecryptToken: vi.fn((ciphertext: string) =>
-      ciphertext.replace(/^encrypted:/, ""),
-    ),
-  }));
+const {
+  mockRefreshLongLivedToken,
+  mockEncryptToken,
+  mockDecryptToken,
+  MockInstagramApiError,
+} = vi.hoisted(() => ({
+  mockRefreshLongLivedToken: vi.fn(),
+  mockEncryptToken: vi.fn((plaintext: string) => `encrypted:${plaintext}`),
+  mockDecryptToken: vi.fn((ciphertext: string) =>
+    ciphertext.replace(/^encrypted:/, ""),
+  ),
+  MockInstagramApiError: class extends Error {
+    status: number;
+    constructor(message: string, status: number) {
+      super(message);
+      this.status = status;
+    }
+  },
+}));
 
 vi.mock("../../server/utils/instagramClient", () => ({
   refreshLongLivedToken: mockRefreshLongLivedToken,
+  InstagramApiError: MockInstagramApiError,
 }));
 
 vi.mock("../../server/utils/tokenCrypto", () => ({
@@ -109,12 +121,15 @@ describe("refreshExpiringInstagramTokens", () => {
     });
   });
 
-  it("orders by soonest expiry and caps the batch", async () => {
+  it("orders by soonest expiry with nulls first and caps the batch", async () => {
     const { db, orderBy, limit } = makeDb([]);
 
     await refreshExpiringInstagramTokens(db);
 
-    expect(orderBy).toHaveBeenCalledTimes(1);
+    const { sql } = new PgDialect().sqlToQuery(
+      orderBy.mock.calls[0]?.[0] as never,
+    );
+    expect(sql.toLowerCase()).toContain("nulls first");
     expect(limit).toHaveBeenCalledWith(INSTAGRAM_REFRESH_BATCH_LIMIT);
   });
 
@@ -172,7 +187,28 @@ describe("refreshExpiringInstagramTokens", () => {
     expect(result.refreshedUserIds).toEqual(["user-ok"]);
     expect(result.refreshedCount).toBe(1);
     expect(result.failures).toEqual([
-      { userId: "user-bad", error: "400 token revoked" },
+      { userId: "user-bad", error: "400 token revoked", unrecoverable: false },
+    ]);
+  });
+
+  it("marks the row expired and flags unrecoverable on a 400/401", async () => {
+    const { db, update } = makeDb([
+      {
+        userId: "user-revoked",
+        externalId: "ig-revoked",
+        accessToken: "encrypted:dead",
+      },
+    ]);
+    mockRefreshLongLivedToken.mockRejectedValue(
+      new MockInstagramApiError("revoked", 400),
+    );
+
+    const result = await refreshExpiringInstagramTokens(db);
+
+    // The only db.update is the mark-expired write (no successful persist).
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(result.failures).toEqual([
+      { userId: "user-revoked", error: "revoked", unrecoverable: true },
     ]);
   });
 

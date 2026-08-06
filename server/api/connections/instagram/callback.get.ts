@@ -20,6 +20,7 @@ import {
   exchangeForLongLivedToken,
   fetchInstagramUser,
 } from "../../../utils/instagramClient";
+import { expiryFromResponse } from "../../../utils/instagramToken";
 import { encryptToken } from "../../../utils/tokenCrypto";
 
 const STATE_COOKIE_NAME = "ig_oauth_state";
@@ -104,13 +105,9 @@ export default defineEventHandler(async (event) => {
   );
 
   const encryptedToken = encryptToken(longLivedTokenResponse.access_token);
-  // Persist the token's expiry so it can be refreshed before it lapses. The
-  // Instagram Graph API returns `expires_in` (seconds) for long-lived tokens;
-  // guard against a missing value rather than storing an Invalid Date.
-  const expiresAt =
-    typeof longLivedTokenResponse.expires_in === "number"
-      ? new Date(Date.now() + longLivedTokenResponse.expires_in * 1000)
-      : null;
+  // Persist the token's expiry so it can be refreshed before it lapses. Shared
+  // with the refresh path so connect and refresh derive the expiry identically.
+  const expiresAt = expiryFromResponse(longLivedTokenResponse, new Date());
   const database = getDb();
 
   // Upsert on (userId, provider) to enforce one Instagram account per user.

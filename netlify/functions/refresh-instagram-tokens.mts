@@ -16,26 +16,34 @@
  * useRuntimeConfig() or any other Nitro auto-import — it reads DATABASE_URL
  * directly from process.env via createDb().
  *
- * Per-account refresh failures (a token already dead, a user who revoked
- * access) are expected and non-fatal: they are collected into the result and
- * logged. Two things are treated as real failures and re-thrown so Netlify's
- * run history records the invocation as failed: an unexpected error (e.g. the
- * DB query itself throwing), and a systemic pattern where a meaningful number
- * of accounts were attempted and every one failed (a rotated app secret or
- * missing encryption key, not a lone revoked account) — see the throw below.
- * Mirrors purge-deleted-accounts.mts.
+ * Per-account failures where Instagram rejected the token (400/401 — the user
+ * revoked access or it lapsed) are expected and non-fatal: they are collected,
+ * logged, and the row is stamped expired so it stops recurring. What is fatal,
+ * and re-thrown so Netlify records the invocation as failed, is: an unexpected
+ * error (e.g. the DB query throwing), a missing encryption key, or a run where
+ * nothing succeeded yet a *recoverable* failure occurred (a rotated app secret,
+ * a 429/5xx storm) — a real problem, not a stray revoked account. Mirrors
+ * purge-deleted-accounts.mts.
  */
 import { createDb } from "../../server/db/index";
 import { refreshExpiringInstagramTokens } from "../../server/utils/refreshInstagramTokens";
 
-// A run is treated as systemically broken (rather than a stray revoked
-// account) only when at least this many accounts were attempted and none
-// succeeded. A single failing account never reds the daily run.
-const SYSTEMIC_FAILURE_MIN = 3;
-
 export const handler = async () => {
   try {
-    const db = createDb(process.env.DATABASE_URL ?? "");
+    // This standalone function reads secrets straight from the Netlify
+    // Functions env (it is not in the Nitro bundle, so useRuntimeConfig() is
+    // unavailable). Fail fast with a clear message if either is unset, rather
+    // than surfacing a driver error or a ReferenceError deep in token decrypt.
+    if (!process.env.DATABASE_URL) {
+      throw new Error("refresh-instagram-tokens: DATABASE_URL is not set");
+    }
+    if (!process.env.TOKEN_ENCRYPTION_KEY) {
+      throw new Error(
+        "refresh-instagram-tokens: TOKEN_ENCRYPTION_KEY is not set",
+      );
+    }
+
+    const db = createDb(process.env.DATABASE_URL);
     const result = await refreshExpiringInstagramTokens(db);
 
     console.log(
@@ -54,18 +62,16 @@ export const handler = async () => {
       );
     }
 
-    // A run where several accounts were attempted and every one failed is a
-    // systemic failure (rotated app secret, endpoint change, missing
-    // encryption key) masquerading as a quiet success. Throw so Netlify marks
-    // the invocation failed. Guarded by SYSTEMIC_FAILURE_MIN so a lone revoked
-    // account — which fails every run until its token naturally lapses — never
-    // reds the daily run.
-    if (
-      result.refreshedCount === 0 &&
-      result.failures.length >= SYSTEMIC_FAILURE_MIN
-    ) {
+    // Nothing renewed AND at least one recoverable failure (not a 400/401
+    // "user must reconnect") means the job itself is broken — a rotated secret
+    // or a transient outage hitting everything. Throw so Netlify marks the run
+    // failed. Runs whose only failures are revoked accounts stay green.
+    const recoverableFailures = result.failures.filter(
+      (failure) => !failure.unrecoverable,
+    );
+    if (result.refreshedCount === 0 && recoverableFailures.length > 0) {
       throw new Error(
-        `refresh-instagram-tokens: all ${result.failures.length} refresh attempt(s) failed`,
+        `refresh-instagram-tokens: ${recoverableFailures.length} recoverable refresh failure(s) with no successes`,
       );
     }
 

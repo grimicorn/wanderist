@@ -42,11 +42,14 @@ vi.mock("../../server/utils/tokenCrypto", () => ({
 
 const {
   INSTAGRAM_REFRESH_THRESHOLD_DAYS,
+  INSTAGRAM_LONG_LIVED_TOKEN_DAYS,
   InstagramTokenExpiredError,
   isInstagramTokenNearExpiry,
   isInstagramTokenExpired,
+  isUnrecoverableRefreshError,
   expiryFromResponse,
   persistRefreshedInstagramToken,
+  markInstagramTokenExpired,
   ensureFreshInstagramToken,
 } = await import("../../server/utils/instagramToken");
 import { MS_PER_DAY } from "../../server/utils/accountLifecycle";
@@ -109,12 +112,35 @@ describe("expiryFromResponse", () => {
     expect(expiry).toEqual(new Date(now.getTime() + 3600 * 1000));
   });
 
-  it("returns null when expires_in is missing rather than an Invalid Date", () => {
+  it("falls back to the 60-day lifetime when expires_in is missing", () => {
     const expiry = expiryFromResponse(
       { access_token: "t", token_type: "bearer" },
       now,
     );
-    expect(expiry).toBeNull();
+    expect(expiry).toEqual(
+      new Date(now.getTime() + INSTAGRAM_LONG_LIVED_TOKEN_DAYS * MS_PER_DAY),
+    );
+  });
+});
+
+describe("isUnrecoverableRefreshError", () => {
+  it("is true for a 400 Instagram API error", () => {
+    expect(
+      isUnrecoverableRefreshError(new MockInstagramApiError("expired", 400)),
+    ).toBe(true);
+  });
+
+  it("is true for a 401 Instagram API error", () => {
+    expect(
+      isUnrecoverableRefreshError(new MockInstagramApiError("revoked", 401)),
+    ).toBe(true);
+  });
+
+  it("is false for a transient 429 and for non-API errors", () => {
+    expect(
+      isUnrecoverableRefreshError(new MockInstagramApiError("rate", 429)),
+    ).toBe(false);
+    expect(isUnrecoverableRefreshError(new Error("network"))).toBe(false);
   });
 });
 
@@ -172,11 +198,14 @@ describe("persistRefreshedInstagramToken", () => {
       now,
     );
 
+    const sixtyDays = new Date(
+      now.getTime() + INSTAGRAM_LONG_LIVED_TOKEN_DAYS * MS_PER_DAY,
+    );
     expect(set).toHaveBeenCalledWith({
       accessToken: "encrypted:fresh-token",
-      expiresAt: null,
+      expiresAt: sixtyDays,
     });
-    expect(expiresAt).toBeNull();
+    expect(expiresAt).toEqual(sixtyDays);
   });
 
   it("scopes the update to (provider, external_id), not the user", async () => {
@@ -194,6 +223,26 @@ describe("persistRefreshedInstagramToken", () => {
     expect(sql).toContain('"provider"');
     expect(sql).toContain('"external_id"');
     expect(sql).not.toContain('"user_id"');
+    expect(params).toContain("ig-A");
+  });
+});
+
+describe("markInstagramTokenExpired", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("stamps the row's expiry as now, scoped to (provider, external_id)", async () => {
+    const { db, set, where } = makeUpdatableDb();
+    const now = new Date("2026-08-01T00:00:00.000Z");
+
+    await markInstagramTokenExpired(db, "ig-A", now);
+
+    expect(set).toHaveBeenCalledWith({ expiresAt: now });
+    const { sql, params } = new PgDialect().sqlToQuery(
+      where.mock.calls[0]?.[0] as never,
+    );
+    expect(sql).toContain('"external_id"');
     expect(params).toContain("ig-A");
   });
 });

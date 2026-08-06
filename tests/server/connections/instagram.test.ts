@@ -152,9 +152,16 @@ vi.mock("../../../server/utils/tokenCrypto", () => ({
   decryptToken: mockDecryptToken,
 }));
 
+const MS_PER_DAY_FOR_MOCK = 24 * 60 * 60 * 1000;
 vi.mock("../../../server/utils/instagramToken", () => ({
   ensureFreshInstagramToken: mockEnsureFreshInstagramToken,
   InstagramTokenExpiredError: MockInstagramTokenExpiredError,
+  // Mirror the real expiryFromResponse: derive from expires_in, else fall back
+  // to Instagram's 60-day lifetime (never null).
+  expiryFromResponse: (response: { expires_in?: number }, now: Date): Date =>
+    typeof response.expires_in === "number"
+      ? new Date(now.getTime() + response.expires_in * 1000)
+      : new Date(now.getTime() + 60 * MS_PER_DAY_FOR_MOCK),
 }));
 
 vi.mock("../../../server/utils/planLimits", () => ({
@@ -426,10 +433,11 @@ describe("GET /api/connections/instagram/callback", () => {
     );
   });
 
-  it("stores a null expiresAt when the long-lived response omits expires_in", async () => {
+  it("falls back to a ~60-day expiry when the long-lived response omits expires_in", async () => {
     mockExchangeForLongLivedToken.mockResolvedValue({
       access_token: "long-token",
     });
+    const before = Date.now();
 
     await call(callbackHandler, makeEvent());
 
@@ -437,7 +445,10 @@ describe("GET /api/connections/instagram/callback", () => {
       string,
       unknown
     >;
-    expect(calledValues?.expiresAt).toBeNull();
+    const expiresAt = calledValues?.expiresAt as Date;
+    const sixtyDaysMs = 60 * 24 * 60 * 60 * 1000;
+    expect(expiresAt).toBeInstanceOf(Date);
+    expect(expiresAt.getTime()).toBeGreaterThanOrEqual(before + sixtyDaysMs);
   });
 });
 

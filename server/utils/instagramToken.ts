@@ -31,6 +31,11 @@ export type InstagramTokenDb = ReturnType<typeof createDb>;
 // lapses, while avoiding a refresh on every single import.
 export const INSTAGRAM_REFRESH_THRESHOLD_DAYS = 10;
 
+// Instagram's documented long-lived token lifetime. Used as the expiry when a
+// token response omits `expires_in`, so a freshly minted token always has a
+// known (non-null) expiry rather than being treated as immediately near-expiry.
+export const INSTAGRAM_LONG_LIVED_TOKEN_DAYS = 60;
+
 // Instagram answers 400/401 when a token is expired or the user revoked
 // access — unrecoverable by refresh, so the connection must be re-established.
 const UNRECOVERABLE_REFRESH_STATUSES = new Set([400, 401]);
@@ -89,34 +94,58 @@ export function isInstagramTokenExpired(
 }
 
 /**
- * Absolute expiry for a freshly refreshed token, derived from the API's
- * `expires_in` (seconds from now). Returns null when the response omits
- * `expires_in` — mirroring the connect path's guard so a missing value can
- * never produce an Invalid Date write.
+ * Absolute expiry for a freshly refreshed or long-lived token, derived from
+ * the API's `expires_in` (seconds from now). When the response omits
+ * `expires_in`, falls back to Instagram's documented 60-day lifetime rather
+ * than null — a token we were just handed is valid for ~60 days, and storing
+ * that estimate keeps a connected account from looking permanently near-expiry
+ * (which would refresh on every import and could reject a <24h-old token).
  */
 export function expiryFromResponse(
   response: InstagramLongLivedTokenResponse,
   now: Date,
-): Date | null {
+): Date {
   if (typeof response.expires_in !== "number") {
-    return null;
+    return new Date(
+      now.getTime() + INSTAGRAM_LONG_LIVED_TOKEN_DAYS * MS_PER_DAY,
+    );
   }
   return new Date(now.getTime() + response.expires_in * 1000);
 }
 
+// Targets exactly one row via the table's unique key, so a user with multiple
+// connected Instagram accounts only ever has the intended account's row
+// touched. Shared by every write here so the scoping can't drift between them.
+function instagramAccountWhere(externalId: string) {
+  return and(
+    eq(connectedAccounts.provider, CONNECTED_ACCOUNT_PROVIDER.INSTAGRAM),
+    eq(connectedAccounts.externalId, externalId),
+  );
+}
+
+/**
+ * True when a refresh failure means the token is dead from Instagram's side
+ * (400/401 — expired or revoked) and only reconnecting can fix it. Shared by
+ * the on-use path and the scheduled batch so both classify failures the same.
+ */
+export function isUnrecoverableRefreshError(error: unknown): boolean {
+  return (
+    error instanceof InstagramApiError &&
+    UNRECOVERABLE_REFRESH_STATUSES.has(error.status)
+  );
+}
+
 /**
  * Writes a refreshed token + its new expiry to the Instagram row identified by
- * `(provider, externalId)` — the table's unique key — so a user with multiple
- * connected Instagram accounts has only the refreshed account's row updated.
- * Shared by the on-use path and the scheduled batch job so both persist
- * identically.
+ * `(provider, externalId)`. Shared by the on-use path and the scheduled batch
+ * job so both persist identically.
  */
 export async function persistRefreshedInstagramToken(
   db: InstagramTokenDb,
   externalId: string,
   response: InstagramLongLivedTokenResponse,
   now: Date,
-): Promise<Date | null> {
+): Promise<Date> {
   const expiresAt = expiryFromResponse(response, now);
   await db
     .update(connectedAccounts)
@@ -124,13 +153,25 @@ export async function persistRefreshedInstagramToken(
       accessToken: encryptToken(response.access_token),
       expiresAt,
     })
-    .where(
-      and(
-        eq(connectedAccounts.provider, CONNECTED_ACCOUNT_PROVIDER.INSTAGRAM),
-        eq(connectedAccounts.externalId, externalId),
-      ),
-    );
+    .where(instagramAccountWhere(externalId));
   return expiresAt;
+}
+
+/**
+ * Stamps a row's expiry as `now`, marking its token dead. Used when Instagram
+ * refuses a refresh (400/401): the row then falls out of the scheduled job's
+ * "still in the future" due window instead of being retried every run, and the
+ * on-use path treats it as expired so the user is prompted to reconnect.
+ */
+export async function markInstagramTokenExpired(
+  db: InstagramTokenDb,
+  externalId: string,
+  now: Date,
+): Promise<void> {
+  await db
+    .update(connectedAccounts)
+    .set({ expiresAt: now })
+    .where(instagramAccountWhere(externalId));
 }
 
 /**
@@ -146,13 +187,10 @@ function isRefreshUnrecoverable(
   expiresAt: Date | null,
   now: Date,
 ): boolean {
-  if (
-    error instanceof InstagramApiError &&
-    UNRECOVERABLE_REFRESH_STATUSES.has(error.status)
-  ) {
-    return true;
-  }
-  return isInstagramTokenExpired(expiresAt, now);
+  return (
+    isUnrecoverableRefreshError(error) ||
+    isInstagramTokenExpired(expiresAt, now)
+  );
 }
 
 /**
