@@ -104,6 +104,13 @@ export default defineEventHandler(async (event) => {
   );
 
   const encryptedToken = encryptToken(longLivedTokenResponse.access_token);
+  // Persist the token's expiry so it can be refreshed before it lapses. The
+  // Instagram Graph API returns `expires_in` (seconds) for long-lived tokens;
+  // guard against a missing value rather than storing an Invalid Date.
+  const expiresAt =
+    typeof longLivedTokenResponse.expires_in === "number"
+      ? new Date(Date.now() + longLivedTokenResponse.expires_in * 1000)
+      : null;
   const database = getDb();
 
   // Upsert on (userId, provider) to enforce one Instagram account per user.
@@ -118,12 +125,14 @@ export default defineEventHandler(async (event) => {
       provider: CONNECTED_ACCOUNT_PROVIDER.INSTAGRAM,
       externalId: instagramUser.id,
       accessToken: encryptedToken,
+      expiresAt,
     })
     .onConflictDoUpdate({
       target: [connectedAccounts.provider, connectedAccounts.externalId],
       set: {
         userId,
         accessToken: encryptedToken,
+        expiresAt,
         connectedAt: new Date(),
       },
     });

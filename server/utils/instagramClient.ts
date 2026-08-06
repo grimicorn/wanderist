@@ -18,6 +18,8 @@ export const INSTAGRAM_OAUTH_TOKEN_URL =
   "https://api.instagram.com/oauth/access_token";
 export const INSTAGRAM_LONG_LIVED_TOKEN_URL =
   "https://graph.instagram.com/access_token";
+export const INSTAGRAM_REFRESH_TOKEN_URL =
+  "https://graph.instagram.com/refresh_access_token";
 
 export const INSTAGRAM_SCOPES = [
   "instagram_basic",
@@ -152,6 +154,33 @@ export async function exchangeForLongLivedToken(params: {
     const text = await response.text();
     throw new Error(
       `Instagram long-lived token exchange failed (${response.status}): ${text}`,
+    );
+  }
+
+  return response.json() as Promise<InstagramLongLivedTokenResponse>;
+}
+
+/**
+ * Refreshes a long-lived token, returning a fresh 60-day token. Instagram
+ * requires the current token to be valid and at least 24 hours old; a token
+ * that has already expired cannot be refreshed and yields a non-2xx response.
+ */
+export async function refreshLongLivedToken(params: {
+  accessToken: string;
+}): Promise<InstagramLongLivedTokenResponse> {
+  const query = new URLSearchParams({
+    grant_type: "ig_refresh_token",
+    access_token: params.accessToken,
+  });
+
+  const response = await fetch(
+    `${INSTAGRAM_REFRESH_TOKEN_URL}?${query.toString()}`,
+  );
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(
+      `Instagram token refresh failed (${response.status}): ${text}`,
     );
   }
 

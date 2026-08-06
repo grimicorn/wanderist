@@ -34,7 +34,7 @@ import {
   filterGeotaggedMedia,
   type InstagramMediaItem,
 } from "../../../utils/instagramClient";
-import { decryptToken } from "../../../utils/tokenCrypto";
+import { ensureFreshInstagramToken } from "../../../utils/instagramToken";
 import { assertInstagramSyncAllowed } from "../../../utils/planLimits";
 
 type DbClient = ReturnType<typeof getDb>;
@@ -203,7 +203,10 @@ export default defineEventHandler(async (event) => {
   const database = getDb();
 
   const connectionRows = await database
-    .select({ accessToken: connectedAccounts.accessToken })
+    .select({
+      accessToken: connectedAccounts.accessToken,
+      expiresAt: connectedAccounts.expiresAt,
+    })
     .from(connectedAccounts)
     .where(
       and(
@@ -221,7 +224,12 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  const accessToken = decryptToken(connection.accessToken);
+  // Refresh-on-use: renews and persists the token before it lapses, so an
+  // active importer's connection self-heals without a scheduled job.
+  const accessToken = await ensureFreshInstagramToken(database, userId, {
+    accessToken: connection.accessToken,
+    expiresAt: connection.expiresAt,
+  });
   const mediaResponse = await fetchInstagramMedia(accessToken);
   const geotagged = filterGeotaggedMedia(mediaResponse.data);
 
