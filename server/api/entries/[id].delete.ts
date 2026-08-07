@@ -43,15 +43,18 @@ async function cleanupOnePhotoMedia(
 }
 
 // Runs after the entry (and its cascaded photo rows) are gone so the reference
-// check does not see the photo that just released the media.
+// check does not see the photo that just released the media. Cleanups run
+// concurrently so a photo-heavy entry does not serialise into enough round
+// trips to blow the function timeout on a delete that already committed; each
+// cleanup swallows its own error, so one failure never aborts the others.
 async function cleanupEntryPhotoMedia(
   database: Database,
   ownerId: string,
   mediaIds: string[],
 ): Promise<void> {
-  for (const mediaId of mediaIds) {
-    await cleanupOnePhotoMedia(database, ownerId, mediaId);
-  }
+  await Promise.all(
+    mediaIds.map((mediaId) => cleanupOnePhotoMedia(database, ownerId, mediaId)),
+  );
 }
 
 export default defineEventHandler(async (event) => {

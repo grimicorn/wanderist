@@ -172,6 +172,32 @@ describe("DELETE /api/entries/:id", () => {
     consoleError.mockRestore();
   });
 
+  it("cleans up remaining photo media when one cleanup fails", async () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    const mockDb = makeDb([{ mediaId: "media-1" }, { mediaId: "media-2" }]);
+    mockGetDb.mockReturnValue(mockDb as unknown as ReturnType<typeof getDb>);
+    mockDeleteMediaIfUnreferenced.mockImplementation(
+      async (_database: unknown, _ownerId: unknown, mediaId: unknown) => {
+        if (mediaId === "media-1") {
+          throw new Error("blob down");
+        }
+        return true;
+      },
+    );
+
+    const result = await invokeHandler({});
+
+    expect(result).toEqual({ success: true });
+    expect(mockDeleteMediaIfUnreferenced).toHaveBeenCalledWith(
+      expect.anything(),
+      "user-1",
+      "media-2",
+    );
+    consoleError.mockRestore();
+  });
+
   it("throws 400 when id param is missing", async () => {
     const missingError = createError({
       statusCode: 400,
