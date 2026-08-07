@@ -30,13 +30,14 @@ async function collectEntryPhotoMediaIds(
 async function cleanupOnePhotoMedia(
   database: Database,
   ownerId: string,
+  entryId: string,
   mediaId: string,
 ): Promise<void> {
   try {
     await deleteMediaIfUnreferenced(database, ownerId, mediaId);
   } catch (cleanupError) {
     console.error(
-      `entry delete: photo media cleanup failed for ${mediaId}`,
+      `entry delete: photo media cleanup failed for entry ${entryId}, media ${mediaId}`,
       cleanupError,
     );
   }
@@ -50,10 +51,13 @@ async function cleanupOnePhotoMedia(
 async function cleanupEntryPhotoMedia(
   database: Database,
   ownerId: string,
+  entryId: string,
   mediaIds: string[],
 ): Promise<void> {
   await Promise.all(
-    mediaIds.map((mediaId) => cleanupOnePhotoMedia(database, ownerId, mediaId)),
+    mediaIds.map((mediaId) =>
+      cleanupOnePhotoMedia(database, ownerId, entryId, mediaId),
+    ),
   );
 }
 
@@ -74,7 +78,7 @@ export default defineEventHandler(async (event) => {
 
   await database.delete(entries).where(eq(entries.id, id));
 
-  await cleanupEntryPhotoMedia(database, entry.userId, mediaIds);
+  await cleanupEntryPhotoMedia(database, entry.userId, id, mediaIds);
 
   return { success: true };
 });

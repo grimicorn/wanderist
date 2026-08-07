@@ -25,12 +25,14 @@ vi.mock("drizzle-orm", async (importOriginal) => {
   return { ...original, eq: vi.fn(original.eq) };
 });
 
+import { eq } from "drizzle-orm";
 import {
   requireRouterParam,
   loadOwnedOrThrow,
 } from "../../../server/utils/db-helpers";
 import { getDb } from "../../../server/db/index";
 import { deleteMediaIfUnreferenced } from "../../../server/utils/coverImageCleanup";
+import { entries, entryPhotos } from "../../../server/db/schema";
 
 const mockRequireRouterParam = vi.mocked(requireRouterParam);
 const mockLoadOwnedOrThrow = vi.mocked(loadOwnedOrThrow);
@@ -51,6 +53,7 @@ function makeDb(photoRows: { mediaId: string }[]) {
 
   return {
     select: selectMock,
+    selectFromMock,
     delete: deleteMock,
     deleteWhereMock,
   };
@@ -91,6 +94,26 @@ describe("DELETE /api/entries/:id", () => {
     const ownershipOrder = mockLoadOwnedOrThrow.mock.invocationCallOrder[0];
     const deleteOrder = mockDb.delete.mock.invocationCallOrder[0];
     expect(ownershipOrder).toBeLessThan(deleteOrder);
+  });
+
+  it("scopes the photo lookup to this entry's photos", async () => {
+    const mockDb = makeDb([]);
+    mockGetDb.mockReturnValue(mockDb as unknown as ReturnType<typeof getDb>);
+
+    await invokeHandler({});
+
+    expect(mockDb.selectFromMock).toHaveBeenCalledWith(entryPhotos);
+    expect(eq).toHaveBeenCalledWith(entryPhotos.entryId, "e-1");
+  });
+
+  it("scopes the delete to this entry", async () => {
+    const mockDb = makeDb([]);
+    mockGetDb.mockReturnValue(mockDb as unknown as ReturnType<typeof getDb>);
+
+    await invokeHandler({});
+
+    expect(mockDb.delete).toHaveBeenCalledWith(entries);
+    expect(eq).toHaveBeenCalledWith(entries.id, "e-1");
   });
 
   it("cleans up each distinct photo media the entry referenced", async () => {
