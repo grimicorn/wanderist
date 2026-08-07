@@ -171,6 +171,17 @@ describe("DELETE /api/entries/:id", () => {
     expect(deleteOrder).toBeLessThan(cleanupOrder);
   });
 
+  it("does not delete the entry when the photo lookup throws", async () => {
+    const mockDb = makeDb([]);
+    mockDb.selectFromMock.mockReturnValue({
+      where: vi.fn().mockRejectedValue(new Error("db down")),
+    });
+    mockGetDb.mockReturnValue(mockDb as unknown as ReturnType<typeof getDb>);
+
+    await expect(invokeHandler({})).rejects.toThrow("db down");
+    expect(mockDb.delete).not.toHaveBeenCalled();
+  });
+
   it("does not clean up media when the entry delete throws", async () => {
     const mockDb = makeDb([{ mediaId: "media-1" }]);
     mockDb.deleteWhereMock.mockRejectedValue(new Error("db down"));
