@@ -20,6 +20,12 @@ export type PurgeDb = ReturnType<typeof createDb>;
 export interface PurgeResult {
   purgedUserIds: string[];
   purgedCount: number;
+  // Blob storage keys whose deletion failed during the run. Blob removal is
+  // best-effort (a failure must not abort the purge), but the keys are
+  // surfaced here so the caller can log/alert rather than report a clean run
+  // while photo bytes leak — the account rows are already gone by then, so
+  // nothing else records what leaked.
+  failedBlobKeys: string[];
 }
 
 /**
@@ -46,44 +52,63 @@ export function isPurgeable(deletedAt: Date | null, now: Date): boolean {
   return deletedAt < purgeCutoff(now);
 }
 
-// Blob removal is best-effort: a leaked blob can be reaped out-of-band, so a
-// failure here is logged rather than thrown, which would abort the whole purge
-// run and leave every remaining account unpurged over one bad blob key.
-async function removeBlobQuietly(storageKey: string): Promise<void> {
+// Blob removal is best-effort: a failure is logged rather than thrown, which
+// would abort the whole purge run and leave every remaining account unpurged
+// over one bad blob key. Returns the key on failure (null on success) so the
+// caller can accumulate and surface the leaked keys instead of hiding them.
+async function removeBlobQuietly(storageKey: string): Promise<string | null> {
   try {
     await removeMediaBlob(storageKey);
+    return null;
   } catch (blobError) {
     console.error(`purge: blob removal failed for ${storageKey}`, blobError);
+    return storageKey;
   }
 }
 
 // Each media row's blob is stored under media.url (insertMediaRow sets
 // url = storageKey), with its thumbnail under the derived -thumb key. The
 // thumbnail may never have been generated, but deleting a missing key is a
-// no-op, so both are attempted unconditionally.
-async function removeStoredBlobs(storageKey: string): Promise<void> {
-  await removeBlobQuietly(storageKey);
-  await removeBlobQuietly(toThumbnailKey(storageKey));
+// no-op, so both are attempted unconditionally. Returns the keys that failed.
+async function removeStoredBlobs(storageKey: string): Promise<string[]> {
+  const failedKeys: string[] = [];
+
+  const originalFailure = await removeBlobQuietly(storageKey);
+  if (originalFailure) {
+    failedKeys.push(originalFailure);
+  }
+
+  const thumbnailFailure = await removeBlobQuietly(toThumbnailKey(storageKey));
+  if (thumbnailFailure) {
+    failedKeys.push(thumbnailFailure);
+  }
+
+  return failedKeys;
 }
 
 /**
  * Deletes the Netlify Blobs objects for every media row owned by any of
  * `userIds`. Must run before the users are deleted, because FK CASCADE
  * removes the media rows (and with them the only record of their blob keys)
- * the moment the users go.
+ * the moment the users go. Returns any blob keys that failed to delete.
  */
 async function purgeUserMediaBlobs(
   db: PurgeDb,
   userIds: string[],
-): Promise<void> {
+): Promise<string[]> {
   const mediaRows = await db
     .select({ url: media.url })
     .from(media)
     .where(inArray(media.userId, userIds));
 
+  const failedBlobKeys: string[] = [];
+
   for (const mediaRow of mediaRows) {
-    await removeStoredBlobs(mediaRow.url);
+    const failures = await removeStoredBlobs(mediaRow.url);
+    failedBlobKeys.push(...failures);
   }
+
+  return failedBlobKeys;
 }
 
 /**
@@ -115,11 +140,11 @@ export async function purgeExpiredDeletedAccounts(
   const candidateUserIds = purgeable.map((row) => row.id);
 
   if (candidateUserIds.length === 0) {
-    return { purgedUserIds: [], purgedCount: 0 };
+    return { purgedUserIds: [], purgedCount: 0, failedBlobKeys: [] };
   }
 
   // Delete the blobs first, while the media rows still exist to name them.
-  await purgeUserMediaBlobs(db, candidateUserIds);
+  const failedBlobKeys = await purgeUserMediaBlobs(db, candidateUserIds);
 
   // Delete on the same cutoff predicate (not a blind delete-by-id) so a row
   // that left the purgeable set between the select and here is never
@@ -132,5 +157,6 @@ export async function purgeExpiredDeletedAccounts(
   return {
     purgedUserIds: purged.map((row) => row.id),
     purgedCount: purged.length,
+    failedBlobKeys,
   };
 }
