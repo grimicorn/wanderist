@@ -4,11 +4,15 @@
  * Isolated from both the Nitro request context and the Netlify Functions
  * runtime that invokes it (netlify/functions/purge-deleted-accounts.mts) so
  * it can be unit tested with a plain mocked `db` object — no getDb()/
- * useRuntimeConfig() call inside this module, and no network access.
+ * useRuntimeConfig() call inside this module. The only external service it
+ * touches is Netlify Blobs, and that goes through the `mediaStore` seam
+ * (removeMediaBlob/toThumbnailKey), which tests mock — so no real network
+ * access happens under test.
  */
-import { and, isNotNull, lt } from "drizzle-orm";
+import { and, isNotNull, lt, inArray } from "drizzle-orm";
 import type { createDb } from "../db/index";
-import { users } from "../db/schema";
+import { users, media } from "../db/schema";
+import { removeMediaBlob, toThumbnailKey } from "./mediaStore";
 import { DELETE_GRACE_PERIOD_DAYS, MS_PER_DAY } from "./accountLifecycle";
 
 export type PurgeDb = ReturnType<typeof createDb>;
@@ -42,11 +46,57 @@ export function isPurgeable(deletedAt: Date | null, now: Date): boolean {
   return deletedAt < purgeCutoff(now);
 }
 
+// Blob removal is best-effort: a leaked blob can be reaped out-of-band, so a
+// failure here is logged rather than thrown, which would abort the whole purge
+// run and leave every remaining account unpurged over one bad blob key.
+async function removeBlobQuietly(storageKey: string): Promise<void> {
+  try {
+    await removeMediaBlob(storageKey);
+  } catch (blobError) {
+    console.error(`purge: blob removal failed for ${storageKey}`, blobError);
+  }
+}
+
+// Each media row's blob is stored under media.url (insertMediaRow sets
+// url = storageKey), with its thumbnail under the derived -thumb key. The
+// thumbnail may never have been generated, but deleting a missing key is a
+// no-op, so both are attempted unconditionally.
+async function removeStoredBlobs(storageKey: string): Promise<void> {
+  await removeBlobQuietly(storageKey);
+  await removeBlobQuietly(toThumbnailKey(storageKey));
+}
+
+/**
+ * Deletes the Netlify Blobs objects for every media row owned by any of
+ * `userIds`. Must run before the users are deleted, because FK CASCADE
+ * removes the media rows (and with them the only record of their blob keys)
+ * the moment the users go.
+ */
+async function purgeUserMediaBlobs(
+  db: PurgeDb,
+  userIds: string[],
+): Promise<void> {
+  const mediaRows = await db
+    .select({ url: media.url })
+    .from(media)
+    .where(inArray(media.userId, userIds));
+
+  for (const mediaRow of mediaRows) {
+    await removeStoredBlobs(mediaRow.url);
+  }
+}
+
 /**
  * Hard-deletes every `users` row soft-deleted (`deletedAt` set) more than
  * DELETE_GRACE_PERIOD_DAYS ago. FK CASCADE (ON DELETE CASCADE, see
  * server/db/schema.ts) removes every child row transitively — no manual
- * per-table cleanup is needed here.
+ * per-table cleanup is needed for the DB.
+ *
+ * The one thing CASCADE cannot reach is Netlify Blobs: the media rows carry
+ * the blob storage keys, so this enumerates and deletes those blobs *before*
+ * deleting the users (once the users go, the cascade takes the media rows and
+ * their keys with them). Without this, every purged account leaks its photo
+ * bytes forever and they stay retrievable via /api/media/[id].
  *
  * Rows with `deletedAt` still null (never deleted) or within the grace
  * period are left untouched.
@@ -57,13 +107,24 @@ export async function purgeExpiredDeletedAccounts(
 ): Promise<PurgeResult> {
   const cutoff = purgeCutoff(now);
 
-  const purged = await db
-    .delete(users)
-    .where(and(isNotNull(users.deletedAt), lt(users.deletedAt, cutoff)))
-    .returning({ id: users.id });
+  const purgeable = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(and(isNotNull(users.deletedAt), lt(users.deletedAt, cutoff)));
+
+  const purgedUserIds = purgeable.map((row) => row.id);
+
+  if (purgedUserIds.length === 0) {
+    return { purgedUserIds: [], purgedCount: 0 };
+  }
+
+  // Delete the blobs first, while the media rows still exist to name them.
+  await purgeUserMediaBlobs(db, purgedUserIds);
+
+  await db.delete(users).where(inArray(users.id, purgedUserIds));
 
   return {
-    purgedUserIds: purged.map((row) => row.id),
-    purgedCount: purged.length,
+    purgedUserIds,
+    purgedCount: purgedUserIds.length,
   };
 }
