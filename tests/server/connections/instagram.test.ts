@@ -150,6 +150,9 @@ vi.mock("../../../server/utils/instagramClient", () => ({
     "id,caption,media_type,timestamp,permalink,media_url,location",
   INSTAGRAM_MEDIA_LIMIT: 50,
   INSTAGRAM_GEOTAGGED_MEDIA_TYPES: new Set(["IMAGE", "CAROUSEL_ALBUM"]),
+  // Lowered from the real 25 so the per-run cap is exercised with a small
+  // fixture: three new items overflow a cap of two.
+  INSTAGRAM_IMPORT_MAX_ITEMS_PER_RUN: 2,
 }));
 
 vi.mock("../../../server/utils/tokenCrypto", () => ({
@@ -560,7 +563,12 @@ describe("POST /api/connections/instagram/import", () => {
   it("returns { imported: 0, skipped: 0, errors: [] } when no geotagged photos exist", async () => {
     const result = await call(importHandler, makeEvent());
 
-    expect(result).toEqual({ imported: 0, skipped: 0, errors: [] });
+    expect(result).toEqual({
+      imported: 0,
+      skipped: 0,
+      errors: [],
+      hasMore: false,
+    });
   });
 
   it("throws 422 when Instagram is not connected", async () => {
@@ -778,7 +786,12 @@ describe("POST /api/connections/instagram/import", () => {
 
     const result = await call(importHandler, makeEvent());
 
-    expect(result).toEqual({ imported: 0, skipped: 1, errors: [] });
+    expect(result).toEqual({
+      imported: 0,
+      skipped: 1,
+      errors: [],
+      hasMore: false,
+    });
     expect(mockFetchInstagramImage).not.toHaveBeenCalled();
   });
 
@@ -811,5 +824,57 @@ describe("POST /api/connections/instagram/import", () => {
 
     // Both select chains pass through where() — ownership scoping was applied twice.
     expect(mockDbSelectWhere).toHaveBeenCalledTimes(2);
+  });
+
+  function makeGeotaggedItem(id: string): Record<string, unknown> {
+    return {
+      id,
+      media_type: "IMAGE",
+      media_url: `https://cdn.instagram.com/${id}.jpg`,
+      timestamp: "2024-01-01T00:00:00Z",
+      permalink: `https://www.instagram.com/p/${id}/`,
+      location: { name: "Paris", latitude: 48.8566, longitude: 2.3522 },
+    };
+  }
+
+  it("imports at most INSTAGRAM_IMPORT_MAX_ITEMS_PER_RUN new photos and reports hasMore", async () => {
+    // Cap is mocked to 2; three new geotagged items overflow it.
+    mockFilterGeotaggedMedia.mockReturnValue([
+      makeGeotaggedItem("ig-a"),
+      makeGeotaggedItem("ig-b"),
+      makeGeotaggedItem("ig-c"),
+    ]);
+    mockFetchInstagramImage.mockResolvedValue(Buffer.from("img"));
+    mockGetDb.mockReturnValue(makeDbWithTransaction());
+
+    const result = await call(importHandler, makeEvent());
+
+    expect(result).toEqual({
+      imported: 2,
+      skipped: 0,
+      errors: [],
+      hasMore: true,
+    });
+    // The third item is deferred to the next run — its image is never fetched.
+    expect(mockFetchInstagramImage).toHaveBeenCalledTimes(2);
+  });
+
+  it("reports hasMore false when the pending items fit within one run", async () => {
+    mockFilterGeotaggedMedia.mockReturnValue([
+      makeGeotaggedItem("ig-a"),
+      makeGeotaggedItem("ig-b"),
+    ]);
+    mockFetchInstagramImage.mockResolvedValue(Buffer.from("img"));
+    mockGetDb.mockReturnValue(makeDbWithTransaction());
+
+    const result = await call(importHandler, makeEvent());
+
+    expect(result).toEqual({
+      imported: 2,
+      skipped: 0,
+      errors: [],
+      hasMore: false,
+    });
+    expect(mockFetchInstagramImage).toHaveBeenCalledTimes(2);
   });
 });

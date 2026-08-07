@@ -11,7 +11,17 @@
  * Place deduplication: photos taken at the same location (name + coordinates)
  * reuse the existing `places` row rather than inserting duplicates.
  *
- * Returns a summary: { imported: number, skipped: number, errors: string[] }
+ * Bounded per run: a first-time account can hold ~500 geotagged photos, and
+ * importing each is expensive (CDN fetch + image processing + DB transaction +
+ * blob writes), so an unbounded run overruns the Netlify function timeout and
+ * commits partial work. Each run imports at most
+ * INSTAGRAM_IMPORT_MAX_ITEMS_PER_RUN new photos and reports `hasMore` when more
+ * remain; the client calls again to resume. No separate cursor is persisted —
+ * the idempotent `media.source_id` set is the cursor: already-imported items
+ * are skipped, so the next run naturally picks up where this one stopped.
+ *
+ * Returns a summary:
+ *   { imported: number, skipped: number, errors: string[], hasMore: boolean }
  */
 
 import { eq, and, inArray } from "drizzle-orm";
@@ -35,6 +45,7 @@ import {
   fetchInstagramMedia,
   fetchInstagramImage,
   filterGeotaggedMedia,
+  INSTAGRAM_IMPORT_MAX_ITEMS_PER_RUN,
   type InstagramMediaItem,
 } from "../../../utils/instagramClient";
 import { decryptToken } from "../../../utils/tokenCrypto";
@@ -218,6 +229,26 @@ async function importSinglePhoto(
   }
 }
 
+async function importBatch(
+  userId: string,
+  items: InstagramMediaItem[],
+): Promise<{ imported: number; errors: string[] }> {
+  let imported = 0;
+  const errors: string[] = [];
+
+  for (const item of items) {
+    try {
+      await importSinglePhoto(userId, item);
+      imported += 1;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      errors.push(`Item ${item.id}: ${message}`);
+    }
+  }
+
+  return { imported, errors };
+}
+
 export default defineEventHandler(async (event) => {
   const userId = await ensureUser(event);
   // No separate per-item photo-storage cap here: Instagram sync itself is
@@ -257,24 +288,18 @@ export default defineEventHandler(async (event) => {
     instagramIds,
   );
 
-  let imported = 0;
-  let skipped = 0;
-  const errors: string[] = [];
+  const pendingItems = geotagged.filter(
+    (item) => !alreadyImportedIds.has(item.id),
+  );
+  const skipped = geotagged.length - pendingItems.length;
 
-  for (const item of geotagged) {
-    if (alreadyImportedIds.has(item.id)) {
-      skipped += 1;
-      continue;
-    }
+  // Bound the expensive per-item work so the run stays under the function
+  // timeout; the overflow resumes on the next call (already-imported items are
+  // skipped above, so no cursor state is needed to know where to continue).
+  const batch = pendingItems.slice(0, INSTAGRAM_IMPORT_MAX_ITEMS_PER_RUN);
+  const hasMore = pendingItems.length > batch.length;
 
-    try {
-      await importSinglePhoto(userId, item);
-      imported += 1;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown error";
-      errors.push(`Item ${item.id}: ${message}`);
-    }
-  }
+  const { imported, errors } = await importBatch(userId, batch);
 
-  return { imported, skipped, errors };
+  return { imported, skipped, errors, hasMore };
 });

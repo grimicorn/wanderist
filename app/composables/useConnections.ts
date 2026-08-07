@@ -67,6 +67,7 @@ export function useConnections() {
     imported: number;
     skipped: number;
     errors: string[];
+    hasMore: boolean;
   } | null>(null);
 
   async function fetchConnections(): Promise<void> {
@@ -138,6 +139,7 @@ export function useConnections() {
         imported: number;
         skipped: number;
         errors: string[];
+        hasMore: boolean;
       }>("/api/connections/instagram/import", { method: "POST" });
       importResult.value = result;
       return true;

@@ -223,11 +223,7 @@
             <div v-if="importResult" style="margin-bottom: 12px">
               <AppAlert
                 :intent="importResult.errors.length > 0 ? 'error' : 'success'"
-                :title="
-                  importResult.errors.length > 0
-                    ? `Import finished with ${importResult.errors.length} error${importResult.errors.length === 1 ? '' : 's'}`
-                    : `Imported ${importResult.imported} photo${importResult.imported === 1 ? '' : 's'}`
-                "
+                :title="importResultMessage"
               />
             </div>
 
@@ -559,6 +555,23 @@ const {
   disconnectGoogle,
   importInstagramPhotos,
 } = useConnections();
+
+const importResultMessage = computed(() => {
+  const result = importResult.value;
+  if (!result) {
+    return "";
+  }
+  if (result.errors.length > 0) {
+    const errorCount = result.errors.length;
+    return `Import finished with ${errorCount} error${errorCount === 1 ? "" : "s"}`;
+  }
+  const photoCount = result.imported;
+  const summary = `Imported ${photoCount} photo${photoCount === 1 ? "" : "s"}`;
+  if (result.hasMore) {
+    return `${summary} — more remain, run import again to continue`;
+  }
+  return summary;
+});
 
 const {
   subscription,

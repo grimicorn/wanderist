@@ -159,6 +159,7 @@ describe("useConnections", () => {
         imported: 5,
         skipped: 1,
         errors: [],
+        hasMore: false,
       });
 
       const { importInstagramPhotos, importResult } = useConnections();

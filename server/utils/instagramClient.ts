@@ -34,6 +34,17 @@ export const INSTAGRAM_MEDIA_LIMIT = 50;
 // items so a very large account can't spin the handler indefinitely.
 export const INSTAGRAM_MAX_MEDIA_PAGES = 10;
 
+// Upper bound on how many *new* photos a single import run downloads,
+// processes, and commits. Each item does a CDN image fetch, sharp probe +
+// thumbnail, a DB transaction, and two blob writes (~1-2s each), so an
+// unbounded run over a first-time account's ~500 geotagged items overruns the
+// Netlify function timeout and commits partial work. Capping the per-run batch
+// keeps each invocation well inside the budget; the remaining items resume on
+// the next run (already-imported items are skipped via the idempotent
+// media.source_id set, so progress persists across runs without extra state).
+// Conservative and tunable — raise it if the function timeout budget grows.
+export const INSTAGRAM_IMPORT_MAX_ITEMS_PER_RUN = 25;
+
 // Only image types can carry location metadata.
 export const INSTAGRAM_GEOTAGGED_MEDIA_TYPES = new Set([
   "IMAGE",
