@@ -18,13 +18,18 @@ export const ONE_HOUR_MS = 60 * ONE_MINUTE_MS;
  * to a new route is a one-line entry here — no route handler changes
  * required. A route with no entry is simply not rate-limited.
  *
- * One caveat when adding a DYNAMIC pattern: the matcher is built only from
- * the patterns in this map, not the app's full route table, so a dynamic
- * pattern also swallows any real static sibling that has no policy of its
- * own. Adding `"GET /api/entries/:id"` would make `/api/entries/on-this-day`
- * (a separate static handler) resolve to `:id` and be metered under it. If a
- * static sibling must stay unmetered, give it its own entry too. All three
- * current policies are static paths, so this doesn't bite today.
+ * One caveat when adding a DYNAMIC pattern: matching is per method, but each
+ * method's matcher is built only from the patterns in this map, not the app's
+ * full route table. So a dynamic pattern swallows any real static sibling
+ * under the SAME method that has no policy of its own. Adding
+ * `"GET /api/entries/:id"` makes `GET /api/entries/on-this-day` (a separate
+ * static handler) resolve to `:id` and be metered under it. There is
+ * currently no way to register a pattern for matching without also metering
+ * it, so an unmetered exemption isn't expressible: either scope the dynamic
+ * policy so metering the sibling is acceptable, give the sibling its own
+ * (possibly generous) policy under that method, or don't add a dynamic policy
+ * on that prefix. All three current policies are static paths, so this
+ * doesn't bite today.
  *
  * Scoped to wanderist#89's three named cost-metered/abuse-prone endpoints;
  * see each entry for why its limit and window were chosen. The pattern
@@ -53,15 +58,21 @@ export const RATE_LIMIT_POLICIES: Record<string, RateLimitPolicy> = {
   "GET /api/search": { limit: 60, windowMs: ONE_MINUTE_MS },
 };
 
-/** The path portion of a policy key ("POST /api/media" -> "/api/media"). */
-function routePatternOf(policyKey: string): string {
+/** Splits a policy key ("POST /api/media") into its method and route pattern. */
+function splitPolicyKey(policyKey: string): {
+  method: string;
+  pattern: string;
+} {
   const separatorIndex = policyKey.indexOf(" ");
   if (separatorIndex === -1) {
     throw new Error(
       `Rate limit policy key "${policyKey}" is missing the "<METHOD> <path>" space separator.`,
     );
   }
-  return policyKey.slice(separatorIndex + 1);
+  return {
+    method: policyKey.slice(0, separatorIndex),
+    pattern: policyKey.slice(separatorIndex + 1),
+  };
 }
 
 // Two patterns of the same shape but different param names (/api/trips/:id vs
@@ -70,7 +81,7 @@ function routePatternOf(policyKey: string): string {
 // other's policy would silently never apply. Collapsing param and wildcard
 // names to a canonical token lets us detect that collision and fail loud
 // instead — the same drift the policy tests guard against, caught at module
-// load. Identical patterns are not a collision (see buildRoutePatternMatcher).
+// load.
 function routeShapeOf(routePattern: string): string {
   return routePattern
     .replace(/\*\*:?[^/]*/g, "**")
@@ -93,9 +104,8 @@ export type RoutePatternMatcher = (path: string) => string | undefined;
  * trailing-slash normalization for free — the reason this defers to the
  * router instead of string-munching path segments. Isolated from the policy
  * map below so dynamic-pattern matching is unit-testable without a live
- * dynamic policy in production. Throws on two distinct patterns that collide
- * on shape (see routeShapeOf); the same pattern repeated (one path, two HTTP
- * methods) is fine.
+ * dynamic policy in production. Throws on two patterns that collide on shape
+ * (see routeShapeOf).
  *
  * Coupling note: this parity holds only while h3 routes with radix3. h3 v2 /
  * Nitro v3 switch to `rou3`, so on a future Nuxt major keep this matcher on
@@ -106,9 +116,7 @@ export function buildRoutePatternMatcher(
 ): RoutePatternMatcher {
   const router = createRouter<{ pattern: string }>();
   const shapeToPattern = new Map<string, string>();
-  // Dedupe first: one path with two HTTP methods yields the same pattern
-  // twice, which is legitimate, not a collision.
-  for (const pattern of new Set(routePatterns)) {
+  for (const pattern of routePatterns) {
     const shape = routeShapeOf(pattern);
     const collidingPattern = shapeToPattern.get(shape);
     if (collidingPattern) {
@@ -122,8 +130,34 @@ export function buildRoutePatternMatcher(
   return (path) => router.lookup(path)?.pattern;
 }
 
-/** Matcher over the route patterns that actually carry a policy. */
-export const matchPolicyRoutePattern: RoutePatternMatcher =
-  buildRoutePatternMatcher(
-    Object.keys(RATE_LIMIT_POLICIES).map(routePatternOf),
-  );
+// One matcher per HTTP method. Matching is method-aware so a policy on one
+// method's route can't change what another method matches: a GET policy on a
+// static sibling (/api/entries/on-this-day) must not un-meter a POST policy
+// on the dynamic /api/entries/:id. Each method's patterns are unique (they're
+// distinct RATE_LIMIT_POLICIES keys), so within a method the only collision
+// left for buildRoutePatternMatcher to catch is a genuine shape clash.
+function buildPolicyMatchersByMethod(): Map<string, RoutePatternMatcher> {
+  const patternsByMethod = new Map<string, string[]>();
+  for (const policyKey of Object.keys(RATE_LIMIT_POLICIES)) {
+    const { method, pattern } = splitPolicyKey(policyKey);
+    const patterns = patternsByMethod.get(method) ?? [];
+    patterns.push(pattern);
+    patternsByMethod.set(method, patterns);
+  }
+
+  const matchersByMethod = new Map<string, RoutePatternMatcher>();
+  for (const [method, patterns] of patternsByMethod) {
+    matchersByMethod.set(method, buildRoutePatternMatcher(patterns));
+  }
+  return matchersByMethod;
+}
+
+const policyMatchersByMethod = buildPolicyMatchersByMethod();
+
+/** Resolves a request's method+path to the policied route pattern it matches, or undefined. */
+export function matchPolicyRoutePattern(
+  method: string,
+  path: string,
+): string | undefined {
+  return policyMatchersByMethod.get(method)?.(path);
+}

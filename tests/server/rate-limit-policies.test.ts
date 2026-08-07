@@ -41,13 +41,16 @@ function candidateHandlerPaths(method: string, apiPath: string): string[] {
       `Policy key "${method} ${apiPath}" is outside ${API_PATH_PREFIX}; extend candidateHandlerPaths to cover it.`,
     );
   }
-  // Nitro compiles a `[id]` file to a `:id` route pattern and a `[...slug]`
-  // file to `**`, so translate the pattern back to file syntax before
-  // resolving it to a path on disk.
+  // Nitro compiles a `[id]` file to a `:id` route pattern, a `[...slug]` file
+  // to `**:slug`, and a bare `[...]` file to `**`, so translate the pattern
+  // back to file syntax before resolving it to a path on disk. Wildcards
+  // first (they carry a `:name` suffix a later `:param` pass would otherwise
+  // mangle).
   const routeSegment = apiPath
     .slice(API_PATH_PREFIX.length)
-    .replace(/:([^/]+)/g, "[$1]")
-    .replace(/\*\*:?([^/]*)/g, (_match, name) => `[...${name || "slug"}]`);
+    .replace(/\*\*:([^/]+)/g, "[...$1]")
+    .replace(/\*\*/g, "[...]")
+    .replace(/:([^/]+)/g, "[$1]");
   const methodSuffix = method.toLowerCase();
 
   return [
@@ -105,11 +108,11 @@ describe("buildRoutePatternMatcher", () => {
   });
 
   it("swallows an unregistered static sibling under a lone dynamic pattern", () => {
-    // Documents the caveat in RATE_LIMIT_POLICIES' docblock: the matcher only
-    // knows the patterns it's given, not the app's full route table, so a
-    // dynamic pattern also matches a real static sibling that carries no
-    // policy of its own. Whoever adds the first dynamic policy must register
-    // any static sibling that should stay unmetered.
+    // Documents the caveat in RATE_LIMIT_POLICIES' docblock: a method's
+    // matcher only knows the patterns it's given, not the app's full route
+    // table, so a dynamic pattern also matches a real static sibling that
+    // carries no policy of its own. An unmetered exemption isn't expressible;
+    // the sibling can only be given its own policy or left metered under this.
     const matchRoute = buildRoutePatternMatcher(["/api/entries/:id"]);
 
     expect(matchRoute("/api/entries/on-this-day")).toBe("/api/entries/:id");
@@ -152,25 +155,49 @@ describe("buildRoutePatternMatcher", () => {
       buildRoutePatternMatcher(["/api/proxy/**", "/api/proxy/**:rest"]),
     ).toThrow(/collide/);
   });
-
-  it("treats the same pattern repeated (one path, two methods) as no collision", () => {
-    expect(() =>
-      buildRoutePatternMatcher(["/api/media", "/api/media"]),
-    ).not.toThrow();
-  });
 });
 
 describe("matchPolicyRoutePattern", () => {
-  it("resolves each policied static path to itself", () => {
-    expect(matchPolicyRoutePattern("/api/media")).toBe("/api/media");
-    expect(matchPolicyRoutePattern("/api/search")).toBe("/api/search");
-    expect(matchPolicyRoutePattern("/api/connections/instagram/import")).toBe(
-      "/api/connections/instagram/import",
-    );
+  it("resolves each policied static path to itself under its method", () => {
+    expect(matchPolicyRoutePattern("POST", "/api/media")).toBe("/api/media");
+    expect(matchPolicyRoutePattern("GET", "/api/search")).toBe("/api/search");
+    expect(
+      matchPolicyRoutePattern("POST", "/api/connections/instagram/import"),
+    ).toBe("/api/connections/instagram/import");
+  });
+
+  it("does not match a policied path under a method that has no policy for it", () => {
+    // /api/media is policied for POST only, so a GET must not resolve to it.
+    expect(matchPolicyRoutePattern("GET", "/api/media")).toBeUndefined();
+    expect(matchPolicyRoutePattern("DELETE", "/api/search")).toBeUndefined();
   });
 
   it("returns undefined for an unpolicied path", () => {
-    expect(matchPolicyRoutePattern("/api/trips")).toBeUndefined();
-    expect(matchPolicyRoutePattern("/api/entries/123")).toBeUndefined();
+    expect(matchPolicyRoutePattern("GET", "/api/trips")).toBeUndefined();
+    expect(matchPolicyRoutePattern("GET", "/api/entries/123")).toBeUndefined();
+  });
+});
+
+describe("candidateHandlerPaths pattern translation", () => {
+  it("translates a `:id` pattern back to its `[id]` handler file", () => {
+    const candidates = candidateHandlerPaths("GET", "/api/entries/:id");
+
+    expect(candidates).toContain(
+      resolve(SERVER_API_DIR, "entries/[id].get.ts"),
+    );
+  });
+
+  it("translates a named wildcard `**:slug` back to `[...slug]`", () => {
+    const candidates = candidateHandlerPaths("GET", "/api/proxy/**:slug");
+
+    expect(candidates).toContain(
+      resolve(SERVER_API_DIR, "proxy/[...slug].get.ts"),
+    );
+  });
+
+  it("translates a bare wildcard `**` back to `[...]`", () => {
+    const candidates = candidateHandlerPaths("GET", "/api/proxy/**");
+
+    expect(candidates).toContain(resolve(SERVER_API_DIR, "proxy/[...].get.ts"));
   });
 });

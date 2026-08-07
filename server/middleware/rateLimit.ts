@@ -41,21 +41,22 @@ let hasWarnedAboutAnonymousBucket = false;
 // h3 uses (see rateLimitPolicies.ts). Keying on the matched pattern rather
 // than the raw path means a dynamic route meters per pattern, not per id, so
 // it can't be evaded by enumerating ids. Returns null when the path matches
-// no policied pattern.
+// no policied pattern for this method.
 function resolveRouteKey(event: H3Event): string | null {
+  // h3 falls back to a route's GET handler for HEAD requests with no HEAD
+  // handler registered, so HEAD must be normalized to GET to stay metered
+  // (and to select the GET matcher below).
+  const method = event.method === "HEAD" ? "GET" : event.method;
   // matchPolicyRoutePattern normalizes a trailing slash the same way h3's
   // router does (both radix3), so the set of paths metered here is exactly
   // the set h3 routes to a handler. A path h3 won't route (e.g. a doubled
   // trailing slash) matches nothing here and stays unmetered, since it does
   // no handler work to abuse.
   const pathWithoutQuery = event.path.split("?")[0];
-  const pattern = matchPolicyRoutePattern(pathWithoutQuery);
+  const pattern = matchPolicyRoutePattern(method, pathWithoutQuery);
   if (!pattern) {
     return null;
   }
-  // h3 falls back to a route's GET handler for HEAD requests with no HEAD
-  // handler registered, so HEAD must be normalized to GET to stay metered.
-  const method = event.method === "HEAD" ? "GET" : event.method;
   return `${method} ${pattern}`;
 }
 
