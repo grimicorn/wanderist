@@ -50,13 +50,7 @@
         </div>
         <!-- Hero search results -->
         <div
-          v-if="
-            heroSearch.trim() &&
-            (heroSearchResults.places.length ||
-              heroSearchResults.trips.length ||
-              heroSearchResults.entries.length ||
-              heroSearchResults.people.length)
-          "
+          v-if="heroSearch.trim() && hasHeroSearchResults"
           class="xsearch-results"
           aria-label="Search results"
         >
@@ -369,8 +363,15 @@ const heroSearchResultGroups = computed(() => ({
   places: { label: "Places", items: heroSearchResults.value.places },
   trips: { label: "Trips", items: heroSearchResults.value.trips },
   entries: { label: "Journal", items: heroSearchResults.value.entries },
+  guides: { label: "Guides", items: heroSearchResults.value.guides },
   people: { label: "People", items: heroSearchResults.value.people },
 }));
+
+const hasHeroSearchResults = computed(() =>
+  Object.values(heroSearchResultGroups.value).some(
+    (group) => group.items.length > 0,
+  ),
+);
 
 watch(heroSearch, (newQuery) => {
   heroDoSearch(newQuery);

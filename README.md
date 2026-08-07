@@ -187,7 +187,7 @@ Wanderist connects to Instagram via the **Instagram Graph API** (not the depreca
 - `GET /api/connections/instagram/start` — sets a CSRF state cookie and redirects the user to Instagram's OAuth authorization page.
 - `GET /api/connections/instagram/callback` — exchanges the authorization code for a long-lived token (60-day expiry), stores the encrypted token in `connected_accounts`, then redirects to `/settings#connections`.
 - `DELETE /api/connections/instagram` — removes the row from `connected_accounts`, revoking access.
-- `POST /api/connections/instagram/import` — pulls recent geotagged media, stores images in Netlify Blobs, and creates journal entries with linked places.
+- `POST /api/connections/instagram/import` — pulls geotagged media, stores images in Netlify Blobs, and creates journal entries with linked places. The client follows Instagram's `paging.next` up to a fixed page bound (the `INSTAGRAM_MAX_MEDIA_PAGES` constant in `server/utils/instagramClient.ts`, not an env var) so photos older than the most recent batch are still ingested; re-imports are idempotent via `media.source_id`.
 
 Access tokens are encrypted at rest using AES-256-GCM. Generate a key with `openssl rand -hex 32` and set it as `TOKEN_ENCRYPTION_KEY`.
 

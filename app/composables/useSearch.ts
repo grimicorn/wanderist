@@ -1,6 +1,6 @@
 /**
  * useSearch — calls GET /api/search?q= and returns grouped, UI-ready result
- * items. All four groups (places, trips, entries, people) map to the same
+ * items. All five groups (places, trips, entries, guides, people) map to the same
  * SearchItem shape that AppCommandPalette, explore, and map already use.
  */
 
@@ -18,6 +18,7 @@ export interface SearchGroups {
   places: SearchItem[];
   trips: SearchItem[];
   entries: SearchItem[];
+  guides: SearchItem[];
   people: SearchItem[];
 }
 
@@ -40,6 +41,11 @@ interface EntryResult {
   title: string;
 }
 
+interface GuideResult {
+  id: string;
+  title: string;
+}
+
 interface PersonResult {
   id: string;
   displayName: string | null;
@@ -50,6 +56,7 @@ interface SearchApiResponse {
   places: PlaceResult[];
   trips: TripResult[];
   entries: EntryResult[];
+  guides: GuideResult[];
   people: PersonResult[];
 }
 
@@ -58,7 +65,7 @@ const DEBOUNCE_MS = 250;
 
 // Factory to avoid sharing array references across resets and initializations.
 function emptyGroups(): SearchGroups {
-  return { places: [], trips: [], entries: [], people: [] };
+  return { places: [], trips: [], entries: [], guides: [], people: [] };
 }
 
 function mapPlace(place: PlaceResult): SearchItem {
@@ -92,6 +99,15 @@ function mapEntry(entry: EntryResult): SearchItem {
   };
 }
 
+function mapGuide(guide: GuideResult): SearchItem {
+  return {
+    id: guide.id,
+    title: guide.title,
+    icon: "layers",
+    href: "/guides",
+  };
+}
+
 function mapPerson(person: PersonResult): SearchItem {
   const title =
     formatHandle(person.handle) ||
@@ -112,6 +128,7 @@ function mapApiResponse(response: SearchApiResponse): SearchGroups {
     places: response.places.map(mapPlace),
     trips: response.trips.map(mapTrip),
     entries: response.entries.map(mapEntry),
+    guides: response.guides.map(mapGuide),
     people: response.people.map(mapPerson),
   };
 }

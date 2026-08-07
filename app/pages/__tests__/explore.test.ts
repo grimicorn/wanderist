@@ -59,6 +59,7 @@ const heroSearchResults = ref<SearchGroups>({
   places: [],
   trips: [],
   entries: [],
+  guides: [],
   people: [],
 });
 const mockHeroSearch = vi.fn();
@@ -234,6 +235,7 @@ describe("Explore page (/explore)", () => {
       places: [],
       trips: [],
       entries: [],
+      guides: [],
       people: [],
     };
   });
@@ -248,6 +250,35 @@ describe("Explore page (/explore)", () => {
     const wrapper = mount(ExplorePage, globalConfig);
     expect(wrapper.find(".xhero h1").text()).toBe("Where to next?");
     expect(wrapper.find(".xsearch input").exists()).toBe(true);
+  });
+
+  it("renders the Guides group in hero search results", async () => {
+    heroSearchQuery.value = "kyoto";
+    heroSearchResults.value = {
+      places: [],
+      trips: [],
+      entries: [],
+      guides: [
+        {
+          id: "g-1",
+          title: "48 hours in Kyoto",
+          icon: "layers",
+          href: "/guides",
+        },
+      ],
+      people: [],
+    };
+
+    const wrapper = mount(ExplorePage, globalConfig);
+    await wrapper.vm.$nextTick();
+
+    const guidesGroup = wrapper
+      .findAll(".xsearch-group")
+      .find((group) => group.find(".xsearch-group__label").text() === "Guides");
+    expect(guidesGroup).toBeDefined();
+    expect(guidesGroup?.find(".xsearch-item__title").text()).toContain(
+      "48 hours in Kyoto",
+    );
   });
 
   it("renders 5 search chips", () => {
