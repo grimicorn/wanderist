@@ -49,6 +49,13 @@ export const useGuidesStore = defineStore("guides", () => {
   const { apiFetch } = useApiClient();
 
   const guides = ref<Guide[]>([]);
+  // Holds the single guide shown on the detail page (/guides/[id]). Kept
+  // separate from the `guides` list because a guide can be opened from explore
+  // without ever loading the owner's full list, and the detail fetch returns a
+  // guide the list may not contain (e.g. someone else's public guide).
+  const currentGuide = ref<Guide | null>(null);
+  const isLoadingGuide = ref(false);
+  const guideError = ref<string | null>(null);
   const isLoading = ref(false);
   // Distinct from isLoading: lets a consumer tell "haven't fetched yet" apart
   // from "fetched and the list is genuinely empty", so a page doesn't flash
@@ -135,6 +142,42 @@ export const useGuidesStore = defineStore("guides", () => {
     }
   }
 
+  // Monotonic token identifying the most recent fetchGuideById call. Keying on
+  // a per-call token (not the id) means even two in-flight requests for the
+  // SAME id — e.g. /guides/a -> /guides/b -> /guides/a via back/forward — are
+  // distinguished, so a slower earlier request can't overwrite the newer
+  // guide, blank it out on a late failure, or clear the loading flag while the
+  // newer one is still in flight. Same intent as fetchGuides' inFlightFetch
+  // guard, for a fetch that legitimately reruns per id.
+  let latestGuideRequestId = 0;
+
+  async function fetchGuideById(id: string): Promise<void> {
+    const requestId = ++latestGuideRequestId;
+    isLoadingGuide.value = true;
+    guideError.value = null;
+
+    try {
+      const guide = await apiFetch<Guide>(`/api/guides/${id}`);
+      if (requestId !== latestGuideRequestId) {
+        return;
+      }
+      currentGuide.value = guide;
+    } catch (fetchError) {
+      if (requestId !== latestGuideRequestId) {
+        throw fetchError;
+      }
+      // Clear any stale guide so the detail page shows its not-found state
+      // rather than the previously-open guide when a fetch fails.
+      currentGuide.value = null;
+      guideError.value = extractErrorMessage(fetchError);
+      throw fetchError;
+    } finally {
+      if (requestId === latestGuideRequestId) {
+        isLoadingGuide.value = false;
+      }
+    }
+  }
+
   // A successful write only proves the single mutated guide reflects server
   // state, not that `guides` holds the user's complete set. If the initial
   // load never succeeded (hasLoaded still false), `guides` may be missing
@@ -180,6 +223,11 @@ export const useGuidesStore = defineStore("guides", () => {
     guides.value = guides.value.map((guide) =>
       guide.id === id ? updated : guide,
     );
+    // Keep the open detail page (which renders from currentGuide, not the
+    // list) in sync so an edit doesn't leave it showing pre-edit content.
+    if (currentGuide.value?.id === id) {
+      currentGuide.value = updated;
+    }
     await markLoadSucceeded();
 
     return updated;
@@ -189,6 +237,11 @@ export const useGuidesStore = defineStore("guides", () => {
     await apiFetch(`/api/guides/${id}`, { method: "DELETE" });
 
     guides.value = guides.value.filter((guide) => guide.id !== id);
+    // Drop the open detail page's guide if it was the one deleted, so it can't
+    // keep rendering a row that no longer exists.
+    if (currentGuide.value?.id === id) {
+      currentGuide.value = null;
+    }
     await markLoadSucceeded();
   }
 
@@ -217,10 +270,14 @@ export const useGuidesStore = defineStore("guides", () => {
 
   return {
     guides,
+    currentGuide,
+    isLoadingGuide,
+    guideError,
     isLoading,
     hasLoaded,
     error,
     fetchGuides,
+    fetchGuideById,
     createGuide,
     updateGuide,
     deleteGuide,

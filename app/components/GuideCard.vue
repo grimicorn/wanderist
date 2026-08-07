@@ -1,7 +1,9 @@
 <template>
   <div class="gcard">
     <div class="gcard__body">
-      <div class="gcard__name">{{ guide.title }}</div>
+      <NuxtLink :to="`/guides/${guide.id}`" class="gcard__name">
+        {{ guide.title }}
+      </NuxtLink>
       <div class="gcard__meta">
         <span class="m">
           <AppIcon name="clock" :size="12" />
@@ -103,6 +105,14 @@ const visibilityTagClass = computed(
   font-family: var(--font-display);
   font-size: 14.5px;
   font-weight: 600;
+  color: inherit;
+  text-decoration: none;
+  /* Without this the link, as a flex item of the column body, stretches to the
+     full card width and its hover/click area spills far past the title. */
+  align-self: flex-start;
+}
+.gcard__name:hover {
+  color: var(--accent-ink);
 }
 .gcard__meta {
   display: flex;
