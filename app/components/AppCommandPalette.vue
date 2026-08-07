@@ -14,7 +14,7 @@
           ref="inputRef"
           v-model="query"
           class="cmdk__input"
-          placeholder="Search places, trips, entries, people…"
+          placeholder="Search places, trips, entries, guides, people…"
           autocomplete="off"
           spellcheck="false"
         />
@@ -60,7 +60,7 @@
           {{ searchError }}
         </div>
         <div v-else-if="query && !searchIsLoading" class="cmdk__empty">
-          No matches for &ldquo;{{ query }}&rdquo;. Try a place, trip or
+          No matches for &ldquo;{{ query }}&rdquo;. Try a place, trip, guide or
           @handle.
         </div>
       </div>
@@ -171,6 +171,7 @@ const visibleGroups = computed<SearchGroup[]>(() => {
     { key: "places", label: "Places", items: results.value.places },
     { key: "trips", label: "Trips", items: results.value.trips },
     { key: "entries", label: "Journal", items: results.value.entries },
+    { key: "guides", label: "Guides", items: results.value.guides },
     { key: "people", label: "People", items: results.value.people },
   ];
 

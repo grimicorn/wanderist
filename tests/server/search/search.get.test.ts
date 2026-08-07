@@ -21,7 +21,13 @@ const mockGetQuery = vi.mocked(
   globalThis.getQuery as (event: unknown) => Record<string, unknown>,
 );
 
-const EMPTY_RESULTS = { places: [], trips: [], entries: [], people: [] };
+const EMPTY_RESULTS = {
+  places: [],
+  trips: [],
+  entries: [],
+  guides: [],
+  people: [],
+};
 
 const handler = await import("../../../server/api/search.get");
 
@@ -97,7 +103,7 @@ describe("GET /api/search", () => {
     expect(result).toEqual(searchResults);
   });
 
-  it("returns all four groups in the response shape", async () => {
+  it("returns all five groups in the response shape", async () => {
     const searchResults = {
       places: [
         {
@@ -110,6 +116,7 @@ describe("GET /api/search", () => {
       ],
       trips: [{ id: "t-1", name: "Japan 2025", status: "past" }],
       entries: [{ id: "e-1", title: "Shinjuku station" }],
+      guides: [{ id: "g-1", title: "48 hours in Kyoto" }],
       people: [
         {
           id: "u-2",
@@ -126,6 +133,7 @@ describe("GET /api/search", () => {
     expect(result.places).toHaveLength(1);
     expect(result.trips).toHaveLength(1);
     expect(result.entries).toHaveLength(1);
+    expect(result.guides).toHaveLength(1);
     expect(result.people).toHaveLength(1);
   });
 

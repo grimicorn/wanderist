@@ -11,7 +11,13 @@ const linkStub = { template: "<a><slot /></a>", props: ["to"] };
 
 // Reactive search state shared across tests
 const mockQuery = ref("");
-const mockResults = ref({ places: [], trips: [], entries: [], people: [] });
+const mockResults = ref({
+  places: [],
+  trips: [],
+  entries: [],
+  guides: [],
+  people: [],
+});
 const mockIsLoading = ref(false);
 const mockError = ref<string | null>(null);
 const mockSearch = vi.fn();
@@ -41,7 +47,13 @@ describe("AppCommandPalette", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     mockQuery.value = "";
-    mockResults.value = { places: [], trips: [], entries: [], people: [] };
+    mockResults.value = {
+      places: [],
+      trips: [],
+      entries: [],
+      guides: [],
+      people: [],
+    };
     mockIsLoading.value = false;
     mockError.value = null;
     mockOpenNewEntry.mockReset();
@@ -146,6 +158,7 @@ describe("AppCommandPalette", () => {
         ],
         trips: [],
         entries: [],
+        guides: [],
         people: [],
       };
     });
@@ -178,6 +191,7 @@ describe("AppCommandPalette", () => {
           },
         ],
         entries: [],
+        guides: [],
         people: [],
       };
     });
@@ -189,6 +203,40 @@ describe("AppCommandPalette", () => {
     const labels = wrapper.findAll(".cmdk__glabel").map((el) => el.text());
     expect(labels).toContain("Places");
     expect(labels).toContain("Trips");
+  });
+
+  it("renders the Guides group when API returns guide results", async () => {
+    const wrapper = mount(AppCommandPalette, {
+      props: { open: true },
+      ...globalConfig,
+    });
+
+    mockSearch.mockImplementation(() => {
+      mockResults.value = {
+        places: [],
+        trips: [],
+        entries: [],
+        guides: [
+          {
+            id: "g-1",
+            title: "48 hours in Kyoto",
+            icon: "layers",
+            href: "/guides",
+          },
+        ],
+        people: [],
+      };
+    });
+
+    await wrapper.find(".cmdk__input").setValue("kyoto");
+    await flushPromises();
+    await wrapper.vm.$nextTick();
+
+    const guidesGroup = wrapper
+      .findAll(".cmdk__group")
+      .find((group) => group.find(".cmdk__glabel").text() === "Guides");
+    expect(guidesGroup).toBeDefined();
+    expect(guidesGroup?.find(".cmdk__t").text()).toContain("48 hours in Kyoto");
   });
 
   it("shows empty state when query is set but API returns no results", async () => {
