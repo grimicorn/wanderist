@@ -1,5 +1,8 @@
 import type { H3Event } from "h3";
-import { RATE_LIMIT_POLICIES } from "../utils/rateLimitPolicies";
+import {
+  RATE_LIMIT_POLICIES,
+  matchPolicyRoutePattern,
+} from "../utils/rateLimitPolicies";
 import { RateLimitStore } from "../utils/rateLimitStore";
 import type { RateLimitResult } from "../utils/rateLimitStore";
 
@@ -31,13 +34,24 @@ let hasWarnedAboutAnonymousBucket = false;
 // Runs after server/middleware/auth.ts (Nitro runs server/middleware/*
 // alphabetically), so for every policied route below, event.context.userId
 // is already set — auth.ts throws its own 401 first if the token is invalid.
-function resolveRouteKey(event: H3Event): string {
+//
+// Global middleware runs before h3's router matches the route, so
+// `event.context.matchedRoute` isn't populated yet here; we match the path
+// against the policied route patterns ourselves via the same radix router
+// h3 uses (see rateLimitPolicies.ts). Keying on the matched pattern rather
+// than the raw path means a dynamic route meters per pattern, not per id, so
+// it can't be evaded by enumerating ids. Returns null when the path matches
+// no policied pattern.
+function resolveRouteKey(event: H3Event): string | null {
   const pathWithoutQuery = event.path.split("?")[0];
-  const pathWithoutTrailingSlash = pathWithoutQuery.replace(/\/+$/, "");
+  const pattern = matchPolicyRoutePattern(pathWithoutQuery);
+  if (!pattern) {
+    return null;
+  }
   // h3 falls back to a route's GET handler for HEAD requests with no HEAD
   // handler registered, so HEAD must be normalized to GET to stay metered.
   const method = event.method === "HEAD" ? "GET" : event.method;
-  return `${method} ${pathWithoutTrailingSlash}`;
+  return `${method} ${pattern}`;
 }
 
 /** Prefers Netlify's client-IP header over the raw socket address `getRequestIP` falls back to. */
@@ -100,6 +114,9 @@ function applyRateLimitHeaders(event: H3Event, result: RateLimitResult): void {
 
 export default defineEventHandler((event) => {
   const routeKey = resolveRouteKey(event);
+  if (!routeKey) {
+    return;
+  }
   const policy = RATE_LIMIT_POLICIES[routeKey];
   if (!policy) {
     return;

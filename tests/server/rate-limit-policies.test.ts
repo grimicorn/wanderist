@@ -1,16 +1,22 @@
 /**
  * Guards RATE_LIMIT_POLICIES against silent drift: each policy key is a
- * plain "<METHOD> <path>" string matched against event.path (see
- * server/middleware/rateLimit.ts), with nothing else tying it to a real
- * route. If a targeted route file is ever renamed or moved, the policy key
- * stops matching anything and the rate limit silently stops applying — no
+ * "<METHOD> <route pattern>" string the middleware resolves a request path
+ * against (see server/middleware/rateLimit.ts), with nothing else tying it to
+ * a real route. If a targeted route file is ever renamed or moved, the policy
+ * key stops matching anything and the rate limit silently stops applying — no
  * test would fail and no error would be logged. This test fails loud instead
- * by asserting every configured key resolves to an actual handler file.
+ * by asserting every configured key resolves to an actual handler file. (All
+ * current targets are static paths; candidateHandlerPaths would need
+ * extending to resolve a dynamic `:id` pattern back to its `[id]` file.)
  */
 import { describe, it, expect } from "vitest";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-import { RATE_LIMIT_POLICIES } from "../../server/utils/rateLimitPolicies";
+import {
+  RATE_LIMIT_POLICIES,
+  buildRoutePatternMatcher,
+  matchPolicyRoutePattern,
+} from "../../server/utils/rateLimitPolicies";
 
 const SERVER_API_DIR = resolve(__dirname, "../../server/api");
 const API_PATH_PREFIX = "/api/";
@@ -66,5 +72,70 @@ describe("RATE_LIMIT_POLICIES route drift guard", () => {
         `Expected "${policyKey}" to resolve to one of:\n${candidates.join("\n")}`,
       ).toBe(true);
     }
+  });
+});
+
+describe("buildRoutePatternMatcher", () => {
+  it("collapses every concrete id of a dynamic route onto one pattern", () => {
+    const matchRoute = buildRoutePatternMatcher(["/api/users/:id"]);
+
+    // The core fix: enumerating ids can no longer mint a distinct rate-limit
+    // key per id — they all resolve to the same pattern, so one bucket.
+    expect(matchRoute("/api/users/1")).toBe("/api/users/:id");
+    expect(matchRoute("/api/users/2")).toBe("/api/users/:id");
+    expect(matchRoute("/api/users/abc-def")).toBe("/api/users/:id");
+  });
+
+  it("prefers a static route over an overlapping dynamic one", () => {
+    const matchRoute = buildRoutePatternMatcher([
+      "/api/entries/:id",
+      "/api/entries/on-this-day",
+    ]);
+
+    expect(matchRoute("/api/entries/on-this-day")).toBe(
+      "/api/entries/on-this-day",
+    );
+    expect(matchRoute("/api/entries/123")).toBe("/api/entries/:id");
+  });
+
+  it("matches a dynamic segment nested under a static suffix", () => {
+    const matchRoute = buildRoutePatternMatcher(["/api/media/:id/thumbnail"]);
+
+    expect(matchRoute("/api/media/9/thumbnail")).toBe(
+      "/api/media/:id/thumbnail",
+    );
+  });
+
+  it("matches a wildcard pattern across any number of trailing segments", () => {
+    const matchRoute = buildRoutePatternMatcher(["/api/proxy/**"]);
+
+    expect(matchRoute("/api/proxy/a/b/c")).toBe("/api/proxy/**");
+  });
+
+  it("normalizes a trailing slash before matching", () => {
+    const matchRoute = buildRoutePatternMatcher(["/api/users/:id"]);
+
+    expect(matchRoute("/api/users/1/")).toBe("/api/users/:id");
+  });
+
+  it("returns undefined for a path outside every pattern", () => {
+    const matchRoute = buildRoutePatternMatcher(["/api/users/:id"]);
+
+    expect(matchRoute("/api/trips")).toBeUndefined();
+  });
+});
+
+describe("matchPolicyRoutePattern", () => {
+  it("resolves each policied static path to itself", () => {
+    expect(matchPolicyRoutePattern("/api/media")).toBe("/api/media");
+    expect(matchPolicyRoutePattern("/api/search")).toBe("/api/search");
+    expect(matchPolicyRoutePattern("/api/connections/instagram/import")).toBe(
+      "/api/connections/instagram/import",
+    );
+  });
+
+  it("returns undefined for an unpolicied path", () => {
+    expect(matchPolicyRoutePattern("/api/trips")).toBeUndefined();
+    expect(matchPolicyRoutePattern("/api/entries/123")).toBeUndefined();
   });
 });
