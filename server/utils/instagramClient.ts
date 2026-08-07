@@ -35,15 +35,23 @@ export const INSTAGRAM_MEDIA_LIMIT = 50;
 export const INSTAGRAM_MAX_MEDIA_PAGES = 10;
 
 // Upper bound on how many *new* photos a single import run downloads,
-// processes, and commits. Each item does a CDN image fetch, sharp probe +
-// thumbnail, a DB transaction, and two blob writes (~1-2s each), so an
-// unbounded run over a first-time account's ~500 geotagged items overruns the
-// Netlify function timeout and commits partial work. Capping the per-run batch
-// keeps each invocation well inside the budget; the remaining items resume on
-// the next run (already-imported items are skipped via the idempotent
-// media.source_id set, so progress persists across runs without extra state).
-// Conservative and tunable — raise it if the function timeout budget grows.
-export const INSTAGRAM_IMPORT_MAX_ITEMS_PER_RUN = 25;
+// processes, and commits. Each item does a CDN image fetch, a sharp probe +
+// thumbnail, a DB transaction, and two blob writes — on the order of ~1s each,
+// so an unbounded run over a first-time account's ~500 geotagged items overruns
+// the Netlify function timeout and commits partial work.
+//
+// Budget: this repo sets no maxDuration, so functions run on Netlify's default
+// synchronous ceiling (10s). The page walk (fetchInstagramMedia, up to
+// INSTAGRAM_MAX_MEDIA_PAGES requests) spends a few seconds before any import,
+// leaving room for a single-digit batch. 8 × ~1s keeps the worst case inside
+// the 10s ceiling with headroom. The remaining items resume on the next run
+// (already-imported items are skipped via the idempotent media.source_id set,
+// so progress persists across runs without extra state).
+//
+// This is the tuning knob: raise it only alongside a raised function timeout,
+// and prefer a background/scheduled function over a large cap for accounts with
+// hundreds of geotagged photos.
+export const INSTAGRAM_IMPORT_MAX_ITEMS_PER_RUN = 8;
 
 // Only image types can carry location metadata.
 export const INSTAGRAM_GEOTAGGED_MEDIA_TYPES = new Set([

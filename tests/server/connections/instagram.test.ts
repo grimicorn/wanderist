@@ -934,4 +934,29 @@ describe("POST /api/connections/instagram/import", () => {
     expect(result.hasMore).toBe(false);
     expect(result.errors).toHaveLength(2);
   });
+
+  it("still advertises a resume when part of the batch fails but one succeeds", async () => {
+    // Cap 2; batch is [ig-a, ig-b]. ig-a's image fetch fails, ig-b succeeds, so
+    // progress was made and a third item still waits — hasMore stays true.
+    mockFilterGeotaggedMedia.mockReturnValue([
+      makeGeotaggedItem("ig-a"),
+      makeGeotaggedItem("ig-b"),
+      makeGeotaggedItem("ig-c"),
+    ]);
+    mockFetchInstagramImage
+      .mockReset()
+      .mockRejectedValueOnce(new Error("CDN 404"))
+      .mockResolvedValue(Buffer.from("img"));
+    mockGetDb.mockReturnValue(makeDbWithTransaction());
+
+    const result = (await call(importHandler, makeEvent())) as {
+      imported: number;
+      hasMore: boolean;
+      errors: string[];
+    };
+
+    expect(result.imported).toBe(1);
+    expect(result.hasMore).toBe(true);
+    expect(result.errors).toHaveLength(1);
+  });
 });

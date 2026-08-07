@@ -23,6 +23,15 @@ export interface ConnectionsState {
   google: GoogleConnectionState;
 }
 
+export interface InstagramImportResult {
+  imported: number;
+  skipped: number;
+  errors: string[];
+  // The import is bounded per run; `hasMore` is true when items remain and the
+  // client should call the endpoint again to resume.
+  hasMore: boolean;
+}
+
 const CONNECTIONS_DEFAULTS: ConnectionsState = {
   instagram: { connected: false },
   google: { connected: false, emailAddress: null, identificationId: null },
@@ -63,12 +72,7 @@ export function useConnections() {
   const isLoading = ref(false);
   const loadError = ref<string | null>(null);
   const actionError = ref<string | null>(null);
-  const importResult = ref<{
-    imported: number;
-    skipped: number;
-    errors: string[];
-    hasMore: boolean;
-  } | null>(null);
+  const importResult = ref<InstagramImportResult | null>(null);
 
   async function fetchConnections(): Promise<void> {
     isLoading.value = true;
@@ -135,12 +139,10 @@ export function useConnections() {
     actionError.value = null;
     importResult.value = null;
     try {
-      const result = await apiFetch<{
-        imported: number;
-        skipped: number;
-        errors: string[];
-        hasMore: boolean;
-      }>("/api/connections/instagram/import", { method: "POST" });
+      const result = await apiFetch<InstagramImportResult>(
+        "/api/connections/instagram/import",
+        { method: "POST" },
+      );
       importResult.value = result;
       return true;
     } catch (error: unknown) {

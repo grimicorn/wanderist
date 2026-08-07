@@ -222,7 +222,11 @@
             </div>
             <div v-if="importResult" style="margin-bottom: 12px">
               <AppAlert
-                :intent="importResult.errors.length > 0 ? 'error' : 'success'"
+                :intent="
+                  importResult.errors.length > 0 && importResult.imported === 0
+                    ? 'error'
+                    : 'success'
+                "
                 :title="importResultMessage"
               />
             </div>
@@ -564,12 +568,13 @@ const importResultMessage = computed(() => {
   const resumeHint = result.hasMore
     ? " More remain, run import again to continue."
     : "";
+  const photoCount = result.imported;
+  const summary = `Imported ${photoCount} photo${photoCount === 1 ? "" : "s"}`;
   if (result.errors.length > 0) {
     const errorCount = result.errors.length;
-    return `Import finished with ${errorCount} error${errorCount === 1 ? "" : "s"}.${resumeHint}`;
+    return `${summary}, ${errorCount} failed.${resumeHint}`;
   }
-  const photoCount = result.imported;
-  return `Imported ${photoCount} photo${photoCount === 1 ? "" : "s"}.${resumeHint}`;
+  return `${summary}.${resumeHint}`;
 });
 
 const {

@@ -300,12 +300,14 @@ export default defineEventHandler(async (event) => {
 
   const { imported, errors } = await importBatch(userId, batch);
 
-  // Only advertise a resume when the run made progress. A failed item is never
-  // written to media.source_id, so it stays at the head of pendingItems; if a
-  // whole batch fails (e.g. every item's CDN asset 404s), re-running would
-  // re-slice the same stuck items forever. Stopping avoids that spin at the
-  // cost of not draining past a permanently-broken head — a durable
-  // failure-marker would be needed to skip such items (see follow-ups).
+  // Only advertise a resume when the run imported at least one item. A failed
+  // item is never written to media.source_id, so it stays in pendingItems and
+  // is retried on the next run. This guard only rules out the degenerate
+  // zero-progress case (a whole batch failing, e.g. every CDN asset 404s), so
+  // the client isn't told to retry into a guaranteed stall. It does NOT skip a
+  // permanently-broken item that sits among successful ones: that item is
+  // re-fetched every run until it succeeds or a human intervenes. Draining past
+  // such items needs a durable per-source_id failure marker (see follow-ups).
   const hasMore = pendingItems.length > batch.length && imported > 0;
 
   return { imported, skipped, errors, hasMore };
