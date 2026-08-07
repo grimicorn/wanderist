@@ -1,16 +1,77 @@
 import { eq } from "drizzle-orm";
-import { assertOwnership, requireRouterParam } from "../../utils/db-helpers";
+import { loadOwnedOrThrow, requireRouterParam } from "../../utils/db-helpers";
 import { getDb } from "../../db/index";
-import { entries } from "../../db/schema";
+import { entries, entryPhotos } from "../../db/schema";
+import { deleteMediaIfUnreferenced } from "../../utils/coverImageCleanup";
+
+type Entry = typeof entries.$inferSelect;
+type Database = ReturnType<typeof getDb>;
+
+// The entry's photos cascade away with the entry (entry_photos.entry_id ON
+// DELETE CASCADE), so their media ids must be captured BEFORE the delete —
+// afterwards there is no row left to tell us which media they pointed at.
+async function collectEntryPhotoMediaIds(
+  database: Database,
+  entryId: string,
+): Promise<string[]> {
+  const rows = await database
+    .select({ mediaId: entryPhotos.mediaId })
+    .from(entryPhotos)
+    .where(eq(entryPhotos.entryId, entryId));
+
+  return [...new Set(rows.map((row) => row.mediaId))];
+}
+
+// Best-effort: a failed media cleanup must not fail an otherwise-successful
+// entry deletion. The media is only orphaned, not corrupt, so we log and move
+// on rather than surfacing a 500. deleteMediaIfUnreferenced re-checks live
+// references, so a media row still used by another entry photo or a trip cover
+// is left untouched.
+async function cleanupOnePhotoMedia(
+  database: Database,
+  ownerId: string,
+  mediaId: string,
+): Promise<void> {
+  try {
+    await deleteMediaIfUnreferenced(database, ownerId, mediaId);
+  } catch (cleanupError) {
+    console.error(
+      `entry delete: photo media cleanup failed for ${mediaId}`,
+      cleanupError,
+    );
+  }
+}
+
+// Runs after the entry (and its cascaded photo rows) are gone so the reference
+// check does not see the photo that just released the media.
+async function cleanupEntryPhotoMedia(
+  database: Database,
+  ownerId: string,
+  mediaIds: string[],
+): Promise<void> {
+  for (const mediaId of mediaIds) {
+    await cleanupOnePhotoMedia(database, ownerId, mediaId);
+  }
+}
 
 export default defineEventHandler(async (event) => {
   const id = requireRouterParam(event, "id");
 
-  await assertOwnership(event, entries, entries.id, entries.userId, id);
+  const entry = await loadOwnedOrThrow<Entry>(
+    event,
+    entries,
+    entries.id,
+    entries.userId,
+    id,
+  );
 
   const database = getDb();
 
+  const mediaIds = await collectEntryPhotoMediaIds(database, id);
+
   await database.delete(entries).where(eq(entries.id, id));
+
+  await cleanupEntryPhotoMedia(database, entry.userId, mediaIds);
 
   return { success: true };
 });
