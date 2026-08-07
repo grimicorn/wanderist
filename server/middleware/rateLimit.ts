@@ -43,10 +43,12 @@ let hasWarnedAboutAnonymousBucket = false;
 // it can't be evaded by enumerating ids. Returns null when the path matches
 // no policied pattern.
 function resolveRouteKey(event: H3Event): string | null {
-  // radix3 normalizes a single trailing slash on its own, but not repeated
-  // ones (`/api/media//`), so collapse those first to keep a doubled-slash
-  // path metered rather than slipping through unmatched.
-  const pathWithoutQuery = event.path.split("?")[0].replace(/\/{2,}$/, "/");
+  // matchPolicyRoutePattern normalizes a trailing slash the same way h3's
+  // router does (both radix3), so the set of paths metered here is exactly
+  // the set h3 routes to a handler. A path h3 won't route (e.g. a doubled
+  // trailing slash) matches nothing here and stays unmetered, since it does
+  // no handler work to abuse.
+  const pathWithoutQuery = event.path.split("?")[0];
   const pattern = matchPolicyRoutePattern(pathWithoutQuery);
   if (!pattern) {
     return null;

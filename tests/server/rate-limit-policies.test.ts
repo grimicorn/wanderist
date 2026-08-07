@@ -92,7 +92,7 @@ describe("buildRoutePatternMatcher", () => {
     expect(matchRoute("/api/users/abc-def")).toBe("/api/users/:id");
   });
 
-  it("prefers a static route over an overlapping dynamic one", () => {
+  it("prefers a static route over an overlapping dynamic one when both are registered", () => {
     const matchRoute = buildRoutePatternMatcher([
       "/api/entries/:id",
       "/api/entries/on-this-day",
@@ -102,6 +102,17 @@ describe("buildRoutePatternMatcher", () => {
       "/api/entries/on-this-day",
     );
     expect(matchRoute("/api/entries/123")).toBe("/api/entries/:id");
+  });
+
+  it("swallows an unregistered static sibling under a lone dynamic pattern", () => {
+    // Documents the caveat in RATE_LIMIT_POLICIES' docblock: the matcher only
+    // knows the patterns it's given, not the app's full route table, so a
+    // dynamic pattern also matches a real static sibling that carries no
+    // policy of its own. Whoever adds the first dynamic policy must register
+    // any static sibling that should stay unmetered.
+    const matchRoute = buildRoutePatternMatcher(["/api/entries/:id"]);
+
+    expect(matchRoute("/api/entries/on-this-day")).toBe("/api/entries/:id");
   });
 
   it("matches a dynamic segment nested under a static suffix", () => {
@@ -134,6 +145,18 @@ describe("buildRoutePatternMatcher", () => {
     expect(() =>
       buildRoutePatternMatcher(["/api/trips/:id", "/api/trips/:tripId"]),
     ).toThrow(/collide/);
+  });
+
+  it("throws on a wildcard-shape collision", () => {
+    expect(() =>
+      buildRoutePatternMatcher(["/api/proxy/**", "/api/proxy/**:rest"]),
+    ).toThrow(/collide/);
+  });
+
+  it("treats the same pattern repeated (one path, two methods) as no collision", () => {
+    expect(() =>
+      buildRoutePatternMatcher(["/api/media", "/api/media"]),
+    ).not.toThrow();
   });
 });
 

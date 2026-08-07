@@ -18,10 +18,18 @@ export const ONE_HOUR_MS = 60 * ONE_MINUTE_MS;
  * to a new route is a one-line entry here — no route handler changes
  * required. A route with no entry is simply not rate-limited.
  *
+ * One caveat when adding a DYNAMIC pattern: the matcher is built only from
+ * the patterns in this map, not the app's full route table, so a dynamic
+ * pattern also swallows any real static sibling that has no policy of its
+ * own. Adding `"GET /api/entries/:id"` would make `/api/entries/on-this-day`
+ * (a separate static handler) resolve to `:id` and be metered under it. If a
+ * static sibling must stay unmetered, give it its own entry too. All three
+ * current policies are static paths, so this doesn't bite today.
+ *
  * Scoped to wanderist#89's three named cost-metered/abuse-prone endpoints;
- * see each entry for why its limit and window were chosen. All three are
- * currently static paths; the pattern matching exists so a future dynamic
- * route can be added here and metered correctly.
+ * see each entry for why its limit and window were chosen. The pattern
+ * matching exists so a future dynamic route can be added here and metered
+ * correctly.
  */
 export const RATE_LIMIT_POLICIES: Record<string, RateLimitPolicy> = {
   // Upload runs image dimension probing + thumbnail generation (sharp) and
@@ -57,13 +65,17 @@ function routePatternOf(policyKey: string): string {
 }
 
 // Two patterns of the same shape but different param names (/api/trips/:id vs
-// /api/trips/:tripId) both insert a placeholder child at the same depth;
-// radix3's lookup picks the first, so the second's policy would silently
-// never apply. Normalizing param names to a placeholder lets us detect that
-// collision and fail loud instead — the same drift the policy tests guard
-// against, caught at module load.
+// /api/trips/:tripId, or /api/proxy/** vs /api/proxy/**:rest) both insert the
+// same placeholder/wildcard node; radix3's lookup keeps only one, so the
+// other's policy would silently never apply. Collapsing param and wildcard
+// names to a canonical token lets us detect that collision and fail loud
+// instead — the same drift the policy tests guard against, caught at module
+// load. Identical patterns are not a collision (see buildRoutePatternMatcher).
 function routeShapeOf(routePattern: string): string {
-  return routePattern.replace(/:[^/]+/g, ":param").replace(/\/+$/, "");
+  return routePattern
+    .replace(/\*\*:?[^/]*/g, "**")
+    .replace(/:[^/]+/g, ":param")
+    .replace(/\/+$/, "");
 }
 
 /**
@@ -75,28 +87,36 @@ export type RoutePatternMatcher = (path: string) => string | undefined;
 
 /**
  * Builds a matcher over `routePatterns` using the same radix3 router Nitro
- * and h3 route requests with. That gives correct static-over-dynamic
+ * and h3 route requests with on Nuxt 4.x. That gives correct
+ * static-over-dynamic
  * precedence (`/api/entries/on-this-day` wins over `/api/entries/:id`) and
  * trailing-slash normalization for free — the reason this defers to the
  * router instead of string-munching path segments. Isolated from the policy
  * map below so dynamic-pattern matching is unit-testable without a live
- * dynamic policy in production. Throws on two patterns that collide on shape
- * (see routeShapeOf).
+ * dynamic policy in production. Throws on two distinct patterns that collide
+ * on shape (see routeShapeOf); the same pattern repeated (one path, two HTTP
+ * methods) is fine.
+ *
+ * Coupling note: this parity holds only while h3 routes with radix3. h3 v2 /
+ * Nitro v3 switch to `rou3`, so on a future Nuxt major keep this matcher on
+ * whatever router h3 uses, or precedence and param syntax can diverge.
  */
 export function buildRoutePatternMatcher(
   routePatterns: string[],
 ): RoutePatternMatcher {
   const router = createRouter<{ pattern: string }>();
-  const seenShapes = new Map<string, string>();
-  for (const pattern of routePatterns) {
+  const shapeToPattern = new Map<string, string>();
+  // Dedupe first: one path with two HTTP methods yields the same pattern
+  // twice, which is legitimate, not a collision.
+  for (const pattern of new Set(routePatterns)) {
     const shape = routeShapeOf(pattern);
-    const collidingPattern = seenShapes.get(shape);
+    const collidingPattern = shapeToPattern.get(shape);
     if (collidingPattern) {
       throw new Error(
         `Rate limit route patterns "${collidingPattern}" and "${pattern}" collide; radix3 would silently match only one.`,
       );
     }
-    seenShapes.set(shape, pattern);
+    shapeToPattern.set(shape, pattern);
     router.insert(pattern, { pattern });
   }
   return (path) => router.lookup(path)?.pattern;
