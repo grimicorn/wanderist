@@ -60,9 +60,22 @@ export function describeInstagramImportResult(result: InstagramImportResult): {
   }
 
   const errorCount = result.errors.length;
-  const message = `${summary}, ${errorCount} failed.${resumeHint}`;
-  const intent: ImportAlertIntent = photoCount === 0 ? "error" : "warning";
-  return { message, intent };
+  // "error" only for the terminal zero-progress case (nothing imported and no
+  // resume queued); if work still remains it's a "warning" the user can act on.
+  const intent: ImportAlertIntent =
+    photoCount === 0 && !result.hasMore ? "error" : "warning";
+
+  // When the resume hint is suppressed (the whole attempted batch failed) but
+  // items were never reached, name them so they aren't silently dropped.
+  const untouched = result.remaining - errorCount;
+  if (!result.hasMore && untouched > 0) {
+    return {
+      message: `${summary}, ${errorCount} failed. ${untouched} still pending.`,
+      intent,
+    };
+  }
+
+  return { message: `${summary}, ${errorCount} failed.${resumeHint}`, intent };
 }
 
 const CONNECTIONS_DEFAULTS: ConnectionsState = {

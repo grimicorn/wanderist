@@ -261,7 +261,11 @@ async function importBatch(
     if (processed >= maxItems) {
       break;
     }
-    if (Date.now() >= deadlineAt) {
+    // Always attempt at least one item per run (`processed > 0` guard) so a run
+    // that entered with its time budget already spent — e.g. a slow page walk
+    // ate it — still makes forward progress instead of returning zero-imported
+    // and looping the user on "run again" forever.
+    if (processed > 0 && Date.now() >= deadlineAt) {
       stoppedOnDeadline = true;
       break;
     }

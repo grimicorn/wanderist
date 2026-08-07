@@ -321,4 +321,36 @@ describe("describeInstagramImportResult", () => {
       intent: "info",
     });
   });
+
+  it("warns (not errors) when nothing imported but a resume is queued", () => {
+    const result = describeInstagramImportResult({
+      imported: 0,
+      skipped: 0,
+      errors: ["Item a: CDN 404"],
+      hasMore: true,
+      remaining: 3,
+    });
+
+    expect(result).toEqual({
+      message:
+        "Imported 0 photos, 1 failed. 3 more remain, run import again to continue.",
+      intent: "warning",
+    });
+  });
+
+  it("names never-attempted items when the whole batch failed and no resume is queued", () => {
+    const result = describeInstagramImportResult({
+      imported: 0,
+      skipped: 0,
+      errors: ["Item a: CDN 404", "Item b: CDN 404"],
+      hasMore: false,
+      remaining: 5,
+    });
+
+    // 2 failed this run, 3 were never reached; surface both, not just the fails.
+    expect(result).toEqual({
+      message: "Imported 0 photos, 2 failed. 3 still pending.",
+      intent: "error",
+    });
+  });
 });

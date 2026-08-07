@@ -53,12 +53,21 @@ export const INSTAGRAM_MAX_MEDIA_PAGES = 10;
 // function over a large cap for accounts with hundreds of geotagged photos.
 export const INSTAGRAM_IMPORT_MAX_ITEMS_PER_RUN = 8;
 
-// Wall-time budget for the per-item import loop. A count cap alone can't bound
-// duration — per-item cost varies with image size, sharp work, and blob-store
-// latency — so the loop also stops before starting a new item once this budget
-// is spent, deferring the rest to the next run. Sized under Netlify's default
-// 10s synchronous ceiling with headroom for the page walk that precedes the
-// loop and the in-flight item that finishes after the check.
+// Wall-time budget for the whole import invocation (anchored at handler entry).
+// A count cap alone can't bound duration — per-item cost varies with image
+// size, sharp work, and blob-store latency — so the loop stops before starting
+// a new item once this budget is spent, deferring the rest to the next run.
+//
+// The true worst case is this budget plus the one item already in flight when
+// the check trips: 7000ms + a ~1-3s item ≈ 8-10s, which sits under Netlify's
+// default 10s synchronous ceiling. Raise the budget only alongside a raised
+// timeout, and keep the gap to the ceiling ≥ the slowest expected item.
+//
+// Caveat: the preceding page walk (fetchInstagramMedia, up to
+// INSTAGRAM_MAX_MEDIA_PAGES requests) is counted against this budget but not
+// itself interrupted by it, so a pathologically slow walk could still approach
+// the ceiling before any import. Bounding the walk by the same deadline is a
+// worthwhile follow-up.
 export const INSTAGRAM_IMPORT_TIME_BUDGET_MS = 7000;
 
 // Only image types can carry location metadata.

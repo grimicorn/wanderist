@@ -1002,17 +1002,17 @@ describe("POST /api/connections/instagram/import", () => {
     }
   });
 
-  it("advertises a resume when the deadline hits before anything imports", async () => {
+  it("still attempts one item when the budget was spent before the loop began", async () => {
     vi.useFakeTimers();
     try {
       mockFilterGeotaggedMedia.mockReturnValue([
         makeGeotaggedItem("ig-a"),
         makeGeotaggedItem("ig-b"),
       ]);
-      // The page walk itself consumes the whole budget, so the import loop is
-      // already past the deadline on its first iteration and imports nothing.
-      // hasMore must still be true so the deferred items aren't lost as a
-      // silent "completed" import.
+      // The page walk itself consumes the whole budget, so the loop enters
+      // already past the deadline. The forward-progress guard must still attempt
+      // one item — otherwise the user loops forever on "run again" with nothing
+      // ever imported.
       mockFetchInstagramMedia.mockImplementation(() => {
         vi.advanceTimersByTime(61000);
         return Promise.resolve({ data: [] });
@@ -1025,10 +1025,11 @@ describe("POST /api/connections/instagram/import", () => {
         remaining: number;
       };
 
-      expect(mockFetchInstagramImage).not.toHaveBeenCalled();
-      expect(result.imported).toBe(0);
+      // Exactly one item attempted (and imported); the second is deferred.
+      expect(mockFetchInstagramImage).toHaveBeenCalledTimes(1);
+      expect(result.imported).toBe(1);
       expect(result.hasMore).toBe(true);
-      expect(result.remaining).toBe(2);
+      expect(result.remaining).toBe(1);
     } finally {
       vi.useRealTimers();
     }
