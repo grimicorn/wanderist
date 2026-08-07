@@ -150,9 +150,12 @@ vi.mock("../../../server/utils/instagramClient", () => ({
     "id,caption,media_type,timestamp,permalink,media_url,location",
   INSTAGRAM_MEDIA_LIMIT: 50,
   INSTAGRAM_GEOTAGGED_MEDIA_TYPES: new Set(["IMAGE", "CAROUSEL_ALBUM"]),
-  // Lowered from the real 25 so the per-run cap is exercised with a small
-  // fixture: three new items overflow a cap of two.
+  // Lowered from the production cap so the per-run bound is exercised with a
+  // small fixture: three new items overflow a cap of two.
   INSTAGRAM_IMPORT_MAX_ITEMS_PER_RUN: 2,
+  // Large so the wall-time budget never trips inside these fast, mocked tests;
+  // the count cap is what the fixtures exercise.
+  INSTAGRAM_IMPORT_TIME_BUDGET_MS: 60000,
 }));
 
 vi.mock("../../../server/utils/tokenCrypto", () => ({
@@ -541,6 +544,7 @@ describe("POST /api/connections/instagram/import", () => {
     // here — otherwise a test that sets a one-off or null return leaks into the
     // next test.
     mockPutMediaBlob.mockReset().mockResolvedValue(undefined);
+    mockFetchInstagramImage.mockReset().mockResolvedValue(Buffer.from("img"));
     mockProbeImageDimensions.mockResolvedValue({ width: 1200, height: 800 });
     mockGenerateThumbnail.mockResolvedValue(Buffer.from("thumb"));
     mockFetchInstagramMedia.mockResolvedValue({ data: [] });
@@ -568,6 +572,7 @@ describe("POST /api/connections/instagram/import", () => {
       skipped: 0,
       errors: [],
       hasMore: false,
+      remaining: 0,
     });
   });
 
@@ -791,6 +796,7 @@ describe("POST /api/connections/instagram/import", () => {
       skipped: 1,
       errors: [],
       hasMore: false,
+      remaining: 0,
     });
     expect(mockFetchInstagramImage).not.toHaveBeenCalled();
   });
@@ -854,8 +860,9 @@ describe("POST /api/connections/instagram/import", () => {
       skipped: 0,
       errors: [],
       hasMore: true,
+      remaining: 1,
     });
-    // The third item is deferred to the next run — its image is never fetched.
+    // The third item is deferred to the next run: its image is never fetched.
     expect(mockFetchInstagramImage).toHaveBeenCalledTimes(2);
   });
 
@@ -874,6 +881,7 @@ describe("POST /api/connections/instagram/import", () => {
       skipped: 0,
       errors: [],
       hasMore: false,
+      remaining: 0,
     });
     expect(mockFetchInstagramImage).toHaveBeenCalledTimes(2);
   });
@@ -908,6 +916,7 @@ describe("POST /api/connections/instagram/import", () => {
       skipped: 2,
       errors: [],
       hasMore: true,
+      remaining: 1,
     });
     expect(mockFetchInstagramImage).toHaveBeenCalledTimes(2);
   });
@@ -944,7 +953,6 @@ describe("POST /api/connections/instagram/import", () => {
       makeGeotaggedItem("ig-c"),
     ]);
     mockFetchInstagramImage
-      .mockReset()
       .mockRejectedValueOnce(new Error("CDN 404"))
       .mockResolvedValue(Buffer.from("img"));
     mockGetDb.mockReturnValue(makeDbWithTransaction());
@@ -952,11 +960,13 @@ describe("POST /api/connections/instagram/import", () => {
     const result = (await call(importHandler, makeEvent())) as {
       imported: number;
       hasMore: boolean;
+      remaining: number;
       errors: string[];
     };
 
     expect(result.imported).toBe(1);
     expect(result.hasMore).toBe(true);
+    expect(result.remaining).toBe(1);
     expect(result.errors).toHaveLength(1);
   });
 });

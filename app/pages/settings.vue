@@ -220,15 +220,24 @@
             <div v-if="connectionsActionError" style="margin-bottom: 12px">
               <AppAlert intent="error" :title="connectionsActionError" />
             </div>
-            <div v-if="importResult" style="margin-bottom: 12px">
+            <div v-if="importAlert" style="margin-bottom: 12px">
               <AppAlert
-                :intent="
-                  importResult.errors.length > 0 && importResult.imported === 0
-                    ? 'error'
-                    : 'success'
-                "
-                :title="importResultMessage"
+                :intent="importAlert.intent"
+                :title="importAlert.message"
               />
+              <ul
+                v-if="importResult && importResult.errors.length > 0"
+                style="
+                  margin: 8px 0 0;
+                  padding-left: 20px;
+                  font-size: 0.85em;
+                  opacity: 0.85;
+                "
+              >
+                <li v-for="(error, index) in importResult.errors" :key="index">
+                  {{ error }}
+                </li>
+              </ul>
             </div>
 
             <!-- Instagram -->
@@ -526,7 +535,10 @@
 <script setup lang="ts">
 import type { Ref } from "vue";
 import { usePreferences } from "~/composables/usePreferences";
-import { useConnections } from "~/composables/useConnections";
+import {
+  useConnections,
+  describeInstagramImportResult,
+} from "~/composables/useConnections";
 import { useAccountActions } from "~/composables/useAccountActions";
 import { useBilling } from "~/composables/useBilling";
 
@@ -560,21 +572,12 @@ const {
   importInstagramPhotos,
 } = useConnections();
 
-const importResultMessage = computed(() => {
+const importAlert = computed(() => {
   const result = importResult.value;
   if (!result) {
-    return "";
+    return null;
   }
-  const resumeHint = result.hasMore
-    ? " More remain, run import again to continue."
-    : "";
-  const photoCount = result.imported;
-  const summary = `Imported ${photoCount} photo${photoCount === 1 ? "" : "s"}`;
-  if (result.errors.length > 0) {
-    const errorCount = result.errors.length;
-    return `${summary}, ${errorCount} failed.${resumeHint}`;
-  }
-  return `${summary}.${resumeHint}`;
+  return describeInstagramImportResult(result);
 });
 
 const {

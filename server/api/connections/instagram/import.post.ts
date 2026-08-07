@@ -15,13 +15,14 @@
  * importing each is expensive (CDN fetch + image processing + DB transaction +
  * blob writes), so an unbounded run overruns the Netlify function timeout and
  * commits partial work. Each run imports at most
- * INSTAGRAM_IMPORT_MAX_ITEMS_PER_RUN new photos and reports `hasMore` when more
- * remain; the client calls again to resume. No separate cursor is persisted —
- * the idempotent `media.source_id` set is the cursor: already-imported items
- * are skipped, so the next run naturally picks up where this one stopped.
+ * INSTAGRAM_IMPORT_MAX_ITEMS_PER_RUN new photos and stops before the wall-time
+ * budget is spent, reporting `hasMore` and how many items are `remaining` so
+ * the client can call again to resume. No separate cursor is persisted; the
+ * idempotent `media.source_id` set is the cursor: already-imported items are
+ * skipped, so the next run naturally picks up where this one stopped.
  *
  * Returns a summary:
- *   { imported: number, skipped: number, errors: string[], hasMore: boolean }
+ *   { imported, skipped, errors, hasMore, remaining }
  */
 
 import { eq, and, inArray } from "drizzle-orm";
@@ -46,6 +47,7 @@ import {
   fetchInstagramImage,
   filterGeotaggedMedia,
   INSTAGRAM_IMPORT_MAX_ITEMS_PER_RUN,
+  INSTAGRAM_IMPORT_TIME_BUDGET_MS,
   type InstagramMediaItem,
 } from "../../../utils/instagramClient";
 import { decryptToken } from "../../../utils/tokenCrypto";
@@ -229,14 +231,32 @@ async function importSinglePhoto(
   }
 }
 
+interface BatchResult {
+  imported: number;
+  errors: string[];
+  // How many items the loop actually attempted before its count/time budget was
+  // spent — the rest of `items` is deferred to the next run.
+  processed: number;
+}
+
+// Imports items one at a time, stopping before it starts an item once either
+// the per-run count cap or the wall-time budget is spent. Bounding on both
+// keeps a run under the function timeout even when per-item cost is uneven.
 async function importBatch(
   userId: string,
   items: InstagramMediaItem[],
-): Promise<{ imported: number; errors: string[] }> {
+  maxItems: number,
+  deadlineAt: number,
+): Promise<BatchResult> {
   let imported = 0;
+  let processed = 0;
   const errors: string[] = [];
 
   for (const item of items) {
+    if (processed >= maxItems || Date.now() >= deadlineAt) {
+      break;
+    }
+    processed += 1;
     try {
       await importSinglePhoto(userId, item);
       imported += 1;
@@ -246,7 +266,7 @@ async function importBatch(
     }
   }
 
-  return { imported, errors };
+  return { imported, errors, processed };
 }
 
 export default defineEventHandler(async (event) => {
@@ -296,9 +316,15 @@ export default defineEventHandler(async (event) => {
   // Bound the expensive per-item work so the run stays under the function
   // timeout; the overflow resumes on the next call (already-imported items are
   // skipped above, so no cursor state is needed to know where to continue).
-  const batch = pendingItems.slice(0, INSTAGRAM_IMPORT_MAX_ITEMS_PER_RUN);
+  const deadlineAt = Date.now() + INSTAGRAM_IMPORT_TIME_BUDGET_MS;
+  const { imported, errors, processed } = await importBatch(
+    userId,
+    pendingItems,
+    INSTAGRAM_IMPORT_MAX_ITEMS_PER_RUN,
+    deadlineAt,
+  );
 
-  const { imported, errors } = await importBatch(userId, batch);
+  const remaining = pendingItems.length - processed;
 
   // Only advertise a resume when the run imported at least one item. A failed
   // item is never written to media.source_id, so it stays in pendingItems and
@@ -308,7 +334,7 @@ export default defineEventHandler(async (event) => {
   // permanently-broken item that sits among successful ones: that item is
   // re-fetched every run until it succeeds or a human intervenes. Draining past
   // such items needs a durable per-source_id failure marker (see follow-ups).
-  const hasMore = pendingItems.length > batch.length && imported > 0;
+  const hasMore = remaining > 0 && imported > 0;
 
-  return { imported, skipped, errors, hasMore };
+  return { imported, skipped, errors, hasMore, remaining };
 });

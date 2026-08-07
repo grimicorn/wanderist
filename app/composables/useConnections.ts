@@ -28,8 +28,37 @@ export interface InstagramImportResult {
   skipped: number;
   errors: string[];
   // The import is bounded per run; `hasMore` is true when items remain and the
-  // client should call the endpoint again to resume.
+  // client should call the endpoint again to resume. `remaining` is how many
+  // new items were deferred to a later run.
   hasMore: boolean;
+  remaining: number;
+}
+
+export type ImportAlertIntent = "success" | "warning" | "error";
+
+/**
+ * Derives the user-facing alert copy and intent for an import result. Pure and
+ * exported so the branch logic (partial success, resume hint, intent choice)
+ * is unit-tested without mounting the settings page.
+ */
+export function describeInstagramImportResult(result: InstagramImportResult): {
+  message: string;
+  intent: ImportAlertIntent;
+} {
+  const photoCount = result.imported;
+  const summary = `Imported ${photoCount} photo${photoCount === 1 ? "" : "s"}`;
+  const resumeHint = result.hasMore
+    ? ` ${result.remaining} more remain, run import again to continue.`
+    : "";
+
+  if (result.errors.length === 0) {
+    return { message: `${summary}.${resumeHint}`, intent: "success" };
+  }
+
+  const errorCount = result.errors.length;
+  const message = `${summary}, ${errorCount} failed.${resumeHint}`;
+  const intent: ImportAlertIntent = photoCount === 0 ? "error" : "warning";
+  return { message, intent };
 }
 
 const CONNECTIONS_DEFAULTS: ConnectionsState = {
