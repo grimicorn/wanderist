@@ -48,7 +48,7 @@ export function describeInstagramImportResult(result: InstagramImportResult): {
   const photoCount = result.imported;
   const summary = `Imported ${photoCount} photo${photoCount === 1 ? "" : "s"}`;
   const resumeHint = result.hasMore
-    ? ` ${result.remaining} more remain, run import again to continue.`
+    ? ` ${result.remaining} more remain${result.remaining === 1 ? "s" : ""}, run import again to continue.`
     : "";
 
   if (result.errors.length === 0) {

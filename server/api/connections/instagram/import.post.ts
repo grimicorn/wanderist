@@ -231,6 +231,18 @@ async function importSinglePhoto(
   }
 }
 
+// The POST response shape. The client mirrors this as InstagramImportResult in
+// app/composables/useConnections.ts; annotating the handler's return here makes
+// a server-side rename or dropped field a compile error rather than a runtime
+// surprise in the settings alert copy.
+interface ImportRunSummary {
+  imported: number;
+  skipped: number;
+  errors: string[];
+  hasMore: boolean;
+  remaining: number;
+}
+
 interface BatchResult {
   imported: number;
   errors: string[];
@@ -282,7 +294,7 @@ async function importBatch(
   return { imported, errors, processed, stoppedOnDeadline };
 }
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event): Promise<ImportRunSummary> => {
   // Anchor the wall-time budget at handler entry so it covers the whole
   // invocation — the page walk and dedupe query included — not just the import
   // loop. Otherwise a slow page walk plus a full loop could still overrun the

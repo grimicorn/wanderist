@@ -322,6 +322,22 @@ describe("describeInstagramImportResult", () => {
     });
   });
 
+  it("uses the singular verb in the resume hint when exactly one remains", () => {
+    const result = describeInstagramImportResult({
+      imported: 4,
+      skipped: 0,
+      errors: [],
+      hasMore: true,
+      remaining: 1,
+    });
+
+    expect(result).toEqual({
+      message:
+        "Imported 4 photos. 1 more remains, run import again to continue.",
+      intent: "success",
+    });
+  });
+
   it("warns (not errors) when nothing imported but a resume is queued", () => {
     const result = describeInstagramImportResult({
       imported: 0,

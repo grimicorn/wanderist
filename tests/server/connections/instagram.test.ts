@@ -942,6 +942,9 @@ describe("POST /api/connections/instagram/import", () => {
     expect(result.imported).toBe(0);
     expect(result.hasMore).toBe(false);
     expect(result.errors).toHaveLength(2);
+    // 3 pending, 0 imported: all three (2 failed + 1 untouched) still remain,
+    // and the UI's "N still pending" copy is computed from this value.
+    expect(result.remaining).toBe(3);
   });
 
   it("still advertises a resume when part of the batch fails but one succeeds", async () => {
