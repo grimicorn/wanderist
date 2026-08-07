@@ -235,8 +235,12 @@ interface BatchResult {
   imported: number;
   errors: string[];
   // How many items the loop actually attempted before its count/time budget was
-  // spent — the rest of `items` is deferred to the next run.
+  // spent; the rest of `items` is deferred to the next run.
   processed: number;
+  // True when the loop stopped because the wall-time budget ran out (rather than
+  // the count cap or reaching the end). Lets the caller advertise a resume even
+  // when the deadline hit before anything was imported.
+  stoppedOnDeadline: boolean;
 }
 
 // Imports items one at a time, stopping before it starts an item once either
@@ -250,10 +254,15 @@ async function importBatch(
 ): Promise<BatchResult> {
   let imported = 0;
   let processed = 0;
+  let stoppedOnDeadline = false;
   const errors: string[] = [];
 
   for (const item of items) {
-    if (processed >= maxItems || Date.now() >= deadlineAt) {
+    if (processed >= maxItems) {
+      break;
+    }
+    if (Date.now() >= deadlineAt) {
+      stoppedOnDeadline = true;
       break;
     }
     processed += 1;
@@ -266,10 +275,16 @@ async function importBatch(
     }
   }
 
-  return { imported, errors, processed };
+  return { imported, errors, processed, stoppedOnDeadline };
 }
 
 export default defineEventHandler(async (event) => {
+  // Anchor the wall-time budget at handler entry so it covers the whole
+  // invocation — the page walk and dedupe query included — not just the import
+  // loop. Otherwise a slow page walk plus a full loop could still overrun the
+  // function timeout.
+  const deadlineAt = Date.now() + INSTAGRAM_IMPORT_TIME_BUDGET_MS;
+
   const userId = await ensureUser(event);
   // No separate per-item photo-storage cap here: Instagram sync itself is
   // gated to Wanderer/Nomad (see assertInstagramSyncAllowed), and both of
@@ -316,25 +331,28 @@ export default defineEventHandler(async (event) => {
   // Bound the expensive per-item work so the run stays under the function
   // timeout; the overflow resumes on the next call (already-imported items are
   // skipped above, so no cursor state is needed to know where to continue).
-  const deadlineAt = Date.now() + INSTAGRAM_IMPORT_TIME_BUDGET_MS;
-  const { imported, errors, processed } = await importBatch(
+  const { imported, errors, processed, stoppedOnDeadline } = await importBatch(
     userId,
     pendingItems,
     INSTAGRAM_IMPORT_MAX_ITEMS_PER_RUN,
     deadlineAt,
   );
 
-  const remaining = pendingItems.length - processed;
+  // A failed item is never written to media.source_id, so it stays pending and
+  // is retried next run — count it as remaining, not just the items the loop
+  // never reached.
+  const remaining = pendingItems.length - imported;
 
-  // Only advertise a resume when the run imported at least one item. A failed
-  // item is never written to media.source_id, so it stays in pendingItems and
-  // is retried on the next run. This guard only rules out the degenerate
-  // zero-progress case (a whole batch failing, e.g. every CDN asset 404s), so
-  // the client isn't told to retry into a guaranteed stall. It does NOT skip a
-  // permanently-broken item that sits among successful ones: that item is
-  // re-fetched every run until it succeeds or a human intervenes. Draining past
-  // such items needs a durable per-source_id failure marker (see follow-ups).
-  const hasMore = remaining > 0 && imported > 0;
+  // Advertise a resume when work remains AND the run either made progress or was
+  // cut short by the time budget. The `imported > 0` clause rules out the
+  // degenerate zero-progress case (a whole batch failing, e.g. every CDN asset
+  // 404s) so the client isn't told to retry into a guaranteed stall; the
+  // `stoppedOnDeadline` clause keeps a run that imported nothing only because it
+  // ran out of time from being mistaken for a completed import. Neither skips a
+  // permanently-broken item sitting among good ones — that item is re-fetched
+  // every run until it succeeds or a human intervenes; draining past it needs a
+  // durable per-source_id failure marker (see follow-ups).
+  const hasMore = remaining > 0 && (imported > 0 || stoppedOnDeadline);
 
   return { imported, skipped, errors, hasMore, remaining };
 });

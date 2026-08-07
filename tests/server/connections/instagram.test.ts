@@ -966,7 +966,71 @@ describe("POST /api/connections/instagram/import", () => {
 
     expect(result.imported).toBe(1);
     expect(result.hasMore).toBe(true);
-    expect(result.remaining).toBe(1);
+    // 3 pending, 1 imported; the failed item plus the untouched one both remain.
+    expect(result.remaining).toBe(2);
     expect(result.errors).toHaveLength(1);
+  });
+
+  it("stops mid-batch when the wall-time budget is spent", async () => {
+    vi.useFakeTimers();
+    try {
+      mockFilterGeotaggedMedia.mockReturnValue([
+        makeGeotaggedItem("ig-a"),
+        makeGeotaggedItem("ig-b"),
+      ]);
+      // The first import overruns the (mocked 60s) budget, so the loop must
+      // break before starting the second item — proving the time budget, not
+      // just the count cap, bounds the run.
+      mockFetchInstagramImage.mockImplementation(() => {
+        vi.advanceTimersByTime(61000);
+        return Promise.resolve(Buffer.from("img"));
+      });
+      mockGetDb.mockReturnValue(makeDbWithTransaction());
+
+      const result = (await call(importHandler, makeEvent())) as {
+        imported: number;
+        hasMore: boolean;
+        remaining: number;
+      };
+
+      expect(mockFetchInstagramImage).toHaveBeenCalledTimes(1);
+      expect(result.imported).toBe(1);
+      expect(result.hasMore).toBe(true);
+      expect(result.remaining).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("advertises a resume when the deadline hits before anything imports", async () => {
+    vi.useFakeTimers();
+    try {
+      mockFilterGeotaggedMedia.mockReturnValue([
+        makeGeotaggedItem("ig-a"),
+        makeGeotaggedItem("ig-b"),
+      ]);
+      // The page walk itself consumes the whole budget, so the import loop is
+      // already past the deadline on its first iteration and imports nothing.
+      // hasMore must still be true so the deferred items aren't lost as a
+      // silent "completed" import.
+      mockFetchInstagramMedia.mockImplementation(() => {
+        vi.advanceTimersByTime(61000);
+        return Promise.resolve({ data: [] });
+      });
+      mockGetDb.mockReturnValue(makeDbWithTransaction());
+
+      const result = (await call(importHandler, makeEvent())) as {
+        imported: number;
+        hasMore: boolean;
+        remaining: number;
+      };
+
+      expect(mockFetchInstagramImage).not.toHaveBeenCalled();
+      expect(result.imported).toBe(0);
+      expect(result.hasMore).toBe(true);
+      expect(result.remaining).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
