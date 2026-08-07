@@ -338,21 +338,23 @@ export default defineEventHandler(async (event) => {
     deadlineAt,
   );
 
-  // A failed item is never written to media.source_id, so it stays pending and
-  // is retried next run — count it as remaining, not just the items the loop
-  // never reached.
+  // `remaining` is the retry count shown to the user: every item not yet
+  // successfully imported, including this run's failures (a failed item is never
+  // written to media.source_id, so it stays pending and is re-attempted).
   const remaining = pendingItems.length - imported;
 
-  // Advertise a resume when work remains AND the run either made progress or was
-  // cut short by the time budget. The `imported > 0` clause rules out the
-  // degenerate zero-progress case (a whole batch failing, e.g. every CDN asset
-  // 404s) so the client isn't told to retry into a guaranteed stall; the
-  // `stoppedOnDeadline` clause keeps a run that imported nothing only because it
-  // ran out of time from being mistaken for a completed import. Neither skips a
-  // permanently-broken item sitting among good ones — that item is re-fetched
-  // every run until it succeeds or a human intervenes; draining past it needs a
-  // durable per-source_id failure marker (see follow-ups).
-  const hasMore = remaining > 0 && (imported > 0 || stoppedOnDeadline);
+  // `deferred` is the count the loop never even attempted (cut off by the count
+  // cap or the time budget). Gate the resume on that, not on `remaining`: if
+  // every pending item was attempted and only failures are left, re-running just
+  // re-fails, so don't advertise phantom deferred work. The `imported > 0`
+  // clause additionally rules out the degenerate case where the whole attempted
+  // batch failed (zero progress), and `stoppedOnDeadline` keeps a run that
+  // imported nothing only because it ran out of time from looking complete.
+  // None of this skips a permanently-broken item sitting among good ones — that
+  // item is re-fetched every run until it succeeds or a human intervenes;
+  // draining past it needs a durable per-source_id failure marker (follow-up).
+  const deferred = pendingItems.length - processed;
+  const hasMore = deferred > 0 && (imported > 0 || stoppedOnDeadline);
 
   return { imported, skipped, errors, hasMore, remaining };
 });

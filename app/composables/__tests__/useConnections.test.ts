@@ -289,4 +289,36 @@ describe("describeInstagramImportResult", () => {
       intent: "error",
     });
   });
+
+  it("appends the resume hint on a partial-failure run that still has work queued", () => {
+    const result = describeInstagramImportResult({
+      imported: 7,
+      skipped: 0,
+      errors: ["Item a: CDN 404", "Item b: timeout"],
+      hasMore: true,
+      remaining: 3,
+    });
+
+    expect(result).toEqual({
+      message:
+        "Imported 7 photos, 2 failed. 3 more remain, run import again to continue.",
+      intent: "warning",
+    });
+  });
+
+  it("is informational (not success) when the run imported nothing but has work queued", () => {
+    const result = describeInstagramImportResult({
+      imported: 0,
+      skipped: 0,
+      errors: [],
+      hasMore: true,
+      remaining: 2,
+    });
+
+    expect(result).toEqual({
+      message:
+        "Imported 0 photos. 2 more remain, run import again to continue.",
+      intent: "info",
+    });
+  });
 });

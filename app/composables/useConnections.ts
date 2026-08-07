@@ -34,7 +34,7 @@ export interface InstagramImportResult {
   remaining: number;
 }
 
-export type ImportAlertIntent = "success" | "warning" | "error";
+export type ImportAlertIntent = "success" | "warning" | "error" | "info";
 
 /**
  * Derives the user-facing alert copy and intent for an import result. Pure and
@@ -52,7 +52,11 @@ export function describeInstagramImportResult(result: InstagramImportResult): {
     : "";
 
   if (result.errors.length === 0) {
-    return { message: `${summary}.${resumeHint}`, intent: "success" };
+    // A run that imported nothing but still has work queued (e.g. the time
+    // budget ran out mid-walk) is in-progress, not a completed success.
+    const intent: ImportAlertIntent =
+      photoCount === 0 && result.hasMore ? "info" : "success";
+    return { message: `${summary}.${resumeHint}`, intent };
   }
 
   const errorCount = result.errors.length;
