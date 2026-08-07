@@ -91,7 +91,11 @@ type Rows = Record<string, unknown>[];
 // against `media`, so one stub answers both the user lookup and the blob-key
 // enumeration. delete().where() records that a delete ran.
 function makeDb(options: { userRows?: Rows; mediaRows?: Rows }) {
-  const deleteWhere = vi.fn().mockResolvedValue(undefined);
+  // The delete re-runs the cutoff predicate and reports the rows it removed
+  // via `.returning()`; the authoritative purged set is the same userRows the
+  // select produced.
+  const deleteReturning = vi.fn().mockResolvedValue(options.userRows ?? []);
+  const deleteWhere = vi.fn(() => ({ returning: deleteReturning }));
   const mockDelete = vi.fn(() => ({ where: deleteWhere }));
 
   function rowsFor(table: unknown): Rows {
@@ -115,7 +119,7 @@ function makeDb(options: { userRows?: Rows; mediaRows?: Rows }) {
     delete: mockDelete,
   } as unknown as Parameters<typeof purgeExpiredDeletedAccounts>[0];
 
-  return { db, mockDelete, deleteWhere };
+  return { db, mockDelete, deleteWhere, deleteReturning };
 }
 
 describe("purgeExpiredDeletedAccounts", () => {
@@ -140,7 +144,7 @@ describe("purgeExpiredDeletedAccounts", () => {
   });
 
   it("deletes every purged user's media blobs (original + thumbnail) before deleting the users", async () => {
-    const { db, mockDelete } = makeDb({
+    const { db, mockDelete, deleteWhere } = makeDb({
       userRows: [{ id: "user-1" }],
       mediaRows: [{ url: "user-1/media-1" }, { url: "user-1/media-2" }],
     });
@@ -153,6 +157,14 @@ describe("purgeExpiredDeletedAccounts", () => {
     expect(mockRemoveMediaBlob).toHaveBeenCalledWith("user-1/media-2-thumb");
     expect(mockRemoveMediaBlob).toHaveBeenCalledTimes(4);
     expect(mockDelete).toHaveBeenCalledTimes(1);
+
+    // The whole point of the change: every blob removal must land before the
+    // users are deleted, or FK CASCADE takes the media rows (and their keys)
+    // out from under the enumeration.
+    const lastBlobCall = Math.max(
+      ...mockRemoveMediaBlob.mock.invocationCallOrder,
+    );
+    expect(lastBlobCall).toBeLessThan(deleteWhere.mock.invocationCallOrder[0]);
   });
 
   it("still deletes the users when there are no media rows to clean up", async () => {
@@ -195,7 +207,7 @@ describe("purgeExpiredDeletedAccounts", () => {
   });
 
   it("filters on the exact cutoff derived from `now` and DELETE_GRACE_PERIOD_DAYS", async () => {
-    const { db } = makeDb({ userRows: [] });
+    const { db } = makeDb({ userRows: [{ id: "user-1" }] });
     const now = new Date("2026-08-01T00:00:00.000Z");
     const expectedCutoff = new Date(
       now.getTime() - DELETE_GRACE_PERIOD_DAYS * MS_PER_DAY,
@@ -203,7 +215,25 @@ describe("purgeExpiredDeletedAccounts", () => {
 
     await purgeExpiredDeletedAccounts(db, now);
 
-    expect(mockLt).toHaveBeenCalledTimes(1);
-    expect(mockLt).toHaveBeenCalledWith(users.deletedAt, expectedCutoff);
+    // Called twice — once for the purgeable-user select, once for the delete —
+    // both from the same purgeCutoff, so both must carry the identical cutoff.
+    expect(mockLt).toHaveBeenCalledTimes(2);
+    expect(mockLt).toHaveBeenNthCalledWith(1, users.deletedAt, expectedCutoff);
+    expect(mockLt).toHaveBeenNthCalledWith(2, users.deletedAt, expectedCutoff);
+  });
+
+  it("propagates a delete failure (after blobs are gone) so the run is recorded as failed", async () => {
+    const { db, deleteReturning } = makeDb({
+      userRows: [{ id: "user-1" }],
+      mediaRows: [{ url: "user-1/media-1" }],
+    });
+    deleteReturning.mockRejectedValue(new Error("DB unreachable"));
+
+    await expect(purgeExpiredDeletedAccounts(db)).rejects.toThrow(
+      "DB unreachable",
+    );
+    // Blob cleanup already ran; the caller surfaces the failure rather than
+    // reporting a clean purge.
+    expect(mockRemoveMediaBlob).toHaveBeenCalledWith("user-1/media-1");
   });
 });

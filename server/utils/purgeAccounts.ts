@@ -112,19 +112,25 @@ export async function purgeExpiredDeletedAccounts(
     .from(users)
     .where(and(isNotNull(users.deletedAt), lt(users.deletedAt, cutoff)));
 
-  const purgedUserIds = purgeable.map((row) => row.id);
+  const candidateUserIds = purgeable.map((row) => row.id);
 
-  if (purgedUserIds.length === 0) {
+  if (candidateUserIds.length === 0) {
     return { purgedUserIds: [], purgedCount: 0 };
   }
 
   // Delete the blobs first, while the media rows still exist to name them.
-  await purgeUserMediaBlobs(db, purgedUserIds);
+  await purgeUserMediaBlobs(db, candidateUserIds);
 
-  await db.delete(users).where(inArray(users.id, purgedUserIds));
+  // Delete on the same cutoff predicate (not a blind delete-by-id) so a row
+  // that left the purgeable set between the select and here is never
+  // hard-deleted, and `.returning()` reports exactly what was removed.
+  const purged = await db
+    .delete(users)
+    .where(and(isNotNull(users.deletedAt), lt(users.deletedAt, cutoff)))
+    .returning({ id: users.id });
 
   return {
-    purgedUserIds,
-    purgedCount: purgedUserIds.length,
+    purgedUserIds: purged.map((row) => row.id),
+    purgedCount: purged.length,
   };
 }
