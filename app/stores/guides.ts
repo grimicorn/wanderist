@@ -256,9 +256,8 @@ export const useGuidesStore = defineStore("guides", () => {
     await markLoadSucceeded();
   }
 
-  // Only the like fields are spliced back in (not the whole row) so a
-  // concurrent edit to the same guide's other fields isn't clobbered by a
-  // like/unlike response that predates it — mirrors likeEntry in stores/entries.ts.
+  // Splices in only the like fields via replaceLikeState (see its comment);
+  // mirrors likeEntry in stores/entries.ts.
   async function likeGuide(id: string): Promise<Guide> {
     const updated = await apiFetch<Guide>(`/api/guides/${id}/like`, {
       method: "POST",
