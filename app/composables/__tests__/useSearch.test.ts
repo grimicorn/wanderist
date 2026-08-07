@@ -9,7 +9,13 @@ vi.useFakeTimers();
 
 const { useSearch } = await import("../useSearch");
 
-const EMPTY_GROUPS = { places: [], trips: [], entries: [], people: [] };
+const EMPTY_GROUPS = {
+  places: [],
+  trips: [],
+  entries: [],
+  guides: [],
+  people: [],
+};
 const DEBOUNCE_MS = 250;
 
 const SAMPLE_API_RESPONSE = {
@@ -24,6 +30,7 @@ const SAMPLE_API_RESPONSE = {
   ],
   trips: [{ id: "t-1", name: "Iceland Ring Road", status: "past" }],
   entries: [{ id: "e-1", title: "Harbor at 4am" }],
+  guides: [{ id: "g-1", title: "48 hours in Kyoto" }],
   people: [
     {
       id: "u-2",
@@ -198,6 +205,19 @@ describe("useSearch", () => {
     expect(entry.title).toBe("Harbor at 4am");
     expect(entry.icon).toBe("journal");
     expect(entry.href).toBe("/journal");
+  });
+
+  it("maps guides to SearchItems with layers icon and /guides href", async () => {
+    mockApiFetch.mockResolvedValue(SAMPLE_API_RESPONSE);
+    const { search, results } = useSearch();
+
+    await searchAndFlush(search, "kyoto");
+
+    const guide = results.value.guides[0];
+    expect(guide.id).toBe("g-1");
+    expect(guide.title).toBe("48 hours in Kyoto");
+    expect(guide.icon).toBe("layers");
+    expect(guide.href).toBe("/guides");
   });
 
   it("maps people to SearchItems with user icon and @handle as title", async () => {
