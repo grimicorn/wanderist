@@ -5,9 +5,9 @@
  * a real route. If a targeted route file is ever renamed or moved, the policy
  * key stops matching anything and the rate limit silently stops applying — no
  * test would fail and no error would be logged. This test fails loud instead
- * by asserting every configured key resolves to an actual handler file. (All
- * current targets are static paths; candidateHandlerPaths would need
- * extending to resolve a dynamic `:id` pattern back to its `[id]` file.)
+ * by asserting every configured key resolves to an actual handler file.
+ * candidateHandlerPaths translates a dynamic `:id` pattern back to its `[id]`
+ * file, so the guard also covers a future dynamic policy.
  */
 import { describe, it, expect } from "vitest";
 import { existsSync } from "node:fs";
@@ -41,7 +41,13 @@ function candidateHandlerPaths(method: string, apiPath: string): string[] {
       `Policy key "${method} ${apiPath}" is outside ${API_PATH_PREFIX}; extend candidateHandlerPaths to cover it.`,
     );
   }
-  const routeSegment = apiPath.slice(API_PATH_PREFIX.length);
+  // Nitro compiles a `[id]` file to a `:id` route pattern and a `[...slug]`
+  // file to `**`, so translate the pattern back to file syntax before
+  // resolving it to a path on disk.
+  const routeSegment = apiPath
+    .slice(API_PATH_PREFIX.length)
+    .replace(/:([^/]+)/g, "[$1]")
+    .replace(/\*\*:?([^/]*)/g, (_match, name) => `[...${name || "slug"}]`);
   const methodSuffix = method.toLowerCase();
 
   return [
@@ -122,6 +128,12 @@ describe("buildRoutePatternMatcher", () => {
     const matchRoute = buildRoutePatternMatcher(["/api/users/:id"]);
 
     expect(matchRoute("/api/trips")).toBeUndefined();
+  });
+
+  it("throws when two patterns collide on shape so no limit silently vanishes", () => {
+    expect(() =>
+      buildRoutePatternMatcher(["/api/trips/:id", "/api/trips/:tripId"]),
+    ).toThrow(/collide/);
   });
 });
 

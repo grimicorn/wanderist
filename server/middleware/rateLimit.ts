@@ -43,7 +43,10 @@ let hasWarnedAboutAnonymousBucket = false;
 // it can't be evaded by enumerating ids. Returns null when the path matches
 // no policied pattern.
 function resolveRouteKey(event: H3Event): string | null {
-  const pathWithoutQuery = event.path.split("?")[0];
+  // radix3 normalizes a single trailing slash on its own, but not repeated
+  // ones (`/api/media//`), so collapse those first to keep a doubled-slash
+  // path metered rather than slipping through unmatched.
+  const pathWithoutQuery = event.path.split("?")[0].replace(/\/{2,}$/, "/");
   const pattern = matchPolicyRoutePattern(pathWithoutQuery);
   if (!pattern) {
     return null;

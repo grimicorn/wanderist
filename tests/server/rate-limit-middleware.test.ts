@@ -181,6 +181,17 @@ describe("rate limit middleware", () => {
     });
   });
 
+  it("collapses repeated trailing slashes before matching a policy", () => {
+    const event = buildEvent("/api/media//", "POST", "user-1");
+
+    rateLimitMiddleware(event as never);
+
+    expect(mockConsume).toHaveBeenCalledWith("POST /api/media:user:user-1", {
+      limit: 20,
+      windowMs: 60_000,
+    });
+  });
+
   it("normalizes a HEAD request to the GET policy, since h3 runs the GET handler for it", () => {
     const event = buildEvent("/api/search", "HEAD", "user-1");
 

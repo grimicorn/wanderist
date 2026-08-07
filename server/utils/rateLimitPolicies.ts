@@ -47,7 +47,23 @@ export const RATE_LIMIT_POLICIES: Record<string, RateLimitPolicy> = {
 
 /** The path portion of a policy key ("POST /api/media" -> "/api/media"). */
 function routePatternOf(policyKey: string): string {
-  return policyKey.slice(policyKey.indexOf(" ") + 1);
+  const separatorIndex = policyKey.indexOf(" ");
+  if (separatorIndex === -1) {
+    throw new Error(
+      `Rate limit policy key "${policyKey}" is missing the "<METHOD> <path>" space separator.`,
+    );
+  }
+  return policyKey.slice(separatorIndex + 1);
+}
+
+// Two patterns of the same shape but different param names (/api/trips/:id vs
+// /api/trips/:tripId) both insert a placeholder child at the same depth;
+// radix3's lookup picks the first, so the second's policy would silently
+// never apply. Normalizing param names to a placeholder lets us detect that
+// collision and fail loud instead — the same drift the policy tests guard
+// against, caught at module load.
+function routeShapeOf(routePattern: string): string {
+  return routePattern.replace(/:[^/]+/g, ":param").replace(/\/+$/, "");
 }
 
 /**
@@ -64,13 +80,23 @@ export type RoutePatternMatcher = (path: string) => string | undefined;
  * trailing-slash normalization for free — the reason this defers to the
  * router instead of string-munching path segments. Isolated from the policy
  * map below so dynamic-pattern matching is unit-testable without a live
- * dynamic policy in production.
+ * dynamic policy in production. Throws on two patterns that collide on shape
+ * (see routeShapeOf).
  */
 export function buildRoutePatternMatcher(
   routePatterns: string[],
 ): RoutePatternMatcher {
   const router = createRouter<{ pattern: string }>();
+  const seenShapes = new Map<string, string>();
   for (const pattern of routePatterns) {
+    const shape = routeShapeOf(pattern);
+    const collidingPattern = seenShapes.get(shape);
+    if (collidingPattern) {
+      throw new Error(
+        `Rate limit route patterns "${collidingPattern}" and "${pattern}" collide; radix3 would silently match only one.`,
+      );
+    }
+    seenShapes.set(shape, pattern);
     router.insert(pattern, { pattern });
   }
   return (path) => router.lookup(path)?.pattern;
