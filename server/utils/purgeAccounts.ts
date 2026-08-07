@@ -40,6 +40,15 @@ function purgeCutoff(now: Date): Date {
 }
 
 /**
+ * The SQL WHERE clause identifying purgeable rows. Both the candidate select
+ * and the actual delete build from this one function so they can never drift
+ * into deleting a different set than was inspected.
+ */
+function purgeablePredicate(cutoff: Date) {
+  return and(isNotNull(users.deletedAt), lt(users.deletedAt, cutoff));
+}
+
+/**
  * The business rule this job enforces, extracted as a pure, directly
  * testable predicate: a row is purgeable once more than
  * DELETE_GRACE_PERIOD_DAYS have passed since `deletedAt`. A never-deleted
@@ -86,25 +95,46 @@ async function removeStoredBlobs(storageKey: string): Promise<string[]> {
   return failedKeys;
 }
 
+interface UserMediaBlob {
+  userId: string;
+  url: string;
+}
+
 /**
- * Deletes the Netlify Blobs objects for every media row owned by any of
- * `userIds`. Must run before the users are deleted, because FK CASCADE
- * removes the media rows (and with them the only record of their blob keys)
- * the moment the users go. Returns any blob keys that failed to delete.
+ * Reads the blob storage key (and owner) of every media row belonging to any
+ * of `userIds`. Must run *before* the users are deleted: FK CASCADE removes
+ * the media rows (and with them the only record of their blob keys) the moment
+ * the users go, so the keys have to be captured into memory first.
  */
-async function purgeUserMediaBlobs(
+async function enumerateUserMediaBlobs(
   db: PurgeDb,
   userIds: string[],
-): Promise<string[]> {
-  const mediaRows = await db
-    .select({ url: media.url })
+): Promise<UserMediaBlob[]> {
+  return db
+    .select({ userId: media.userId, url: media.url })
     .from(media)
     .where(inArray(media.userId, userIds));
+}
 
+/**
+ * Deletes the Netlify Blobs objects for the pre-enumerated media rows, but
+ * only for users that were actually purged (`purgedUserIds`). Scoping to the
+ * confirmed-purged set means a delete that removed fewer rows than expected
+ * (or none, on failure) never destroys a surviving account's photos. Returns
+ * any blob keys that failed to delete.
+ */
+async function removeBlobsForPurgedUsers(
+  mediaBlobs: UserMediaBlob[],
+  purgedUserIds: string[],
+): Promise<string[]> {
+  const purgedSet = new Set(purgedUserIds);
   const failedBlobKeys: string[] = [];
 
-  for (const mediaRow of mediaRows) {
-    const failures = await removeStoredBlobs(mediaRow.url);
+  for (const mediaBlob of mediaBlobs) {
+    if (!purgedSet.has(mediaBlob.userId)) {
+      continue;
+    }
+    const failures = await removeStoredBlobs(mediaBlob.url);
     failedBlobKeys.push(...failures);
   }
 
@@ -118,10 +148,12 @@ async function purgeUserMediaBlobs(
  * per-table cleanup is needed for the DB.
  *
  * The one thing CASCADE cannot reach is Netlify Blobs: the media rows carry
- * the blob storage keys, so this enumerates and deletes those blobs *before*
- * deleting the users (once the users go, the cascade takes the media rows and
- * their keys with them). Without this, every purged account leaks its photo
- * bytes forever and they stay retrievable via /api/media/[id].
+ * the blob storage keys, so this captures those keys first, deletes the users,
+ * and only then deletes the blobs of the users it actually purged. Ordering
+ * blob removal *after* the row delete means a failed delete leaves orphaned
+ * bytes (recoverable, surfaced via failedBlobKeys) rather than destroying the
+ * media of an account that survived. Without any of this, every purged account
+ * leaks its photo bytes forever and they stay retrievable via /api/media/[id].
  *
  * Rows with `deletedAt` still null (never deleted) or within the grace
  * period are left untouched.
@@ -135,7 +167,7 @@ export async function purgeExpiredDeletedAccounts(
   const purgeable = await db
     .select({ id: users.id })
     .from(users)
-    .where(and(isNotNull(users.deletedAt), lt(users.deletedAt, cutoff)));
+    .where(purgeablePredicate(cutoff));
 
   const candidateUserIds = purgeable.map((row) => row.id);
 
@@ -143,20 +175,28 @@ export async function purgeExpiredDeletedAccounts(
     return { purgedUserIds: [], purgedCount: 0, failedBlobKeys: [] };
   }
 
-  // Delete the blobs first, while the media rows still exist to name them.
-  const failedBlobKeys = await purgeUserMediaBlobs(db, candidateUserIds);
+  // Capture the blob keys while the media rows still exist to name them.
+  const mediaBlobs = await enumerateUserMediaBlobs(db, candidateUserIds);
 
   // Delete on the same cutoff predicate (not a blind delete-by-id) so a row
   // that left the purgeable set between the select and here is never
-  // hard-deleted, and `.returning()` reports exactly what was removed.
+  // hard-deleted; `.returning()` reports exactly what was removed.
   const purged = await db
     .delete(users)
-    .where(and(isNotNull(users.deletedAt), lt(users.deletedAt, cutoff)))
+    .where(purgeablePredicate(cutoff))
     .returning({ id: users.id });
 
+  const purgedUserIds = purged.map((row) => row.id);
+
+  // Only now, with the rows provably gone, remove the blobs.
+  const failedBlobKeys = await removeBlobsForPurgedUsers(
+    mediaBlobs,
+    purgedUserIds,
+  );
+
   return {
-    purgedUserIds: purged.map((row) => row.id),
-    purgedCount: purged.length,
+    purgedUserIds,
+    purgedCount: purgedUserIds.length,
     failedBlobKeys,
   };
 }

@@ -98,31 +98,36 @@ describe("isPurgeable", () => {
 type Rows = Record<string, unknown>[];
 
 // A chainable drizzle fake. select().from(table).where() resolves to the
-// purgeable users when queried against `users` and to media rows when queried
-// against `media`, so one stub answers both the user lookup and the blob-key
-// enumeration. delete().where() records that a delete ran.
-function makeDb(options: { userRows?: Rows; mediaRows?: Rows }) {
-  // The delete re-runs the cutoff predicate and reports the rows it removed
-  // via `.returning()`; the authoritative purged set is the same userRows the
-  // select produced.
-  const deleteReturning = vi.fn().mockResolvedValue(options.userRows ?? []);
+// purgeable users (queried against `users`) or the media rows (queried against
+// `media`), with a distinct where() mock per table so a test can assert their
+// relative call order. delete().where().returning() resolves the purged set —
+// separate from userRows so a test can model a delete that removed a subset.
+function makeDb(options: {
+  userRows?: Rows;
+  mediaRows?: Rows;
+  purgedRows?: Rows;
+}) {
+  const deleteReturning = vi
+    .fn()
+    .mockResolvedValue(options.purgedRows ?? options.userRows ?? []);
   const deleteWhere = vi.fn(() => ({ returning: deleteReturning }));
   const mockDelete = vi.fn(() => ({ where: deleteWhere }));
 
-  function rowsFor(table: unknown): Rows {
+  const userSelectWhere = vi.fn().mockResolvedValue(options.userRows ?? []);
+  const mediaSelectWhere = vi.fn().mockResolvedValue(options.mediaRows ?? []);
+
+  function whereForTable(table: unknown) {
     if (table === users) {
-      return options.userRows ?? [];
+      return userSelectWhere;
     }
     if (table === media) {
-      return options.mediaRows ?? [];
+      return mediaSelectWhere;
     }
-    return [];
+    return vi.fn().mockResolvedValue([]);
   }
 
   const mockSelect = vi.fn(() => ({
-    from: vi.fn((table: unknown) => ({
-      where: vi.fn().mockResolvedValue(rowsFor(table)),
-    })),
+    from: vi.fn((table: unknown) => ({ where: whereForTable(table) })),
   }));
 
   const db = {
@@ -130,7 +135,7 @@ function makeDb(options: { userRows?: Rows; mediaRows?: Rows }) {
     delete: mockDelete,
   } as unknown as Parameters<typeof purgeExpiredDeletedAccounts>[0];
 
-  return { db, mockDelete, deleteWhere, deleteReturning };
+  return { db, mockDelete, deleteWhere, deleteReturning, mediaSelectWhere };
 }
 
 describe("purgeExpiredDeletedAccounts", () => {
@@ -155,10 +160,13 @@ describe("purgeExpiredDeletedAccounts", () => {
     });
   });
 
-  it("deletes every purged user's media blobs (original + thumbnail) before deleting the users", async () => {
-    const { db, mockDelete, deleteWhere } = makeDb({
+  it("deletes every purged user's media blobs (original + thumbnail)", async () => {
+    const { db, mockDelete } = makeDb({
       userRows: [{ id: "user-1" }],
-      mediaRows: [{ url: "user-1/media-1" }, { url: "user-1/media-2" }],
+      mediaRows: [
+        { userId: "user-1", url: "user-1/media-1" },
+        { userId: "user-1", url: "user-1/media-2" },
+      ],
     });
 
     await purgeExpiredDeletedAccounts(db);
@@ -169,20 +177,35 @@ describe("purgeExpiredDeletedAccounts", () => {
     expect(mockRemoveMediaBlob).toHaveBeenCalledWith("user-1/media-2-thumb");
     expect(mockRemoveMediaBlob).toHaveBeenCalledTimes(4);
     expect(mockDelete).toHaveBeenCalledTimes(1);
+  });
 
-    // The whole point of the change: every blob removal must land before the
-    // users are deleted, or FK CASCADE takes the media rows (and their keys)
-    // out from under the enumeration.
-    const lastBlobCall = Math.max(
+  it("captures the blob keys before deleting the users, then removes blobs after", async () => {
+    const { db, deleteWhere, mediaSelectWhere } = makeDb({
+      userRows: [{ id: "user-1" }],
+      mediaRows: [{ userId: "user-1", url: "user-1/media-1" }],
+    });
+
+    await purgeExpiredDeletedAccounts(db);
+
+    // Enumeration must precede the delete, or FK CASCADE removes the media
+    // rows (and their keys) before they can be read.
+    expect(mediaSelectWhere.mock.invocationCallOrder[0]).toBeLessThan(
+      deleteWhere.mock.invocationCallOrder[0],
+    );
+    // Blob removal must follow the delete, so a failed delete never destroys a
+    // surviving account's photos.
+    const firstBlobCall = Math.min(
       ...mockRemoveMediaBlob.mock.invocationCallOrder,
     );
-    expect(lastBlobCall).toBeLessThan(deleteWhere.mock.invocationCallOrder[0]);
+    expect(firstBlobCall).toBeGreaterThan(
+      deleteWhere.mock.invocationCallOrder[0],
+    );
   });
 
   it("scopes the media enumeration to the purged users (never every user's blobs)", async () => {
     const { db } = makeDb({
       userRows: [{ id: "user-1" }, { id: "user-2" }],
-      mediaRows: [{ url: "user-1/media-1" }],
+      mediaRows: [{ userId: "user-1", url: "user-1/media-1" }],
     });
 
     await purgeExpiredDeletedAccounts(db);
@@ -191,6 +214,29 @@ describe("purgeExpiredDeletedAccounts", () => {
       "user-1",
       "user-2",
     ]);
+  });
+
+  it("only removes blobs of users the delete actually purged", async () => {
+    // user-2 was a candidate but the delete removed only user-1 (models a row
+    // that left the purgeable set between select and delete). user-2's blob
+    // must survive.
+    const { db } = makeDb({
+      userRows: [{ id: "user-1" }, { id: "user-2" }],
+      purgedRows: [{ id: "user-1" }],
+      mediaRows: [
+        { userId: "user-1", url: "user-1/media-1" },
+        { userId: "user-2", url: "user-2/media-9" },
+      ],
+    });
+
+    const result = await purgeExpiredDeletedAccounts(db);
+
+    expect(mockRemoveMediaBlob).toHaveBeenCalledWith("user-1/media-1");
+    expect(mockRemoveMediaBlob).not.toHaveBeenCalledWith("user-2/media-9");
+    expect(mockRemoveMediaBlob).not.toHaveBeenCalledWith(
+      "user-2/media-9-thumb",
+    );
+    expect(result.purgedUserIds).toEqual(["user-1"]);
   });
 
   it("still deletes the users when there are no media rows to clean up", async () => {
@@ -205,13 +251,13 @@ describe("purgeExpiredDeletedAccounts", () => {
     expect(mockDelete).toHaveBeenCalledTimes(1);
   });
 
-  it("treats a blob-removal failure as best-effort: logs it but still purges the account", async () => {
+  it("treats a blob-removal failure as best-effort: logs it, surfaces the key, still purges", async () => {
     const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     mockRemoveMediaBlob.mockRejectedValueOnce(new Error("blob store down"));
 
     const { db, mockDelete } = makeDb({
       userRows: [{ id: "user-1" }],
-      mediaRows: [{ url: "user-1/media-1" }],
+      mediaRows: [{ userId: "user-1", url: "user-1/media-1" }],
     });
 
     const result = await purgeExpiredDeletedAccounts(db);
@@ -224,6 +270,33 @@ describe("purgeExpiredDeletedAccounts", () => {
       purgedCount: 1,
       failedBlobKeys: ["user-1/media-1"],
     });
+    consoleSpy.mockRestore();
+  });
+
+  it("keeps going after a failure: one row's thumbnail failing does not skip the next row", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    mockRemoveMediaBlob.mockImplementation(async (key: string) => {
+      if (key === "user-1/media-1-thumb") {
+        throw new Error("blob store down");
+      }
+    });
+
+    const { db } = makeDb({
+      userRows: [{ id: "user-1" }],
+      mediaRows: [
+        { userId: "user-1", url: "user-1/media-1" },
+        { userId: "user-1", url: "user-1/media-2" },
+      ],
+    });
+
+    const result = await purgeExpiredDeletedAccounts(db);
+
+    // The failed key is the thumbnail branch; both rows are still fully
+    // attempted (4 calls), proving the failure did not short-circuit the loop.
+    expect(result.failedBlobKeys).toEqual(["user-1/media-1-thumb"]);
+    expect(mockRemoveMediaBlob).toHaveBeenCalledWith("user-1/media-2");
+    expect(mockRemoveMediaBlob).toHaveBeenCalledWith("user-1/media-2-thumb");
+    expect(mockRemoveMediaBlob).toHaveBeenCalledTimes(4);
     consoleSpy.mockRestore();
   });
 
@@ -251,24 +324,25 @@ describe("purgeExpiredDeletedAccounts", () => {
     await purgeExpiredDeletedAccounts(db, now);
 
     // Called twice — once for the purgeable-user select, once for the delete —
-    // both from the same purgeCutoff, so both must carry the identical cutoff.
+    // both from the same purgeablePredicate/purgeCutoff, so both must carry the
+    // identical cutoff.
     expect(mockLt).toHaveBeenCalledTimes(2);
     expect(mockLt).toHaveBeenNthCalledWith(1, users.deletedAt, expectedCutoff);
     expect(mockLt).toHaveBeenNthCalledWith(2, users.deletedAt, expectedCutoff);
   });
 
-  it("propagates a delete failure (after blobs are gone) so the run is recorded as failed", async () => {
+  it("propagates a delete failure and destroys no blobs (nothing removed before the delete)", async () => {
     const { db, deleteReturning } = makeDb({
       userRows: [{ id: "user-1" }],
-      mediaRows: [{ url: "user-1/media-1" }],
+      mediaRows: [{ userId: "user-1", url: "user-1/media-1" }],
     });
     deleteReturning.mockRejectedValue(new Error("DB unreachable"));
 
     await expect(purgeExpiredDeletedAccounts(db)).rejects.toThrow(
       "DB unreachable",
     );
-    // Blob cleanup already ran; the caller surfaces the failure rather than
-    // reporting a clean purge.
-    expect(mockRemoveMediaBlob).toHaveBeenCalledWith("user-1/media-1");
+    // Blobs are removed only after a successful delete, so a failed delete
+    // leaves the account's media fully intact for the next run to retry.
+    expect(mockRemoveMediaBlob).not.toHaveBeenCalled();
   });
 });
