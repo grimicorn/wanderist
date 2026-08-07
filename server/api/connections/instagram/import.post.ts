@@ -297,9 +297,16 @@ export default defineEventHandler(async (event) => {
   // timeout; the overflow resumes on the next call (already-imported items are
   // skipped above, so no cursor state is needed to know where to continue).
   const batch = pendingItems.slice(0, INSTAGRAM_IMPORT_MAX_ITEMS_PER_RUN);
-  const hasMore = pendingItems.length > batch.length;
 
   const { imported, errors } = await importBatch(userId, batch);
+
+  // Only advertise a resume when the run made progress. A failed item is never
+  // written to media.source_id, so it stays at the head of pendingItems; if a
+  // whole batch fails (e.g. every item's CDN asset 404s), re-running would
+  // re-slice the same stuck items forever. Stopping avoids that spin at the
+  // cost of not draining past a permanently-broken head — a durable
+  // failure-marker would be needed to skip such items (see follow-ups).
+  const hasMore = pendingItems.length > batch.length && imported > 0;
 
   return { imported, skipped, errors, hasMore };
 });

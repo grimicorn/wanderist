@@ -561,16 +561,15 @@ const importResultMessage = computed(() => {
   if (!result) {
     return "";
   }
+  const resumeHint = result.hasMore
+    ? " More remain, run import again to continue."
+    : "";
   if (result.errors.length > 0) {
     const errorCount = result.errors.length;
-    return `Import finished with ${errorCount} error${errorCount === 1 ? "" : "s"}`;
+    return `Import finished with ${errorCount} error${errorCount === 1 ? "" : "s"}.${resumeHint}`;
   }
   const photoCount = result.imported;
-  const summary = `Imported ${photoCount} photo${photoCount === 1 ? "" : "s"}`;
-  if (result.hasMore) {
-    return `${summary} — more remain, run import again to continue`;
-  }
-  return summary;
+  return `Imported ${photoCount} photo${photoCount === 1 ? "" : "s"}.${resumeHint}`;
 });
 
 const {

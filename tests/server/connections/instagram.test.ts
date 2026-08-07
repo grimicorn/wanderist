@@ -560,7 +560,7 @@ describe("POST /api/connections/instagram/import", () => {
     expect(mockFetchInstagramMedia).not.toHaveBeenCalled();
   });
 
-  it("returns { imported: 0, skipped: 0, errors: [] } when no geotagged photos exist", async () => {
+  it("returns { imported: 0, skipped: 0, errors: [], hasMore: false } when no geotagged photos exist", async () => {
     const result = await call(importHandler, makeEvent());
 
     expect(result).toEqual({
@@ -876,5 +876,62 @@ describe("POST /api/connections/instagram/import", () => {
       hasMore: false,
     });
     expect(mockFetchInstagramImage).toHaveBeenCalledTimes(2);
+  });
+
+  it("excludes already-imported items before applying the per-run cap", async () => {
+    // 2 already-imported + 3 new; the cap of 2 must slice the *pending* items,
+    // not the raw geotagged list — so 2 import, 2 are skipped, 1 remains.
+    mockFilterGeotaggedMedia.mockReturnValue([
+      makeGeotaggedItem("ig-old-1"),
+      makeGeotaggedItem("ig-old-2"),
+      makeGeotaggedItem("ig-new-1"),
+      makeGeotaggedItem("ig-new-2"),
+      makeGeotaggedItem("ig-new-3"),
+    ]);
+    mockFetchInstagramImage.mockResolvedValue(Buffer.from("img"));
+    mockGetDb.mockReturnValue(makeDbWithTransaction());
+
+    mockDbSelectWhere.mockImplementationOnce(() => {
+      // Connection lookup — needs .limit().
+      const thenable = Promise.resolve([] as unknown[]);
+      return Object.assign(thenable, { limit: mockDbSelectLimit });
+    });
+    mockDbSelectWhere.mockImplementationOnce(() =>
+      // Dedupe query — two ids already imported.
+      Promise.resolve([{ sourceId: "ig-old-1" }, { sourceId: "ig-old-2" }]),
+    );
+
+    const result = await call(importHandler, makeEvent());
+
+    expect(result).toEqual({
+      imported: 2,
+      skipped: 2,
+      errors: [],
+      hasMore: true,
+    });
+    expect(mockFetchInstagramImage).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not advertise a resume when the whole batch fails", async () => {
+    // Three new items overflow the cap of 2, but every import fails, so no
+    // source_id is written; re-running would re-slice the same stuck items.
+    // hasMore must be false to avoid an endless retry loop.
+    mockFilterGeotaggedMedia.mockReturnValue([
+      makeGeotaggedItem("ig-a"),
+      makeGeotaggedItem("ig-b"),
+      makeGeotaggedItem("ig-c"),
+    ]);
+    mockFetchInstagramImage.mockRejectedValue(new Error("CDN 404"));
+    mockGetDb.mockReturnValue(makeDbWithTransaction());
+
+    const result = (await call(importHandler, makeEvent())) as {
+      imported: number;
+      hasMore: boolean;
+      errors: string[];
+    };
+
+    expect(result.imported).toBe(0);
+    expect(result.hasMore).toBe(false);
+    expect(result.errors).toHaveLength(2);
   });
 });
