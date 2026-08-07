@@ -35,6 +35,9 @@ const {
   mockEnsureFreshInstagramToken,
   MockInstagramTokenExpiredError,
   mockPutMediaBlob,
+  mockToThumbnailKey,
+  mockProbeImageDimensions,
+  mockGenerateThumbnail,
   mockGetCookie,
   mockSetCookie,
   mockDeleteCookie,
@@ -108,6 +111,12 @@ const {
     mockEnsureFreshInstagramToken: vi.fn().mockResolvedValue("long-token"),
     MockInstagramTokenExpiredError: class extends Error {},
     mockPutMediaBlob: vi.fn().mockResolvedValue(undefined),
+    // Mirrors the real suffix convention so tests can assert the derived key.
+    mockToThumbnailKey: vi.fn((storageKey: string) => `${storageKey}-thumb`),
+    mockProbeImageDimensions: vi
+      .fn()
+      .mockResolvedValue({ width: 1200, height: 800 }),
+    mockGenerateThumbnail: vi.fn().mockResolvedValue(Buffer.from("thumb")),
     mockGetCookie: vi.fn(),
     mockSetCookie: vi.fn(),
     mockDeleteCookie: vi.fn(),
@@ -170,6 +179,12 @@ vi.mock("../../../server/utils/planLimits", () => ({
 
 vi.mock("../../../server/utils/mediaStore", () => ({
   putMediaBlob: mockPutMediaBlob,
+  toThumbnailKey: mockToThumbnailKey,
+}));
+
+vi.mock("../../../server/utils/imageProcessing", () => ({
+  probeImageDimensions: mockProbeImageDimensions,
+  generateThumbnail: mockGenerateThumbnail,
 }));
 
 // Nitro/h3 globals
@@ -532,26 +547,32 @@ describe("DELETE /api/connections/instagram", () => {
 // ---------------------------------------------------------------------------
 
 describe("POST /api/connections/instagram/import", () => {
-  function makeTransactionDb(): object {
+  // Optional `capturedInserts` records every value object passed to an insert
+  // inside the transaction, so tests can assert on the media row's fields.
+  function makeTransactionDb(
+    capturedInserts?: Record<string, unknown>[],
+  ): object {
     const txSelectLimit = vi.fn().mockResolvedValue([]);
     const txSelectWhere = vi.fn(() => ({ limit: txSelectLimit }));
     const txSelectFrom = vi.fn(() => ({ where: txSelectWhere }));
     const txSelect = vi.fn(() => ({ from: txSelectFrom }));
+    const txInsertValues = vi.fn((values: Record<string, unknown>) => {
+      capturedInserts?.push(values);
+      return { returning: vi.fn().mockResolvedValue([{ id: "new-id" }]) };
+    });
     return {
-      insert: vi.fn(() => ({
-        values: vi.fn(() => ({
-          returning: vi.fn().mockResolvedValue([{ id: "new-id" }]),
-        })),
-      })),
+      insert: vi.fn(() => ({ values: txInsertValues })),
       select: txSelect,
     };
   }
 
-  function makeDbWithTransaction(): object {
+  function makeDbWithTransaction(
+    capturedInserts?: Record<string, unknown>[],
+  ): object {
     const mockTransaction = vi
       .fn()
       .mockImplementation(async (callback: (db: object) => Promise<unknown>) =>
-        callback(makeTransactionDb()),
+        callback(makeTransactionDb(capturedInserts)),
       );
     return {
       insert: mockDbInsert,
@@ -574,6 +595,14 @@ describe("POST /api/connections/instagram/import", () => {
       return Object.assign(thenable, { limit: mockDbSelectLimit });
     });
     mockEnsureFreshInstagramToken.mockResolvedValue("long-token");
+    mockDecryptToken.mockReturnValue("long-token");
+    // clearAllMocks() wipes call records but neither resets implementations nor
+    // drains the mock*Once queues, so re-establish the image-pipeline defaults
+    // here — otherwise a test that sets a one-off or null return leaks into the
+    // next test.
+    mockPutMediaBlob.mockReset().mockResolvedValue(undefined);
+    mockProbeImageDimensions.mockResolvedValue({ width: 1200, height: 800 });
+    mockGenerateThumbnail.mockResolvedValue(Buffer.from("thumb"));
     mockFetchInstagramMedia.mockResolvedValue({ data: [] });
     mockFilterGeotaggedMedia.mockReturnValue([]);
     mockAssertInstagramSyncAllowed.mockResolvedValue(undefined);
@@ -653,6 +682,114 @@ describe("POST /api/connections/instagram/import", () => {
     expect(mockFetchInstagramImage).toHaveBeenCalledWith(
       "https://cdn.instagram.com/photo.jpg",
     );
+  });
+
+  const geotaggedPhoto = {
+    id: "ig-media-thumb",
+    media_type: "IMAGE",
+    media_url: "https://cdn.instagram.com/photo.jpg",
+    timestamp: "2024-01-01T00:00:00Z",
+    permalink: "https://www.instagram.com/p/abc/",
+    location: { name: "Paris", latitude: 48.8566, longitude: 2.3522 },
+  };
+
+  it("probes dimensions and stores original + thumbnail blobs for each imported photo", async () => {
+    const imageBuffer = Buffer.from("real-image-bytes");
+    const thumbnailBuffer = Buffer.from("thumb");
+    mockFilterGeotaggedMedia.mockReturnValue([geotaggedPhoto]);
+    mockFetchInstagramImage.mockResolvedValue(imageBuffer);
+    mockGenerateThumbnail.mockResolvedValue(thumbnailBuffer);
+    mockGetDb.mockReturnValue(makeDbWithTransaction());
+
+    await call(importHandler, makeEvent());
+
+    expect(mockProbeImageDimensions).toHaveBeenCalledWith(imageBuffer);
+    expect(mockGenerateThumbnail).toHaveBeenCalledWith(imageBuffer);
+    // storeMediaBlobs writes the original first, then the thumbnail under the
+    // original key's `-thumb` suffix. Deriving the expected thumbnail key from
+    // the actual original key pins the pairing (not two independent matchers).
+    expect(mockPutMediaBlob).toHaveBeenCalledTimes(2);
+    const originalKey = mockPutMediaBlob.mock.calls[0][0] as string;
+    expect(originalKey).toMatch(/^user-1\//);
+    expect(mockPutMediaBlob.mock.calls[0]).toEqual([
+      originalKey,
+      imageBuffer,
+      "image/jpeg",
+    ]);
+    expect(mockPutMediaBlob.mock.calls[1]).toEqual([
+      `${originalKey}-thumb`,
+      thumbnailBuffer,
+      "image/jpeg",
+    ]);
+  });
+
+  it("records the probed width/height on the imported media row", async () => {
+    const capturedInserts: Record<string, unknown>[] = [];
+    mockFilterGeotaggedMedia.mockReturnValue([geotaggedPhoto]);
+    mockFetchInstagramImage.mockResolvedValue(Buffer.from("img"));
+    mockGetDb.mockReturnValue(makeDbWithTransaction(capturedInserts));
+
+    await call(importHandler, makeEvent());
+
+    const mediaInsert = capturedInserts.find((row) => "sourceId" in row);
+    expect(mediaInsert).toMatchObject({
+      width: 1200,
+      height: 800,
+      source: "instagram",
+    });
+  });
+
+  it("still counts the photo as imported when the thumbnail blob store fails", async () => {
+    // Rows are committed before storeMediaBlobs runs, so a thumbnail store
+    // rejection must degrade to a missing thumbnail — never a miscounted
+    // import for a photo that is already in the DB and visible in the UI.
+    mockFilterGeotaggedMedia.mockReturnValue([geotaggedPhoto]);
+    mockFetchInstagramImage.mockResolvedValue(Buffer.from("img"));
+    mockPutMediaBlob
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("blob store down"));
+    mockGetDb.mockReturnValue(makeDbWithTransaction());
+
+    const result = await call(importHandler, makeEvent());
+
+    expect(result).toMatchObject({ imported: 1, errors: [] });
+    // Both stores were attempted — the failure branch actually ran.
+    expect(mockPutMediaBlob).toHaveBeenCalledTimes(2);
+  });
+
+  it("reports an error and does not count the photo when the original blob store fails", async () => {
+    // The original store runs after the transaction commits, so a failure here
+    // leaves a committed media row with a broken URL (documented tradeoff) and
+    // must surface as a per-item error rather than a silent success.
+    mockFilterGeotaggedMedia.mockReturnValue([geotaggedPhoto]);
+    mockFetchInstagramImage.mockResolvedValue(Buffer.from("img"));
+    mockPutMediaBlob.mockRejectedValueOnce(new Error("blob store down"));
+    mockGetDb.mockReturnValue(makeDbWithTransaction());
+
+    const result = (await call(importHandler, makeEvent())) as {
+      imported: number;
+      errors: string[];
+    };
+
+    expect(result.imported).toBe(0);
+    expect(result.errors[0]).toContain("ig-media-thumb");
+  });
+
+  it("still imports the original with null dimensions when the image can't be processed", async () => {
+    const capturedInserts: Record<string, unknown>[] = [];
+    mockFilterGeotaggedMedia.mockReturnValue([geotaggedPhoto]);
+    mockFetchInstagramImage.mockResolvedValue(Buffer.from("img"));
+    mockProbeImageDimensions.mockResolvedValue(null);
+    mockGenerateThumbnail.mockResolvedValue(null);
+    mockGetDb.mockReturnValue(makeDbWithTransaction(capturedInserts));
+
+    const result = await call(importHandler, makeEvent());
+
+    expect(result).toMatchObject({ imported: 1, errors: [] });
+    const mediaInsert = capturedInserts.find((row) => "sourceId" in row);
+    expect(mediaInsert).toMatchObject({ width: null, height: null });
+    // No thumbnail generated → only the original blob is stored.
+    expect(mockPutMediaBlob).toHaveBeenCalledTimes(1);
   });
 
   it("skips items already imported and increments skipped count", async () => {

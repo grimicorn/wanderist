@@ -13,8 +13,19 @@ import {
   filterGeotaggedMedia,
   INSTAGRAM_OAUTH_AUTHORIZE_URL,
   INSTAGRAM_SCOPES,
+  INSTAGRAM_MAX_MEDIA_PAGES,
   type InstagramMediaItem,
 } from "../../../server/utils/instagramClient";
+
+function makeMediaItem(id: string): InstagramMediaItem {
+  return {
+    id,
+    media_type: "IMAGE",
+    media_url: `https://cdn.ig.com/${id}.jpg`,
+    timestamp: "2024-01-01T00:00:00Z",
+    permalink: `https://ig.com/p/${id}`,
+  };
+}
 
 function makeFetchResponse(body: unknown, ok = true, status = 200): Response {
   return {
@@ -197,6 +208,8 @@ describe("fetchInstagramUser", () => {
 describe("fetchInstagramMedia", () => {
   beforeEach(() => {
     vi.stubGlobal("fetch", vi.fn());
+    // The walk warns on truncation / off-host cursors — silence expected noise.
+    vi.spyOn(console, "warn").mockImplementation(() => {});
   });
 
   it("returns the media response with a data array", async () => {
@@ -223,6 +236,190 @@ describe("fetchInstagramMedia", () => {
     vi.mocked(fetch).mockResolvedValue(makeFetchResponse({}, false, 400));
 
     await expect(fetchInstagramMedia("bad-token")).rejects.toThrow();
+  });
+
+  it("follows paging.next and concatenates items across pages", async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        makeFetchResponse({
+          data: [makeMediaItem("p1a"), makeMediaItem("p1b")],
+          paging: {
+            next: "https://graph.instagram.com/me/media?after=cursor1",
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        makeFetchResponse({
+          data: [makeMediaItem("p2a")],
+          paging: {
+            next: "https://graph.instagram.com/me/media?after=cursor2",
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        makeFetchResponse({
+          data: [makeMediaItem("p3a")],
+          // No paging.next — the walk stops here.
+        }),
+      );
+
+    const result = await fetchInstagramMedia("access-token");
+
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(3);
+    expect(result.data.map((item) => item.id)).toEqual([
+      "p1a",
+      "p1b",
+      "p2a",
+      "p3a",
+    ]);
+  });
+
+  it("requests each paging.next URL verbatim", async () => {
+    const nextUrl = "https://graph.instagram.com/me/media?after=opaque-cursor";
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        makeFetchResponse({
+          data: [makeMediaItem("a")],
+          paging: { next: nextUrl },
+        }),
+      )
+      .mockResolvedValueOnce(makeFetchResponse({ data: [makeMediaItem("b")] }));
+
+    await fetchInstagramMedia("access-token");
+
+    const secondCallUrl = vi.mocked(fetch).mock.calls[1]![0] as string;
+    expect(secondCallUrl).toBe(nextUrl);
+  });
+
+  it("stops after INSTAGRAM_MAX_MEDIA_PAGES even when paging.next persists", async () => {
+    // Every page reports another next cursor; the bound must cut the walk off.
+    // Each page carries a unique id so the item count reflects pages fetched.
+    let pageIndex = 0;
+    vi.mocked(fetch).mockImplementation(() => {
+      pageIndex += 1;
+      return Promise.resolve(
+        makeFetchResponse({
+          data: [makeMediaItem(`x${pageIndex}`)],
+          paging: {
+            next: "https://graph.instagram.com/me/media?after=endless",
+          },
+        }),
+      );
+    });
+
+    const result = await fetchInstagramMedia("access-token");
+
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(INSTAGRAM_MAX_MEDIA_PAGES);
+    expect(result.data).toHaveLength(INSTAGRAM_MAX_MEDIA_PAGES);
+  });
+
+  it("makes a single request when the first page has no paging.next", async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      makeFetchResponse({ data: [makeMediaItem("only")] }),
+    );
+
+    const result = await fetchInstagramMedia("access-token");
+
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1);
+    expect(result.data).toHaveLength(1);
+  });
+
+  it("does not follow a paging.next that points off the Instagram host", async () => {
+    const evilUrl = "https://evil.example.com/steal?token=leak";
+    vi.mocked(fetch).mockResolvedValueOnce(
+      makeFetchResponse({
+        data: [makeMediaItem("a")],
+        paging: { next: evilUrl },
+      }),
+    );
+
+    const result = await fetchInstagramMedia("access-token");
+
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1);
+    expect(result.data.map((item) => item.id)).toEqual(["a"]);
+    const fetchedUrls = vi
+      .mocked(fetch)
+      .mock.calls.map((call) => String(call[0]));
+    expect(fetchedUrls).not.toContain(evilUrl);
+  });
+
+  it("stops on a null paging.next without throwing", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      makeFetchResponse({
+        data: [makeMediaItem("a")],
+        paging: { next: null },
+      }),
+    );
+
+    const result = await fetchInstagramMedia("access-token");
+
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1);
+    expect(result.data.map((item) => item.id)).toEqual(["a"]);
+  });
+
+  it("keeps earlier pages when a later page fetch fails", async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        makeFetchResponse({
+          data: [makeMediaItem("p1")],
+          paging: {
+            next: "https://graph.instagram.com/me/media?after=cursor1",
+          },
+        }),
+      )
+      .mockResolvedValueOnce(makeFetchResponse({}, false, 429));
+
+    const result = await fetchInstagramMedia("access-token");
+
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(2);
+    expect(result.data.map((item) => item.id)).toEqual(["p1"]);
+  });
+
+  it("throws when the first page fails even after retriable pages", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(makeFetchResponse({}, false, 429));
+
+    await expect(fetchInstagramMedia("access-token")).rejects.toThrow();
+  });
+
+  it("deduplicates items that repeat across pages by id", async () => {
+    // A media item can appear on two pages when the account changes mid-walk;
+    // the aggregated result must contain one entry per id.
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        makeFetchResponse({
+          data: [makeMediaItem("dup"), makeMediaItem("p1")],
+          paging: {
+            next: "https://graph.instagram.com/me/media?after=cursor1",
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        makeFetchResponse({
+          data: [makeMediaItem("dup"), makeMediaItem("p2")],
+        }),
+      );
+
+    const result = await fetchInstagramMedia("access-token");
+
+    expect(result.data.map((item) => item.id)).toEqual(["dup", "p1", "p2"]);
+  });
+
+  it("tolerates a page whose body omits the data array", async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        makeFetchResponse({
+          data: [makeMediaItem("a")],
+          paging: {
+            next: "https://graph.instagram.com/me/media?after=cursor1",
+          },
+        }),
+      )
+      .mockResolvedValueOnce(makeFetchResponse({ paging: {} }));
+
+    const result = await fetchInstagramMedia("access-token");
+
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(2);
+    expect(result.data.map((item) => item.id)).toEqual(["a"]);
   });
 });
 

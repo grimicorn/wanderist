@@ -31,6 +31,11 @@ export const INSTAGRAM_MEDIA_FIELDS =
 
 export const INSTAGRAM_MEDIA_LIMIT = 50;
 
+// Upper bound on how many /me/media pages a single import follows via
+// paging.next. Caps a run at INSTAGRAM_MAX_MEDIA_PAGES * INSTAGRAM_MEDIA_LIMIT
+// items so a very large account can't spin the handler indefinitely.
+export const INSTAGRAM_MAX_MEDIA_PAGES = 10;
+
 // Only image types can carry location metadata.
 export const INSTAGRAM_GEOTAGGED_MEDIA_TYPES = new Set([
   "IMAGE",
@@ -232,7 +237,70 @@ export async function fetchInstagramUser(
 }
 
 /**
- * Fetches recent media for the authenticated user.
+ * Fetches a single /me/media page from a fully-formed URL. Instagram's
+ * paging.next already carries the fields, limit, cursor, and access_token, so
+ * this seam is reused verbatim for both the first request and every follow-up.
+ */
+async function fetchInstagramMediaPage(
+  url: string,
+): Promise<InstagramMediaResponse> {
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(
+      `Instagram media fetch failed (${response.status}): ${text}`,
+    );
+  }
+
+  return response.json() as Promise<InstagramMediaResponse>;
+}
+
+/**
+ * Resolves the next page URL to follow, or undefined to stop. Only cursors
+ * that stay on the Instagram Graph host are followed: a `next` pointing
+ * elsewhere would be a server-side request forgery seam and never occurs in a
+ * legitimate response, so it's rejected loudly rather than fetched.
+ */
+function resolveNextPageUrl(
+  paging: InstagramMediaResponse["paging"],
+): string | undefined {
+  const next = paging?.next;
+  // Catches undefined, null, and "" — a real API sends an explicit null when
+  // there's no further page, which new URL() would otherwise choke on.
+  if (!next) {
+    return undefined;
+  }
+  const graphOrigin = new URL(INSTAGRAM_GRAPH_BASE_URL).origin;
+  if (new URL(next).origin === graphOrigin) {
+    return next;
+  }
+  console.warn(
+    `fetchInstagramMedia: ignoring off-host paging.next (${new URL(next).origin})`,
+  );
+  return undefined;
+}
+
+/**
+ * Deduplicates media items by id, keeping one entry per id. Cursor paging is
+ * not a consistent snapshot, so a media item can appear on two pages if the
+ * account changes mid-walk; without this the import's unique (user, source,
+ * source_id) index would reject the second copy as a spurious error.
+ */
+function dedupeById(items: InstagramMediaItem[]): InstagramMediaItem[] {
+  return [...new Map(items.map((item) => [item.id, item])).values()];
+}
+
+/**
+ * Fetches the authenticated user's media, following paging.next up to
+ * INSTAGRAM_MAX_MEDIA_PAGES so imports reach geotagged photos older than the
+ * most recent batch. Returns one response whose `data` concatenates every
+ * fetched page, deduplicated by id.
+ *
+ * A failure on the first page throws (bad token / no data is genuinely fatal);
+ * a failure on a later page (e.g. a rate-limit 429 deep in the walk) stops the
+ * walk and returns the pages already gathered rather than voiding them, logging
+ * why. `paging` is the last page seen and is not a reliable truncation signal.
  */
 export async function fetchInstagramMedia(
   accessToken: string,
@@ -243,18 +311,39 @@ export async function fetchInstagramMedia(
     access_token: accessToken,
   });
 
-  const response = await fetch(
-    `${INSTAGRAM_GRAPH_BASE_URL}/me/media?${query.toString()}`,
-  );
+  const aggregatedData: InstagramMediaItem[] = [];
+  let lastPaging: InstagramMediaResponse["paging"];
+  let nextUrl: string | undefined =
+    `${INSTAGRAM_GRAPH_BASE_URL}/me/media?${query.toString()}`;
+  let page = 0;
 
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(
-      `Instagram media fetch failed (${response.status}): ${text}`,
+  for (; nextUrl !== undefined && page < INSTAGRAM_MAX_MEDIA_PAGES; page += 1) {
+    let pageResponse: InstagramMediaResponse;
+    try {
+      pageResponse = await fetchInstagramMediaPage(nextUrl);
+    } catch (error) {
+      if (page === 0) {
+        throw error;
+      }
+      console.warn(
+        `fetchInstagramMedia: stopping after page ${page}: ${String(error)}`,
+      );
+      break;
+    }
+    // Defensive against a malformed page body: the documented contract always
+    // includes `data`, but an error envelope or edge-cached body may omit it.
+    aggregatedData.push(...(pageResponse.data ?? []));
+    lastPaging = pageResponse.paging;
+    nextUrl = resolveNextPageUrl(pageResponse.paging);
+  }
+
+  if (nextUrl !== undefined && page >= INSTAGRAM_MAX_MEDIA_PAGES) {
+    console.warn(
+      `fetchInstagramMedia: hit ${INSTAGRAM_MAX_MEDIA_PAGES}-page bound; import truncated`,
     );
   }
 
-  return response.json() as Promise<InstagramMediaResponse>;
+  return { data: dedupeById(aggregatedData), paging: lastPaging };
 }
 
 /**

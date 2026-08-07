@@ -27,7 +27,10 @@ import {
   MEDIA_SOURCE,
   VISIBILITY,
 } from "../../../db/schema";
-import { putMediaBlob } from "../../../utils/mediaStore";
+import {
+  processMediaImage,
+  storeMediaBlobs,
+} from "../../../utils/mediaPipeline";
 import {
   fetchInstagramMedia,
   fetchInstagramImage,
@@ -159,10 +162,17 @@ async function importSinglePhoto(
   const mediaId = crypto.randomUUID();
   const storageKey = `${userId}/${mediaId}`;
 
-  // Commit DB rows first; then write the blob. This ordering ensures a race on
+  // Probe dimensions and generate the thumbnail before opening the transaction
+  // so width/height land on the media row in the same insert the upload path
+  // uses. Best-effort: a bad image yields null dimensions and no thumbnail
+  // without blocking the import.
+  const { dimensions, thumbnailBuffer } = await processMediaImage(imageBuffer);
+
+  // Commit DB rows first; then write the blobs. This ordering ensures a race on
   // the (user_id, source, source_id) unique index rolls back cleanly without
-  // leaving an orphaned blob. The tradeoff: if putMediaBlob fails after the
-  // transaction commits, the media row exists but its URL is broken. In that
+  // leaving an orphaned blob. The tradeoff: if the original blob store fails
+  // after the transaction commits, the media row exists but its URL is broken
+  // (the thumbnail store is best-effort and never fails the import). In that
   // case the item will be skipped on the next import run (source_id is already
   // in the table), so the broken-URL entry requires manual cleanup. Accepted
   // as the less-common failure mode vs. blob orphans on concurrent imports.
@@ -196,6 +206,8 @@ async function importSinglePhoto(
         userId,
         url: storageKey,
         contentType,
+        width: dimensions?.width ?? null,
+        height: dimensions?.height ?? null,
         source: MEDIA_SOURCE.INSTAGRAM,
         sourceId: item.id,
       })
@@ -215,7 +227,21 @@ async function importSinglePhoto(
     });
   });
 
-  await putMediaBlob(storageKey, imageBuffer, contentType);
+  const thumbnailKey = await storeMediaBlobs(
+    storageKey,
+    imageBuffer,
+    thumbnailBuffer,
+    contentType,
+  );
+
+  // Surface the best-effort thumbnail gap rather than swallowing it: the row is
+  // already committed and will be skipped on re-import, so a missing thumbnail
+  // is otherwise invisible and un-backfillable.
+  if (!thumbnailKey) {
+    console.warn(
+      `instagram import: no thumbnail stored for media ${mediaId} (item ${item.id})`,
+    );
+  }
 }
 
 export default defineEventHandler(async (event) => {

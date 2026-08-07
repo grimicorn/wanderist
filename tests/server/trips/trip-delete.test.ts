@@ -14,6 +14,7 @@ const {
   mockCreateError,
   mockDelete,
   mockWhere,
+  mockDeleteMediaIfUnreferenced,
 } = vi.hoisted(() => {
   const mockWhere = vi.fn().mockResolvedValue(undefined);
   const mockDelete = vi.fn(() => ({ where: mockWhere }));
@@ -27,6 +28,7 @@ const {
     ),
     mockDelete,
     mockWhere,
+    mockDeleteMediaIfUnreferenced: vi.fn().mockResolvedValue(true),
   };
 });
 
@@ -46,6 +48,10 @@ vi.mock("../../../server/utils/trip-helpers", () => ({
 
 vi.mock("../../../server/db/index", () => ({
   getDb: () => ({ delete: mockDelete }),
+}));
+
+vi.mock("../../../server/utils/coverImageCleanup", () => ({
+  deleteMediaIfUnreferenced: mockDeleteMediaIfUnreferenced,
 }));
 
 Object.assign(globalThis, {
@@ -68,9 +74,14 @@ describe("DELETE /api/trips/[id]", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetRouterParam.mockReturnValue("trip-1");
-    mockLoadOwnedTrip.mockResolvedValue({ id: "trip-1" });
+    mockLoadOwnedTrip.mockResolvedValue({
+      id: "trip-1",
+      userId: "user-1",
+      coverImageId: null,
+    });
     mockWhere.mockResolvedValue(undefined);
     mockDelete.mockReturnValue({ where: mockWhere });
+    mockDeleteMediaIfUnreferenced.mockResolvedValue(true);
   });
 
   it("deletes the trip and returns ok", async () => {
@@ -103,5 +114,80 @@ describe("DELETE /api/trips/[id]", () => {
     await expect(callHandler(handler, buildEvent())).rejects.toMatchObject({
       statusCode: 404,
     });
+  });
+
+  it("cleans up the trip's cover media when it has one", async () => {
+    mockLoadOwnedTrip.mockResolvedValue({
+      id: "trip-1",
+      userId: "user-1",
+      coverImageId: "media-1",
+    });
+
+    await callHandler(handler, buildEvent());
+
+    expect(mockDeleteMediaIfUnreferenced).toHaveBeenCalledWith(
+      expect.anything(),
+      "user-1",
+      "media-1",
+    );
+  });
+
+  it("deletes the trip before cleaning up its cover media", async () => {
+    mockLoadOwnedTrip.mockResolvedValue({
+      id: "trip-1",
+      userId: "user-1",
+      coverImageId: "media-1",
+    });
+
+    await callHandler(handler, buildEvent());
+
+    const deleteOrder = mockDelete.mock.invocationCallOrder[0];
+    const cleanupOrder =
+      mockDeleteMediaIfUnreferenced.mock.invocationCallOrder[0];
+    expect(deleteOrder).toBeLessThan(cleanupOrder);
+  });
+
+  it("does not clean up media when the trip has no cover", async () => {
+    mockLoadOwnedTrip.mockResolvedValue({
+      id: "trip-1",
+      userId: "user-1",
+      coverImageId: null,
+    });
+
+    await callHandler(handler, buildEvent());
+
+    expect(mockDeleteMediaIfUnreferenced).not.toHaveBeenCalled();
+  });
+
+  it("does not clean up media when the trip delete throws", async () => {
+    mockLoadOwnedTrip.mockResolvedValue({
+      id: "trip-1",
+      userId: "user-1",
+      coverImageId: "media-1",
+    });
+    mockWhere.mockRejectedValue(new Error("db down"));
+
+    await expect(callHandler(handler, buildEvent())).rejects.toThrow("db down");
+    expect(mockDeleteMediaIfUnreferenced).not.toHaveBeenCalled();
+  });
+
+  it("still returns ok and logs when cover cleanup fails", async () => {
+    mockLoadOwnedTrip.mockResolvedValue({
+      id: "trip-1",
+      userId: "user-1",
+      coverImageId: "media-1",
+    });
+    mockDeleteMediaIfUnreferenced.mockRejectedValue(new Error("blob down"));
+    const logSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const result = await callHandler(handler, buildEvent());
+
+    expect(result).toEqual({ ok: true });
+    expect(logSpy).toHaveBeenCalledWith(
+      expect.stringContaining("media-1"),
+      expect.any(Error),
+    );
+
+    logSpy.mockRestore();
   });
 });
