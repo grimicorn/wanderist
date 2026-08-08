@@ -461,6 +461,7 @@ describe("GET /api/connections/instagram/callback", () => {
     const before = Date.now();
 
     await call(callbackHandler, makeEvent());
+    const after = Date.now();
 
     const calledValues = mockDbInsertValues.mock.calls[0]?.[0] as Record<
       string,
@@ -469,7 +470,10 @@ describe("GET /api/connections/instagram/callback", () => {
     const expiresAt = calledValues?.expiresAt as Date;
     const sixtyDaysMs = 60 * 24 * 60 * 60 * 1000;
     expect(expiresAt).toBeInstanceOf(Date);
+    // Bounded both sides so lengthening the fallback (e.g. to 600 days) fails
+    // this test, not just shortening it.
     expect(expiresAt.getTime()).toBeGreaterThanOrEqual(before + sixtyDaysMs);
+    expect(expiresAt.getTime()).toBeLessThanOrEqual(after + sixtyDaysMs);
   });
 });
 

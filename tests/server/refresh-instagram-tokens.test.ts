@@ -166,7 +166,7 @@ describe("refreshExpiringInstagramTokens", () => {
   });
 
   it("collects a per-account failure and keeps going with the rest", async () => {
-    const { db } = makeDb([
+    const { db, update } = makeDb([
       { userId: "user-ok", externalId: "ig-ok", accessToken: "encrypted:ok" },
       {
         userId: "user-bad",
@@ -188,6 +188,24 @@ describe("refreshExpiringInstagramTokens", () => {
     expect(result.refreshedCount).toBe(1);
     expect(result.failures).toEqual([
       { userId: "user-bad", error: "400 token revoked", unrecoverable: false },
+    ]);
+    // Only the successful persist writes; a recoverable failure must NOT stamp
+    // the row expired, or a healthy token would be dropped from the due set.
+    expect(update).toHaveBeenCalledTimes(1);
+  });
+
+  it("records a failure without an API call when the stored token is null", async () => {
+    const { db, update } = makeDb([
+      { userId: "user-null", externalId: "ig-null", accessToken: null },
+    ]);
+
+    const result = await refreshExpiringInstagramTokens(db);
+
+    expect(mockRefreshLongLivedToken).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
+    expect(result.refreshedUserIds).toEqual([]);
+    expect(result.failures).toEqual([
+      { userId: "user-null", error: "No stored token", unrecoverable: true },
     ]);
   });
 
