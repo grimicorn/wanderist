@@ -60,16 +60,25 @@ low="$(read_count low)"
   echo "| Low      | ${low} |"
 } | tee -a "${GITHUB_STEP_SUMMARY:-/dev/null}"
 
+# Reads a JSON string on stdin through jq so each id pipeline is a single call.
+jq_on() {
+  printf '%s' "$1" | jq "${@:2}"
+}
+
 # Build the allowlist as a JSON array — safe even when the array is emptied
 # (removing every entry is the documented next step once fixes ship).
 allow_json="$(jq -cn '$ARGS.positional' --args ${ALLOWLISTED_ADVISORIES[@]+"${ALLOWLISTED_ADVISORIES[@]}"})"
 
-# Distinct high/critical advisory ids in the report (GHSA id when the advisory
-# carries one, otherwise a source-<n> fallback so nothing is silently dropped).
-all_ids="$(printf '%s' "$report" | jq -c '
-  [ .vulnerabilities[].via[]
+# Distinct high/critical advisory ids in the report: the GHSA id when the
+# advisory carries one, otherwise a source-<n>:<pkg> fallback that stays unique
+# so two url-less advisories never collapse. `(.via // [])` tolerates a
+# vulnerability object without a `via` array instead of aborting under set -e.
+all_ids="$(jq_on "$report" -c '
+  [ .vulnerabilities[]
+    | (.via // [])[]
     | select(type == "object" and (.severity == "high" or .severity == "critical"))
-    | (((.url // "") | capture("(?<id>GHSA-[-0-9a-z]+)").id)? ) // ("source-" + ((.source // 0) | tostring))
+    | (((.url // "") | capture("(?<id>GHSA-[-0-9a-z]+)").id)? )
+      // ("source-" + ((.source // 0) | tostring) + ":" + (.name // .title // "unknown"))
   ] | unique')"
 
 # NOTE on staleness: there is no reliable per-advisory "patched upstream" signal
@@ -78,25 +87,33 @@ all_ids="$(printf '%s' "$report" | jq -c '
 # So removal is manual: this gate re-runs `npm audit` every CI run, keeping the
 # data fresh; when a maintainer next touches deps and sees image-size (or its
 # consumer) ship a real fix, drop the entry above and bump it via `overrides`.
-blocking_ids="$(printf '%s' "$all_ids" | jq -c --argjson allow "$allow_json" '
-  map(select(. as $id | ($allow | index($id)) | not))')"
-blocking_count="$(printf '%s' "$blocking_ids" | jq 'length')"
+# The warning below flags entries that have already fallen out of the report.
+blocking_ids="$(jq_on "$all_ids" -c --argjson allow "$allow_json" 'map(select(IN($allow[]) | not))')"
+blocking_count="$(jq_on "$blocking_ids" 'length')"
 
-accepted_ids="$(printf '%s' "$all_ids" | jq -c --argjson allow "$allow_json" '
-  map(select(. as $id | $allow | index($id)))')"
-accepted_present="$(printf '%s' "$accepted_ids" | jq 'length')"
+accepted_ids="$(jq_on "$all_ids" -c --argjson allow "$allow_json" 'map(select(IN($allow[])))')"
+accepted_present="$(jq_on "$accepted_ids" 'length')"
+
+stale_ids="$(jq_on "$all_ids" -r --argjson allow "$allow_json" '$allow - . | .[]')"
+if [ -n "$stale_ids" ]; then
+  echo "Allowlist entries no longer present in the audit — safe to remove from ALLOWLISTED_ADVISORIES:" >&2
+  printf '%s\n' "$stale_ids" >&2
+fi
 
 if [ "$accepted_present" -gt 0 ]; then
   {
     echo ""
     echo "Accepted (allowlisted, no upstream fix) high/critical advisories:"
-    printf '%s' "$accepted_ids" | jq -r '.[] | "- " + .'
+    jq_on "$accepted_ids" -r '.[] | "- " + .'
   } | tee -a "${GITHUB_STEP_SUMMARY:-/dev/null}"
 fi
 
 if [ "$blocking_count" -gt 0 ]; then
-  echo "Found ${blocking_count} un-allowlisted high/critical advisories — failing the build:" >&2
-  printf '%s' "$blocking_ids" | jq -r '.[]' >&2
+  {
+    echo ""
+    echo "Found ${blocking_count} un-allowlisted high/critical advisories — failing the build:"
+    jq_on "$blocking_ids" -r '.[] | "- " + .'
+  } | tee -a "${GITHUB_STEP_SUMMARY:-/dev/null}" >&2
   exit 1
 fi
 
