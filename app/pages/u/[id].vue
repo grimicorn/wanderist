@@ -134,17 +134,26 @@ useHead(
 );
 
 async function onToggleFollow(): Promise<void> {
-  const wasFollowing = following.value;
-  await toggleFollow(userId.value);
-  // Keep the displayed follower count in step with the button after a
-  // successful toggle (following.value reflects the committed state).
-  if (!profile.value || following.value === wasFollowing) {
+  // Capture the target once: the viewer can navigate to another profile while
+  // the toggle is in flight (follower rows link to /u/[id]), so re-reading
+  // userId after the await would adjust the wrong profile's count.
+  const targetUserId = userId.value;
+  const wasFollowing = isFollowing(targetUserId);
+  await toggleFollow(targetUserId);
+  // Bail if the loaded profile is no longer the one we toggled (navigated away).
+  if (!profile.value || profile.value.userId !== targetUserId) {
     return;
   }
-  profile.value.followerCount += following.value ? 1 : -1;
+  // Keep the displayed follower count in step with the button after a
+  // successful toggle (isFollowing reflects the committed state).
+  const nowFollowing = isFollowing(targetUserId);
+  if (nowFollowing === wasFollowing) {
+    return;
+  }
+  profile.value.followerCount += nowFollowing ? 1 : -1;
   // The viewer just joined/left this profile's followers, so the list below is
   // now stale — refetch it to keep the list consistent with the count.
-  await fetchFollowers(userId.value);
+  await fetchFollowers(targetUserId);
 }
 
 // Drive loading from the route param (not a bare onMounted) so navigating

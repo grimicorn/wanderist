@@ -275,4 +275,23 @@ describe("profile page", () => {
     // A no-op toggle must not trigger a wasteful followers refetch.
     expect(mockFetchFollowers).not.toHaveBeenCalled();
   });
+
+  it("does not adjust the count when the loaded profile changes mid-toggle", async () => {
+    profile.value = { ...SAMPLE_PROFILE, userId: "user-1", followerCount: 3 };
+    // Simulate the viewer navigating to another profile while the toggle is in
+    // flight: the loaded profile is swapped out before toggleFollow resolves.
+    mockToggleFollow.mockImplementation(async (id: string) => {
+      followingIds.value = new Set([...followingIds.value, id]);
+      profile.value = { ...SAMPLE_PROFILE, userId: "user-2", followerCount: 9 };
+    });
+    const wrapper = mount(ProfilePage, globalConfig);
+    mockFetchFollowers.mockClear();
+
+    await clickFollowButton(wrapper);
+
+    // The newly-loaded profile's count must be left as-is, not bumped by the
+    // toggle that targeted the previous profile.
+    expect(profile.value?.followerCount).toBe(9);
+    expect(mockFetchFollowers).not.toHaveBeenCalled();
+  });
 });

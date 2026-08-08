@@ -162,6 +162,46 @@ describe("useProfile", () => {
     ]);
   });
 
+  it("clears the list up front when switching to a different profile", async () => {
+    const { followers, hasMoreFollowers, fetchFollowers } = useProfile();
+
+    mockApiFetch.mockResolvedValueOnce({
+      followers: [{ userId: "user-a-follower", displayName: "A", handle: "a" }],
+      hasMore: true,
+    });
+    await fetchFollowers("user-a");
+    expect(followers.value).toHaveLength(1);
+
+    // A new profile's fetch is in flight (unresolved): the previous traveler's
+    // followers must be gone immediately so they never render under the new name.
+    mockApiFetch.mockReturnValueOnce(new Promise(() => {}));
+    void fetchFollowers("user-b");
+
+    expect(followers.value).toEqual([]);
+    expect(hasMoreFollowers.value).toBe(false);
+  });
+
+  it("keeps the list visible during a same-user refresh", async () => {
+    const { followers, fetchFollowers } = useProfile();
+
+    const followerRows = [
+      { userId: "user-a-follower", displayName: "A", handle: "a" },
+    ];
+    mockApiFetch.mockResolvedValueOnce({
+      followers: followerRows,
+      hasMore: false,
+    });
+    await fetchFollowers("user-a");
+    expect(followers.value).toHaveLength(1);
+
+    // A refresh for the same user (e.g. after a follow toggle) must not flash
+    // the list away while the refetch is in flight.
+    mockApiFetch.mockReturnValueOnce(new Promise(() => {}));
+    void fetchFollowers("user-a");
+
+    expect(followers.value).toEqual(followerRows);
+  });
+
   it("encodes the user ID in the followers request path", async () => {
     mockApiFetch.mockResolvedValue({ followers: [], hasMore: false });
     const { fetchFollowers } = useProfile();

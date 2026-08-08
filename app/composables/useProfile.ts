@@ -73,6 +73,11 @@ export function useProfile() {
   let profileRequestId = 0;
   let followersRequestId = 0;
 
+  // The user whose followers are currently loaded, so a switch to a different
+  // profile can clear the stale list up front while a same-user refresh keeps
+  // it visible.
+  let loadedFollowersUserId: string | null = null;
+
   async function fetchProfile(userId: string): Promise<void> {
     const requestId = ++profileRequestId;
     isLoading.value = true;
@@ -107,6 +112,15 @@ export function useProfile() {
 
   async function fetchFollowers(userId: string): Promise<void> {
     const requestId = ++followersRequestId;
+    // Switching to a different profile: drop the previous traveler's followers
+    // immediately so the list can't render under the new name while the new
+    // fetch is in flight. A same-user refresh (e.g. after a follow toggle)
+    // keeps the list visible to avoid flashing back to the loading note.
+    if (userId !== loadedFollowersUserId) {
+      followers.value = [];
+      hasMoreFollowers.value = false;
+      loadedFollowersUserId = userId;
+    }
     followersLoading.value = true;
     followersError.value = null;
 
