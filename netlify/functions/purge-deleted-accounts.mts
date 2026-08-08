@@ -45,6 +45,16 @@ export const handler = async () => {
       result.purgedUserIds,
     );
 
+    // Best-effort blob removal that failed leaves orphaned bytes the cascade
+    // already erased the DB record for. Surface it at error level so a broken
+    // blob store does not read as a run of clean successes.
+    if (result.failedBlobKeys.length > 0) {
+      console.error(
+        `purge-deleted-accounts: ${result.failedBlobKeys.length} media blob(s) failed to delete and remain orphaned`,
+        result.failedBlobKeys,
+      );
+    }
+
     return {
       statusCode: 200,
       body: JSON.stringify(result),

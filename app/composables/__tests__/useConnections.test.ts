@@ -25,7 +25,8 @@ vi.stubGlobal("readonly", (value: unknown) => value);
 // Import composable after mocks
 // ---------------------------------------------------------------------------
 
-const { useConnections } = await import("../useConnections");
+const { useConnections, describeInstagramImportResult } =
+  await import("../useConnections");
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -159,6 +160,8 @@ describe("useConnections", () => {
         imported: 5,
         skipped: 1,
         errors: [],
+        hasMore: false,
+        remaining: 0,
       });
 
       const { importInstagramPhotos, importResult } = useConnections();
@@ -209,6 +212,161 @@ describe("useConnections", () => {
         (connections as { value: { instagram: { connected: boolean } } }).value
           .instagram.connected,
       ).toBe(true);
+    });
+  });
+});
+
+describe("describeInstagramImportResult", () => {
+  it("reports a clean full import as a success with no resume hint", () => {
+    const result = describeInstagramImportResult({
+      imported: 3,
+      skipped: 0,
+      errors: [],
+      hasMore: false,
+      remaining: 0,
+    });
+
+    expect(result).toEqual({
+      message: "Imported 3 photos.",
+      intent: "success",
+    });
+  });
+
+  it("uses the singular noun for a single imported photo", () => {
+    const result = describeInstagramImportResult({
+      imported: 1,
+      skipped: 0,
+      errors: [],
+      hasMore: false,
+      remaining: 0,
+    });
+
+    expect(result.message).toBe("Imported 1 photo.");
+  });
+
+  it("appends the remaining count as a resume hint when more remain", () => {
+    const result = describeInstagramImportResult({
+      imported: 8,
+      skipped: 0,
+      errors: [],
+      hasMore: true,
+      remaining: 42,
+    });
+
+    expect(result).toEqual({
+      message:
+        "Imported 8 photos. 42 more remain, run import again to continue.",
+      intent: "success",
+    });
+  });
+
+  it("warns (not errors) when some imported and some failed", () => {
+    const result = describeInstagramImportResult({
+      imported: 7,
+      skipped: 0,
+      errors: ["Item a: CDN 404", "Item b: timeout"],
+      hasMore: false,
+      remaining: 0,
+    });
+
+    expect(result).toEqual({
+      message: "Imported 7 photos, 2 failed.",
+      intent: "warning",
+    });
+  });
+
+  it("errors when nothing imported and every item failed", () => {
+    const result = describeInstagramImportResult({
+      imported: 0,
+      skipped: 0,
+      errors: ["Item a: CDN 404"],
+      hasMore: false,
+      remaining: 0,
+    });
+
+    expect(result).toEqual({
+      message: "Imported 0 photos, 1 failed.",
+      intent: "error",
+    });
+  });
+
+  it("appends the resume hint on a partial-failure run that still has work queued", () => {
+    const result = describeInstagramImportResult({
+      imported: 7,
+      skipped: 0,
+      errors: ["Item a: CDN 404", "Item b: timeout"],
+      hasMore: true,
+      remaining: 3,
+    });
+
+    expect(result).toEqual({
+      message:
+        "Imported 7 photos, 2 failed. 3 more remain, run import again to continue.",
+      intent: "warning",
+    });
+  });
+
+  it("is informational (not success) when the run imported nothing but has work queued", () => {
+    const result = describeInstagramImportResult({
+      imported: 0,
+      skipped: 0,
+      errors: [],
+      hasMore: true,
+      remaining: 2,
+    });
+
+    expect(result).toEqual({
+      message:
+        "Imported 0 photos. 2 more remain, run import again to continue.",
+      intent: "info",
+    });
+  });
+
+  it("uses the singular verb in the resume hint when exactly one remains", () => {
+    const result = describeInstagramImportResult({
+      imported: 4,
+      skipped: 0,
+      errors: [],
+      hasMore: true,
+      remaining: 1,
+    });
+
+    expect(result).toEqual({
+      message:
+        "Imported 4 photos. 1 more remains, run import again to continue.",
+      intent: "success",
+    });
+  });
+
+  it("warns (not errors) when nothing imported but a resume is queued", () => {
+    const result = describeInstagramImportResult({
+      imported: 0,
+      skipped: 0,
+      errors: ["Item a: CDN 404"],
+      hasMore: true,
+      remaining: 3,
+    });
+
+    expect(result).toEqual({
+      message:
+        "Imported 0 photos, 1 failed. 3 more remain, run import again to continue.",
+      intent: "warning",
+    });
+  });
+
+  it("names never-attempted items when the whole batch failed and no resume is queued", () => {
+    const result = describeInstagramImportResult({
+      imported: 0,
+      skipped: 0,
+      errors: ["Item a: CDN 404", "Item b: CDN 404"],
+      hasMore: false,
+      remaining: 5,
+    });
+
+    // 2 failed this run, 3 were never reached; surface both, not just the fails.
+    expect(result).toEqual({
+      message: "Imported 0 photos, 2 failed. 3 still pending.",
+      intent: "error",
     });
   });
 });

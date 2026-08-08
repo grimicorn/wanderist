@@ -1,5 +1,8 @@
 import type { H3Event } from "h3";
-import { RATE_LIMIT_POLICIES } from "../utils/rateLimitPolicies";
+import {
+  RATE_LIMIT_POLICIES,
+  matchPolicyRoutePattern,
+} from "../utils/rateLimitPolicies";
 import { RateLimitStore } from "../utils/rateLimitStore";
 import type { RateLimitResult } from "../utils/rateLimitStore";
 
@@ -31,13 +34,30 @@ let hasWarnedAboutAnonymousBucket = false;
 // Runs after server/middleware/auth.ts (Nitro runs server/middleware/*
 // alphabetically), so for every policied route below, event.context.userId
 // is already set — auth.ts throws its own 401 first if the token is invalid.
-function resolveRouteKey(event: H3Event): string {
-  const pathWithoutQuery = event.path.split("?")[0];
-  const pathWithoutTrailingSlash = pathWithoutQuery.replace(/\/+$/, "");
+//
+// Global middleware runs before h3's router matches the route, so
+// `event.context.matchedRoute` isn't populated yet here; we match the path
+// against the policied route patterns ourselves via the same radix router
+// h3 uses (see rateLimitPolicies.ts). Keying on the matched pattern rather
+// than the raw path means a dynamic route meters per pattern, not per id, so
+// it can't be evaded by enumerating ids. Returns null when the path matches
+// no policied pattern for this method.
+function resolveRouteKey(event: H3Event): string | null {
   // h3 falls back to a route's GET handler for HEAD requests with no HEAD
-  // handler registered, so HEAD must be normalized to GET to stay metered.
+  // handler registered, so HEAD must be normalized to GET to stay metered
+  // (and to select the GET matcher below).
   const method = event.method === "HEAD" ? "GET" : event.method;
-  return `${method} ${pathWithoutTrailingSlash}`;
+  // matchPolicyRoutePattern normalizes a trailing slash the same way h3's
+  // router does (both radix3), so the set of paths metered here is exactly
+  // the set h3 routes to a handler. A path h3 won't route (e.g. a doubled
+  // trailing slash) matches nothing here and stays unmetered, since it does
+  // no handler work to abuse.
+  const pathWithoutQuery = event.path.split("?")[0];
+  const pattern = matchPolicyRoutePattern(method, pathWithoutQuery);
+  if (!pattern) {
+    return null;
+  }
+  return `${method} ${pattern}`;
 }
 
 /** Prefers Netlify's client-IP header over the raw socket address `getRequestIP` falls back to. */
@@ -100,6 +120,9 @@ function applyRateLimitHeaders(event: H3Event, result: RateLimitResult): void {
 
 export default defineEventHandler((event) => {
   const routeKey = resolveRouteKey(event);
+  if (!routeKey) {
+    return;
+  }
   const policy = RATE_LIMIT_POLICIES[routeKey];
   if (!policy) {
     return;
