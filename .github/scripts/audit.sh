@@ -60,28 +60,51 @@ low="$(read_count low)"
   echo "| Low      | ${low} |"
 } | tee -a "${GITHUB_STEP_SUMMARY:-/dev/null}"
 
-allow_json="$(printf '%s\n' "${ALLOWLISTED_ADVISORIES[@]}" | jq -R . | jq -s .)"
+# Build the allowlist as a JSON array — safe even when the array is emptied
+# (removing every entry is the documented next step once fixes ship).
+allow_json="$(jq -cn '$ARGS.positional' --args ${ALLOWLISTED_ADVISORIES[@]+"${ALLOWLISTED_ADVISORIES[@]}"})"
 
-# Distinct high/critical advisory ids present in the report (GHSA id when the
-# advisory carries one, otherwise a source-<n> fallback so nothing is dropped).
-advisory_ids() {
-  printf '%s' "$report" | jq -r '
-    [ .vulnerabilities[].via[]
-      | select(type == "object" and (.severity == "high" or .severity == "critical"))
-      | (((.url // "") | capture("(?<id>GHSA-[-0-9a-z]+)").id)? ) // ("source-" + ((.source // 0) | tostring))
-    ] | unique | .[]'
-}
+# Distinct high/critical advisory ids in the report (GHSA id when the advisory
+# carries one, otherwise a source-<n> fallback so nothing is silently dropped).
+all_ids="$(printf '%s' "$report" | jq -c '
+  [ .vulnerabilities[].via[]
+    | select(type == "object" and (.severity == "high" or .severity == "critical"))
+    | (((.url // "") | capture("(?<id>GHSA-[-0-9a-z]+)").id)? ) // ("source-" + ((.source // 0) | tostring))
+  ] | unique')"
 
-blocking_ids="$(advisory_ids | jq -R . | jq -s --argjson allow "$allow_json" '
+# An allowlisted advisory that now has a clean, in-range upstream fix must be
+# removed and bumped via `overrides`, not left suppressed — fail loudly so the
+# pin does not rot. `fixAvailable == true` is npm's signal for a non-breaking
+# fix; an object value is a breaking tree-surgery suggestion (e.g. a major
+# downgrade of a parent), which is not a real patch and must not trip this.
+now_fixable="$(printf '%s' "$report" | jq -r --argjson allow "$allow_json" '
+  [ .vulnerabilities[]
+    | select(.fixAvailable == true)
+    | .via[] | select(type == "object")
+    | ((.url // "") | capture("(?<id>GHSA-[-0-9a-z]+)").id)?
+    | select(. as $id | $allow | index($id))
+  ] | unique | .[]')"
+
+if [ -n "$now_fixable" ]; then
+  echo "Allowlisted advisories now have an upstream fix — remove them from ALLOWLISTED_ADVISORIES and bump via overrides:" >&2
+  printf '%s\n' "$now_fixable" >&2
+  exit 1
+fi
+
+blocking_ids="$(printf '%s' "$all_ids" | jq -c --argjson allow "$allow_json" '
   map(select(. as $id | ($allow | index($id)) | not))')"
-
 blocking_count="$(printf '%s' "$blocking_ids" | jq 'length')"
 
-accepted_present="$(advisory_ids | jq -R . | jq -s --argjson allow "$allow_json" '
-  map(select(. as $id | $allow | index($id))) | length')"
+accepted_ids="$(printf '%s' "$all_ids" | jq -c --argjson allow "$allow_json" '
+  map(select(. as $id | $allow | index($id)))')"
+accepted_present="$(printf '%s' "$accepted_ids" | jq 'length')"
 
 if [ "$accepted_present" -gt 0 ]; then
-  echo "Accepted (allowlisted, no upstream fix) high/critical advisories: ${accepted_present}."
+  {
+    echo ""
+    echo "Accepted (allowlisted, no upstream fix) high/critical advisories:"
+    printf '%s' "$accepted_ids" | jq -r '.[] | "- " + .'
+  } | tee -a "${GITHUB_STEP_SUMMARY:-/dev/null}"
 fi
 
 if [ "$blocking_count" -gt 0 ]; then
