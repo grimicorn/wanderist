@@ -26,18 +26,17 @@ const { handler } =
   await import("../../netlify/functions/refresh-instagram-tokens.mts");
 
 describe("refresh-instagram-tokens scheduled function", () => {
-  const originalDatabaseUrl = process.env.DATABASE_URL;
-  const originalEncryptionKey = process.env.TOKEN_ENCRYPTION_KEY;
-
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.DATABASE_URL = "postgres://test/db";
-    process.env.TOKEN_ENCRYPTION_KEY = "a".repeat(64);
+    // vi.stubEnv restores the original value (including unset) on
+    // vi.unstubAllEnvs, so an env var that was undefined before the run is not
+    // left as the literal string "undefined".
+    vi.stubEnv("DATABASE_URL", "postgres://test/db");
+    vi.stubEnv("TOKEN_ENCRYPTION_KEY", "a".repeat(64));
   });
 
   afterEach(() => {
-    process.env.DATABASE_URL = originalDatabaseUrl;
-    process.env.TOKEN_ENCRYPTION_KEY = originalEncryptionKey;
+    vi.unstubAllEnvs();
   });
 
   it("builds a DB client from DATABASE_URL and returns 200 with the refresh result", async () => {
@@ -59,9 +58,18 @@ describe("refresh-instagram-tokens scheduled function", () => {
 
   it("throws before touching the DB when TOKEN_ENCRYPTION_KEY is unset", async () => {
     const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    delete process.env.TOKEN_ENCRYPTION_KEY;
+    vi.stubEnv("TOKEN_ENCRYPTION_KEY", undefined);
 
     await expect(handler()).rejects.toThrow(/TOKEN_ENCRYPTION_KEY/);
+    expect(mockCreateDb).not.toHaveBeenCalled();
+    consoleSpy.mockRestore();
+  });
+
+  it("throws before touching the DB when DATABASE_URL is unset", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.stubEnv("DATABASE_URL", undefined);
+
+    await expect(handler()).rejects.toThrow(/DATABASE_URL/);
     expect(mockCreateDb).not.toHaveBeenCalled();
     consoleSpy.mockRestore();
   });

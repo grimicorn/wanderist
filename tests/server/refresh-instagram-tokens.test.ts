@@ -212,6 +212,50 @@ describe("refreshExpiringInstagramTokens", () => {
     ]);
   });
 
+  it("keeps the batch alive when the mark-expired write itself fails", async () => {
+    const consoleSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const limit = vi.fn().mockResolvedValue([
+      { userId: "user-ok", externalId: "ig-ok", accessToken: "encrypted:ok" },
+      {
+        userId: "user-revoked",
+        externalId: "ig-revoked",
+        accessToken: "encrypted:dead",
+      },
+    ]);
+    const orderBy = vi.fn(() => ({ limit }));
+    const select = vi.fn(() => ({
+      from: vi.fn(() => ({ where: vi.fn(() => ({ orderBy })) })),
+    }));
+    // First update is the successful persist; second is the mark-expired write,
+    // which fails — it must not throw out of the batch and lose user-ok.
+    const updateWhere = vi
+      .fn()
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("db down"));
+    const update = vi.fn(() => ({
+      set: vi.fn(() => ({ where: updateWhere })),
+    }));
+    const db = { select, update } as unknown as Parameters<
+      typeof refreshExpiringInstagramTokens
+    >[0];
+    mockRefreshLongLivedToken
+      .mockResolvedValueOnce({
+        access_token: "new-token",
+        token_type: "bearer",
+        expires_in: 5_183_944,
+      })
+      .mockRejectedValueOnce(new MockInstagramApiError("revoked", 400));
+
+    const result = await refreshExpiringInstagramTokens(db);
+
+    expect(result.refreshedUserIds).toEqual(["user-ok"]);
+    expect(result.failures).toEqual([
+      { userId: "user-revoked", error: "revoked", unrecoverable: true },
+    ]);
+    expect(consoleSpy).toHaveBeenCalled();
+    consoleSpy.mockRestore();
+  });
+
   it("flags capReached when the batch fills to the limit", async () => {
     const full: DueAccount[] = Array.from(
       { length: INSTAGRAM_REFRESH_BATCH_LIMIT },

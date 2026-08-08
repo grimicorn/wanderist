@@ -91,6 +91,64 @@ async function refreshOne(
 }
 
 /**
+ * Refreshes a single due account, translating any failure into an
+ * InstagramRefreshFailure rather than throwing — so one bad account never
+ * aborts the batch (the contract this module promises). An unrecoverable
+ * failure stamps the row expired, but that stamp is best-effort: a DB error on
+ * the stamp is logged and folded into the returned failure, never re-thrown.
+ */
+async function refreshAccount(
+  db: InstagramTokenDb,
+  account: { userId: string; externalId: string; accessToken: string | null },
+  now: Date,
+): Promise<InstagramRefreshFailure | null> {
+  if (!account.accessToken) {
+    return {
+      userId: account.userId,
+      error: "No stored token",
+      unrecoverable: true,
+    };
+  }
+  try {
+    await refreshOne(
+      db,
+      { externalId: account.externalId, accessToken: account.accessToken },
+      now,
+    );
+    return null;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    const unrecoverable = isUnrecoverableRefreshError(error);
+    if (unrecoverable) {
+      await markExpiredBestEffort(db, account.externalId, now);
+    }
+    return { userId: account.userId, error: message, unrecoverable };
+  }
+}
+
+/**
+ * Stamps a row expired without letting a failed stamp propagate: the batch has
+ * already decided this account failed, and a DB error on the stamp must not
+ * discard the accounts refreshed earlier in the run.
+ */
+async function markExpiredBestEffort(
+  db: InstagramTokenDb,
+  externalId: string,
+  now: Date,
+): Promise<void> {
+  try {
+    // Instagram rejected the token — stamp it expired so it drops out of the
+    // due window next run instead of failing forever.
+    await markInstagramTokenExpired(db, externalId, now);
+  } catch (markError) {
+    console.warn(
+      "refreshExpiringInstagramTokens: failed to mark token expired",
+      { externalId, markError },
+    );
+  }
+}
+
+/**
  * Refreshes every Instagram token due for renewal. One account's failure never
  * aborts the batch: failures are collected and returned so the caller can
  * surface partial results rather than swallowing them.
@@ -117,31 +175,12 @@ export async function refreshExpiringInstagramTokens(
   const failures: InstagramRefreshFailure[] = [];
 
   for (const account of dueAccounts) {
-    if (!account.accessToken) {
-      failures.push({
-        userId: account.userId,
-        error: "No stored token",
-        unrecoverable: true,
-      });
+    const failure = await refreshAccount(db, account, now);
+    if (failure) {
+      failures.push(failure);
       continue;
     }
-    try {
-      await refreshOne(
-        db,
-        { externalId: account.externalId, accessToken: account.accessToken },
-        now,
-      );
-      refreshedUserIds.push(account.userId);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown error";
-      const unrecoverable = isUnrecoverableRefreshError(error);
-      if (unrecoverable) {
-        // Instagram rejected the token — stamp it expired so it drops out of
-        // the due window next run instead of failing forever.
-        await markInstagramTokenExpired(db, account.externalId, now);
-      }
-      failures.push({ userId: account.userId, error: message, unrecoverable });
-    }
+    refreshedUserIds.push(account.userId);
   }
 
   return {

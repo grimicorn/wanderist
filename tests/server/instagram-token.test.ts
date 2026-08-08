@@ -187,7 +187,7 @@ describe("persistRefreshedInstagramToken", () => {
     expect(expiresAt).toEqual(new Date(now.getTime() + 5000 * 1000));
   });
 
-  it("persists a null expiry when the response omits expires_in", async () => {
+  it("persists a 60-day fallback expiry when the response omits expires_in", async () => {
     const { db, set } = makeUpdatableDb();
     const now = new Date("2026-08-01T00:00:00.000Z");
 
