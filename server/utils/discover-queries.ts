@@ -20,6 +20,23 @@ import {
 
 export type Database = ReturnType<typeof getDb>;
 
+/**
+ * The predicate that makes a content author eligible to surface publicly: their
+ * account is live (not soft-deleted), their profile is public, and they have
+ * opted into explore. Shared so the single-guide read path
+ * (guide-queries.loadReadableGuide) can't drift from what actually appears on
+ * explore — a guide must never stay readable by id after its author fails this.
+ * Callers `and()` it with their own table-specific conditions (e.g. the
+ * relevant `visibility = public`).
+ */
+export function discoverableAuthorCondition() {
+  return and(
+    isNull(users.deletedAt),
+    eq(userPreferences.publicProfile, true),
+    eq(userPreferences.showOnExplore, true),
+  );
+}
+
 // Maximum result counts for each discovery section.
 const FEATURED_TRIP_LIMIT = 6;
 const TRENDING_PLACES_LIMIT = 8;
@@ -181,9 +198,7 @@ export async function fetchGuides(
     .where(
       and(
         eq(guides.visibility, VISIBILITY.PUBLIC),
-        eq(userPreferences.publicProfile, true),
-        eq(userPreferences.showOnExplore, true),
-        isNull(users.deletedAt),
+        discoverableAuthorCondition(),
       ),
     )
     .orderBy(desc(guides.likeCount))

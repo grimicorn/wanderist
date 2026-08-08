@@ -33,6 +33,9 @@ const {
   mockEncryptToken,
   mockDecryptToken,
   mockPutMediaBlob,
+  mockToThumbnailKey,
+  mockProbeImageDimensions,
+  mockGenerateThumbnail,
   mockGetCookie,
   mockSetCookie,
   mockDeleteCookie,
@@ -104,6 +107,12 @@ const {
     mockEncryptToken: vi.fn().mockReturnValue("encrypted-token"),
     mockDecryptToken: vi.fn().mockReturnValue("long-token"),
     mockPutMediaBlob: vi.fn().mockResolvedValue(undefined),
+    // Mirrors the real suffix convention so tests can assert the derived key.
+    mockToThumbnailKey: vi.fn((storageKey: string) => `${storageKey}-thumb`),
+    mockProbeImageDimensions: vi
+      .fn()
+      .mockResolvedValue({ width: 1200, height: 800 }),
+    mockGenerateThumbnail: vi.fn().mockResolvedValue(Buffer.from("thumb")),
     mockGetCookie: vi.fn(),
     mockSetCookie: vi.fn(),
     mockDeleteCookie: vi.fn(),
@@ -141,6 +150,12 @@ vi.mock("../../../server/utils/instagramClient", () => ({
     "id,caption,media_type,timestamp,permalink,media_url,location",
   INSTAGRAM_MEDIA_LIMIT: 50,
   INSTAGRAM_GEOTAGGED_MEDIA_TYPES: new Set(["IMAGE", "CAROUSEL_ALBUM"]),
+  // Lowered from the production cap so the per-run bound is exercised with a
+  // small fixture: three new items overflow a cap of two.
+  INSTAGRAM_IMPORT_MAX_ITEMS_PER_RUN: 2,
+  // Large so the wall-time budget never trips inside these fast, mocked tests;
+  // the count cap is what the fixtures exercise.
+  INSTAGRAM_IMPORT_TIME_BUDGET_MS: 60000,
 }));
 
 vi.mock("../../../server/utils/tokenCrypto", () => ({
@@ -154,6 +169,12 @@ vi.mock("../../../server/utils/planLimits", () => ({
 
 vi.mock("../../../server/utils/mediaStore", () => ({
   putMediaBlob: mockPutMediaBlob,
+  toThumbnailKey: mockToThumbnailKey,
+}));
+
+vi.mock("../../../server/utils/imageProcessing", () => ({
+  probeImageDimensions: mockProbeImageDimensions,
+  generateThumbnail: mockGenerateThumbnail,
 }));
 
 // Nitro/h3 globals
@@ -472,26 +493,32 @@ describe("DELETE /api/connections/instagram", () => {
 // ---------------------------------------------------------------------------
 
 describe("POST /api/connections/instagram/import", () => {
-  function makeTransactionDb(): object {
+  // Optional `capturedInserts` records every value object passed to an insert
+  // inside the transaction, so tests can assert on the media row's fields.
+  function makeTransactionDb(
+    capturedInserts?: Record<string, unknown>[],
+  ): object {
     const txSelectLimit = vi.fn().mockResolvedValue([]);
     const txSelectWhere = vi.fn(() => ({ limit: txSelectLimit }));
     const txSelectFrom = vi.fn(() => ({ where: txSelectWhere }));
     const txSelect = vi.fn(() => ({ from: txSelectFrom }));
+    const txInsertValues = vi.fn((values: Record<string, unknown>) => {
+      capturedInserts?.push(values);
+      return { returning: vi.fn().mockResolvedValue([{ id: "new-id" }]) };
+    });
     return {
-      insert: vi.fn(() => ({
-        values: vi.fn(() => ({
-          returning: vi.fn().mockResolvedValue([{ id: "new-id" }]),
-        })),
-      })),
+      insert: vi.fn(() => ({ values: txInsertValues })),
       select: txSelect,
     };
   }
 
-  function makeDbWithTransaction(): object {
+  function makeDbWithTransaction(
+    capturedInserts?: Record<string, unknown>[],
+  ): object {
     const mockTransaction = vi
       .fn()
       .mockImplementation(async (callback: (db: object) => Promise<unknown>) =>
-        callback(makeTransactionDb()),
+        callback(makeTransactionDb(capturedInserts)),
       );
     return {
       insert: mockDbInsert,
@@ -512,6 +539,14 @@ describe("POST /api/connections/instagram/import", () => {
       return Object.assign(thenable, { limit: mockDbSelectLimit });
     });
     mockDecryptToken.mockReturnValue("long-token");
+    // clearAllMocks() wipes call records but neither resets implementations nor
+    // drains the mock*Once queues, so re-establish the image-pipeline defaults
+    // here — otherwise a test that sets a one-off or null return leaks into the
+    // next test.
+    mockPutMediaBlob.mockReset().mockResolvedValue(undefined);
+    mockFetchInstagramImage.mockReset().mockResolvedValue(Buffer.from("img"));
+    mockProbeImageDimensions.mockResolvedValue({ width: 1200, height: 800 });
+    mockGenerateThumbnail.mockResolvedValue(Buffer.from("thumb"));
     mockFetchInstagramMedia.mockResolvedValue({ data: [] });
     mockFilterGeotaggedMedia.mockReturnValue([]);
     mockAssertInstagramSyncAllowed.mockResolvedValue(undefined);
@@ -529,10 +564,16 @@ describe("POST /api/connections/instagram/import", () => {
     expect(mockFetchInstagramMedia).not.toHaveBeenCalled();
   });
 
-  it("returns { imported: 0, skipped: 0, errors: [] } when no geotagged photos exist", async () => {
+  it("returns { imported: 0, skipped: 0, errors: [], hasMore: false } when no geotagged photos exist", async () => {
     const result = await call(importHandler, makeEvent());
 
-    expect(result).toEqual({ imported: 0, skipped: 0, errors: [] });
+    expect(result).toEqual({
+      imported: 0,
+      skipped: 0,
+      errors: [],
+      hasMore: false,
+      remaining: 0,
+    });
   });
 
   it("throws 422 when Instagram is not connected", async () => {
@@ -576,6 +617,114 @@ describe("POST /api/connections/instagram/import", () => {
     expect(mockFetchInstagramImage).toHaveBeenCalledWith(
       "https://cdn.instagram.com/photo.jpg",
     );
+  });
+
+  const geotaggedPhoto = {
+    id: "ig-media-thumb",
+    media_type: "IMAGE",
+    media_url: "https://cdn.instagram.com/photo.jpg",
+    timestamp: "2024-01-01T00:00:00Z",
+    permalink: "https://www.instagram.com/p/abc/",
+    location: { name: "Paris", latitude: 48.8566, longitude: 2.3522 },
+  };
+
+  it("probes dimensions and stores original + thumbnail blobs for each imported photo", async () => {
+    const imageBuffer = Buffer.from("real-image-bytes");
+    const thumbnailBuffer = Buffer.from("thumb");
+    mockFilterGeotaggedMedia.mockReturnValue([geotaggedPhoto]);
+    mockFetchInstagramImage.mockResolvedValue(imageBuffer);
+    mockGenerateThumbnail.mockResolvedValue(thumbnailBuffer);
+    mockGetDb.mockReturnValue(makeDbWithTransaction());
+
+    await call(importHandler, makeEvent());
+
+    expect(mockProbeImageDimensions).toHaveBeenCalledWith(imageBuffer);
+    expect(mockGenerateThumbnail).toHaveBeenCalledWith(imageBuffer);
+    // storeMediaBlobs writes the original first, then the thumbnail under the
+    // original key's `-thumb` suffix. Deriving the expected thumbnail key from
+    // the actual original key pins the pairing (not two independent matchers).
+    expect(mockPutMediaBlob).toHaveBeenCalledTimes(2);
+    const originalKey = mockPutMediaBlob.mock.calls[0][0] as string;
+    expect(originalKey).toMatch(/^user-1\//);
+    expect(mockPutMediaBlob.mock.calls[0]).toEqual([
+      originalKey,
+      imageBuffer,
+      "image/jpeg",
+    ]);
+    expect(mockPutMediaBlob.mock.calls[1]).toEqual([
+      `${originalKey}-thumb`,
+      thumbnailBuffer,
+      "image/jpeg",
+    ]);
+  });
+
+  it("records the probed width/height on the imported media row", async () => {
+    const capturedInserts: Record<string, unknown>[] = [];
+    mockFilterGeotaggedMedia.mockReturnValue([geotaggedPhoto]);
+    mockFetchInstagramImage.mockResolvedValue(Buffer.from("img"));
+    mockGetDb.mockReturnValue(makeDbWithTransaction(capturedInserts));
+
+    await call(importHandler, makeEvent());
+
+    const mediaInsert = capturedInserts.find((row) => "sourceId" in row);
+    expect(mediaInsert).toMatchObject({
+      width: 1200,
+      height: 800,
+      source: "instagram",
+    });
+  });
+
+  it("still counts the photo as imported when the thumbnail blob store fails", async () => {
+    // Rows are committed before storeMediaBlobs runs, so a thumbnail store
+    // rejection must degrade to a missing thumbnail — never a miscounted
+    // import for a photo that is already in the DB and visible in the UI.
+    mockFilterGeotaggedMedia.mockReturnValue([geotaggedPhoto]);
+    mockFetchInstagramImage.mockResolvedValue(Buffer.from("img"));
+    mockPutMediaBlob
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("blob store down"));
+    mockGetDb.mockReturnValue(makeDbWithTransaction());
+
+    const result = await call(importHandler, makeEvent());
+
+    expect(result).toMatchObject({ imported: 1, errors: [] });
+    // Both stores were attempted — the failure branch actually ran.
+    expect(mockPutMediaBlob).toHaveBeenCalledTimes(2);
+  });
+
+  it("reports an error and does not count the photo when the original blob store fails", async () => {
+    // The original store runs after the transaction commits, so a failure here
+    // leaves a committed media row with a broken URL (documented tradeoff) and
+    // must surface as a per-item error rather than a silent success.
+    mockFilterGeotaggedMedia.mockReturnValue([geotaggedPhoto]);
+    mockFetchInstagramImage.mockResolvedValue(Buffer.from("img"));
+    mockPutMediaBlob.mockRejectedValueOnce(new Error("blob store down"));
+    mockGetDb.mockReturnValue(makeDbWithTransaction());
+
+    const result = (await call(importHandler, makeEvent())) as {
+      imported: number;
+      errors: string[];
+    };
+
+    expect(result.imported).toBe(0);
+    expect(result.errors[0]).toContain("ig-media-thumb");
+  });
+
+  it("still imports the original with null dimensions when the image can't be processed", async () => {
+    const capturedInserts: Record<string, unknown>[] = [];
+    mockFilterGeotaggedMedia.mockReturnValue([geotaggedPhoto]);
+    mockFetchInstagramImage.mockResolvedValue(Buffer.from("img"));
+    mockProbeImageDimensions.mockResolvedValue(null);
+    mockGenerateThumbnail.mockResolvedValue(null);
+    mockGetDb.mockReturnValue(makeDbWithTransaction(capturedInserts));
+
+    const result = await call(importHandler, makeEvent());
+
+    expect(result).toMatchObject({ imported: 1, errors: [] });
+    const mediaInsert = capturedInserts.find((row) => "sourceId" in row);
+    expect(mediaInsert).toMatchObject({ width: null, height: null });
+    // No thumbnail generated → only the original blob is stored.
+    expect(mockPutMediaBlob).toHaveBeenCalledTimes(1);
   });
 
   it("skips items already imported and increments skipped count", async () => {
@@ -642,7 +791,13 @@ describe("POST /api/connections/instagram/import", () => {
 
     const result = await call(importHandler, makeEvent());
 
-    expect(result).toEqual({ imported: 0, skipped: 1, errors: [] });
+    expect(result).toEqual({
+      imported: 0,
+      skipped: 1,
+      errors: [],
+      hasMore: false,
+      remaining: 0,
+    });
     expect(mockFetchInstagramImage).not.toHaveBeenCalled();
   });
 
@@ -675,5 +830,211 @@ describe("POST /api/connections/instagram/import", () => {
 
     // Both select chains pass through where() — ownership scoping was applied twice.
     expect(mockDbSelectWhere).toHaveBeenCalledTimes(2);
+  });
+
+  function makeGeotaggedItem(id: string): Record<string, unknown> {
+    return {
+      id,
+      media_type: "IMAGE",
+      media_url: `https://cdn.instagram.com/${id}.jpg`,
+      timestamp: "2024-01-01T00:00:00Z",
+      permalink: `https://www.instagram.com/p/${id}/`,
+      location: { name: "Paris", latitude: 48.8566, longitude: 2.3522 },
+    };
+  }
+
+  it("imports at most INSTAGRAM_IMPORT_MAX_ITEMS_PER_RUN new photos and reports hasMore", async () => {
+    // Cap is mocked to 2; three new geotagged items overflow it.
+    mockFilterGeotaggedMedia.mockReturnValue([
+      makeGeotaggedItem("ig-a"),
+      makeGeotaggedItem("ig-b"),
+      makeGeotaggedItem("ig-c"),
+    ]);
+    mockFetchInstagramImage.mockResolvedValue(Buffer.from("img"));
+    mockGetDb.mockReturnValue(makeDbWithTransaction());
+
+    const result = await call(importHandler, makeEvent());
+
+    expect(result).toEqual({
+      imported: 2,
+      skipped: 0,
+      errors: [],
+      hasMore: true,
+      remaining: 1,
+    });
+    // The third item is deferred to the next run: its image is never fetched.
+    expect(mockFetchInstagramImage).toHaveBeenCalledTimes(2);
+  });
+
+  it("reports hasMore false when the pending items fit within one run", async () => {
+    mockFilterGeotaggedMedia.mockReturnValue([
+      makeGeotaggedItem("ig-a"),
+      makeGeotaggedItem("ig-b"),
+    ]);
+    mockFetchInstagramImage.mockResolvedValue(Buffer.from("img"));
+    mockGetDb.mockReturnValue(makeDbWithTransaction());
+
+    const result = await call(importHandler, makeEvent());
+
+    expect(result).toEqual({
+      imported: 2,
+      skipped: 0,
+      errors: [],
+      hasMore: false,
+      remaining: 0,
+    });
+    expect(mockFetchInstagramImage).toHaveBeenCalledTimes(2);
+  });
+
+  it("excludes already-imported items before applying the per-run cap", async () => {
+    // 2 already-imported + 3 new; the cap of 2 must slice the *pending* items,
+    // not the raw geotagged list — so 2 import, 2 are skipped, 1 remains.
+    mockFilterGeotaggedMedia.mockReturnValue([
+      makeGeotaggedItem("ig-old-1"),
+      makeGeotaggedItem("ig-old-2"),
+      makeGeotaggedItem("ig-new-1"),
+      makeGeotaggedItem("ig-new-2"),
+      makeGeotaggedItem("ig-new-3"),
+    ]);
+    mockFetchInstagramImage.mockResolvedValue(Buffer.from("img"));
+    mockGetDb.mockReturnValue(makeDbWithTransaction());
+
+    mockDbSelectWhere.mockImplementationOnce(() => {
+      // Connection lookup — needs .limit().
+      const thenable = Promise.resolve([] as unknown[]);
+      return Object.assign(thenable, { limit: mockDbSelectLimit });
+    });
+    mockDbSelectWhere.mockImplementationOnce(() =>
+      // Dedupe query — two ids already imported.
+      Promise.resolve([{ sourceId: "ig-old-1" }, { sourceId: "ig-old-2" }]),
+    );
+
+    const result = await call(importHandler, makeEvent());
+
+    expect(result).toEqual({
+      imported: 2,
+      skipped: 2,
+      errors: [],
+      hasMore: true,
+      remaining: 1,
+    });
+    expect(mockFetchInstagramImage).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not advertise a resume when the whole batch fails", async () => {
+    // Three new items overflow the cap of 2, but every import fails, so no
+    // source_id is written; re-running would re-slice the same stuck items.
+    // hasMore must be false to avoid an endless retry loop.
+    mockFilterGeotaggedMedia.mockReturnValue([
+      makeGeotaggedItem("ig-a"),
+      makeGeotaggedItem("ig-b"),
+      makeGeotaggedItem("ig-c"),
+    ]);
+    mockFetchInstagramImage.mockRejectedValue(new Error("CDN 404"));
+    mockGetDb.mockReturnValue(makeDbWithTransaction());
+
+    const result = (await call(importHandler, makeEvent())) as {
+      imported: number;
+      hasMore: boolean;
+      errors: string[];
+    };
+
+    expect(result.imported).toBe(0);
+    expect(result.hasMore).toBe(false);
+    expect(result.errors).toHaveLength(2);
+    // 3 pending, 0 imported: all three (2 failed + 1 untouched) still remain,
+    // and the UI's "N still pending" copy is computed from this value.
+    expect(result.remaining).toBe(3);
+  });
+
+  it("still advertises a resume when part of the batch fails but one succeeds", async () => {
+    // Cap 2; batch is [ig-a, ig-b]. ig-a's image fetch fails, ig-b succeeds, so
+    // progress was made and a third item still waits — hasMore stays true.
+    mockFilterGeotaggedMedia.mockReturnValue([
+      makeGeotaggedItem("ig-a"),
+      makeGeotaggedItem("ig-b"),
+      makeGeotaggedItem("ig-c"),
+    ]);
+    mockFetchInstagramImage
+      .mockRejectedValueOnce(new Error("CDN 404"))
+      .mockResolvedValue(Buffer.from("img"));
+    mockGetDb.mockReturnValue(makeDbWithTransaction());
+
+    const result = (await call(importHandler, makeEvent())) as {
+      imported: number;
+      hasMore: boolean;
+      remaining: number;
+      errors: string[];
+    };
+
+    expect(result.imported).toBe(1);
+    expect(result.hasMore).toBe(true);
+    // 3 pending, 1 imported; the failed item plus the untouched one both remain.
+    expect(result.remaining).toBe(2);
+    expect(result.errors).toHaveLength(1);
+  });
+
+  it("stops mid-batch when the wall-time budget is spent", async () => {
+    vi.useFakeTimers();
+    try {
+      mockFilterGeotaggedMedia.mockReturnValue([
+        makeGeotaggedItem("ig-a"),
+        makeGeotaggedItem("ig-b"),
+      ]);
+      // The first import overruns the (mocked 60s) budget, so the loop must
+      // break before starting the second item — proving the time budget, not
+      // just the count cap, bounds the run.
+      mockFetchInstagramImage.mockImplementation(() => {
+        vi.advanceTimersByTime(61000);
+        return Promise.resolve(Buffer.from("img"));
+      });
+      mockGetDb.mockReturnValue(makeDbWithTransaction());
+
+      const result = (await call(importHandler, makeEvent())) as {
+        imported: number;
+        hasMore: boolean;
+        remaining: number;
+      };
+
+      expect(mockFetchInstagramImage).toHaveBeenCalledTimes(1);
+      expect(result.imported).toBe(1);
+      expect(result.hasMore).toBe(true);
+      expect(result.remaining).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("still attempts one item when the budget was spent before the loop began", async () => {
+    vi.useFakeTimers();
+    try {
+      mockFilterGeotaggedMedia.mockReturnValue([
+        makeGeotaggedItem("ig-a"),
+        makeGeotaggedItem("ig-b"),
+      ]);
+      // The page walk itself consumes the whole budget, so the loop enters
+      // already past the deadline. The forward-progress guard must still attempt
+      // one item — otherwise the user loops forever on "run again" with nothing
+      // ever imported.
+      mockFetchInstagramMedia.mockImplementation(() => {
+        vi.advanceTimersByTime(61000);
+        return Promise.resolve({ data: [] });
+      });
+      mockGetDb.mockReturnValue(makeDbWithTransaction());
+
+      const result = (await call(importHandler, makeEvent())) as {
+        imported: number;
+        hasMore: boolean;
+        remaining: number;
+      };
+
+      // Exactly one item attempted (and imported); the second is deferred.
+      expect(mockFetchInstagramImage).toHaveBeenCalledTimes(1);
+      expect(result.imported).toBe(1);
+      expect(result.hasMore).toBe(true);
+      expect(result.remaining).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

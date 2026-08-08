@@ -2,17 +2,10 @@ import type { H3Event } from "h3";
 import { getDb } from "../../db/index";
 import { media } from "../../db/schema";
 import { ensureUser } from "../../utils/auth";
-import {
-  putMediaBlob,
-  removeMediaBlob,
-  toThumbnailKey,
-} from "../../utils/mediaStore";
+import { removeMediaBlob } from "../../utils/mediaStore";
 import { assertPhotoLimit } from "../../utils/planLimits";
-import {
-  generateThumbnail,
-  probeImageDimensions,
-  type ImageDimensions,
-} from "../../utils/imageProcessing";
+import type { ImageDimensions } from "../../utils/imageProcessing";
+import { processMediaImage, storeMediaBlobs } from "../../utils/mediaPipeline";
 
 // 10 MB expressed in bytes.
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
@@ -90,55 +83,6 @@ async function readValidatedUploadBuffer(event: H3Event): Promise<Buffer> {
   assertFileSizeAllowed(rawBody.byteLength);
 
   return Buffer.from(rawBody);
-}
-
-interface ProcessedImage {
-  dimensions: ImageDimensions | null;
-  thumbnailBuffer: Buffer | null;
-}
-
-// Best-effort: dimension probing and thumbnail generation never block the
-// upload of the original. A failure here leaves width/height null and/or
-// the thumbnail unwritten, which callers already treat as absent data.
-async function processUploadedImage(buffer: Buffer): Promise<ProcessedImage> {
-  const dimensions = await probeImageDimensions(buffer);
-  const thumbnailBuffer = await generateThumbnail(buffer);
-  return { dimensions, thumbnailBuffer };
-}
-
-// Stores the original under `storageKey` and, if a thumbnail was generated,
-// stores it under the derived thumbnail key. Returns that key (or null) so
-// the caller can record it for cleanup and response-building.
-//
-// A thumbnail *store* failure degrades the same way a thumbnail *generation*
-// failure does (return null, keep going) rather than failing the whole
-// request: the original is already durably stored at this point, and
-// thumbnails are best-effort throughout this handler. Failing here would
-// both contradict that contract and orphan the already-stored original,
-// since only insertMediaRow's catch path cleans up blobs.
-async function storeMediaBlobs(
-  storageKey: string,
-  originalBuffer: Buffer,
-  thumbnailBuffer: Buffer | null,
-  contentType: string,
-): Promise<string | null> {
-  await putMediaBlob(storageKey, originalBuffer, contentType);
-
-  if (!thumbnailBuffer) {
-    return null;
-  }
-
-  const thumbnailKey = toThumbnailKey(storageKey);
-  try {
-    await putMediaBlob(thumbnailKey, thumbnailBuffer, contentType);
-  } catch (thumbnailStoreError) {
-    console.error(
-      `media post: thumbnail store failed for ${storageKey}`,
-      thumbnailStoreError,
-    );
-    return null;
-  }
-  return thumbnailKey;
 }
 
 async function cleanupOrphanedBlobs(
@@ -225,7 +169,7 @@ export default defineEventHandler(async (event) => {
   const storageKey = `${userId}/${mediaId}`;
 
   const { dimensions, thumbnailBuffer } =
-    await processUploadedImage(originalBuffer);
+    await processMediaImage(originalBuffer);
   const thumbnailKey = await storeMediaBlobs(
     storageKey,
     originalBuffer,

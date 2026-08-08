@@ -34,6 +34,7 @@ const BASE_PROPS = {
   hasLoaded: true,
   editingGuideId: null,
   deletingGuideIds: new Set<string>(),
+  likedGuideIds: new Set<string>(),
   isSavingGuide: false,
   formError: null,
 };
@@ -123,6 +124,30 @@ describe("GuidesList", () => {
       ?.trigger("click");
 
     expect(wrapper.emitted("delete")?.[0]).toEqual([SAMPLE_GUIDES[0]]);
+  });
+
+  it("emits toggle-like from the card's like button", async () => {
+    const wrapper = mount(GuidesList, {
+      ...globalConfig,
+      props: { ...BASE_PROPS, guides: SAMPLE_GUIDES },
+    });
+
+    await wrapper.find(".gcard__like").trigger("click");
+
+    expect(wrapper.emitted("toggle-like")?.[0]).toEqual([SAMPLE_GUIDES[0]]);
+  });
+
+  it("marks a card liked when its id is in likedGuideIds", () => {
+    const wrapper = mount(GuidesList, {
+      ...globalConfig,
+      props: {
+        ...BASE_PROPS,
+        guides: SAMPLE_GUIDES,
+        likedGuideIds: new Set([SAMPLE_GUIDES[0].id]),
+      },
+    });
+
+    expect(wrapper.find(".gcard__like").classes()).toContain("liked");
   });
 
   it("emits submitEdit with the guide id and input from the edit form", async () => {

@@ -17,3 +17,14 @@ export const textareaStub = {
   template:
     '<textarea :placeholder="placeholder" :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)"></textarea>',
 };
+
+/**
+ * NuxtLink is resolved via Nuxt's build-time components, which plain Vitest
+ * can't do — render it as a plain anchor so tests can assert the resolved
+ * `href` (and so mounting a component that links out doesn't warn about an
+ * unresolved component).
+ */
+export const nuxtLinkStub = {
+  props: ["to"],
+  template: '<a :href="to"><slot /></a>',
+};

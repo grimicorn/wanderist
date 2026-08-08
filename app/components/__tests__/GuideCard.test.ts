@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { mount } from "@vue/test-utils";
 import GuideCard from "../GuideCard.vue";
+import { nuxtLinkStub } from "./input-stubs";
 import type { Guide } from "~/stores/guides";
 
 const SAMPLE_GUIDE: Guide = {
@@ -19,6 +20,7 @@ const globalConfig = {
   global: {
     stubs: {
       AppIcon: { template: "<svg data-icon />" },
+      NuxtLink: nuxtLinkStub,
     },
   },
 };
@@ -43,6 +45,14 @@ describe("GuideCard", () => {
     expect(wrapper.text()).toContain("12");
   });
 
+  it("links the title to the guide's detail page", () => {
+    const wrapper = mount(GuideCard, {
+      ...globalConfig,
+      props: { guide: SAMPLE_GUIDE },
+    });
+    expect(wrapper.find(".gcard__name").attributes("href")).toBe("/guides/g-1");
+  });
+
   it("tags a public guide with the ongoing style", () => {
     const wrapper = mount(GuideCard, {
       ...globalConfig,
@@ -57,6 +67,39 @@ describe("GuideCard", () => {
       props: { guide: { ...SAMPLE_GUIDE, visibility: "private" } },
     });
     expect(wrapper.find(".tag--past").exists()).toBe(true);
+  });
+
+  it("emits toggle-like with the guide when the like button is clicked", async () => {
+    const wrapper = mount(GuideCard, {
+      ...globalConfig,
+      props: { guide: SAMPLE_GUIDE },
+    });
+
+    await wrapper.find(".gcard__like").trigger("click");
+
+    expect(wrapper.emitted("toggle-like")?.[0]).toEqual([SAMPLE_GUIDE]);
+  });
+
+  it("applies the liked class and 'Unlike guide' label when isLiked is true", () => {
+    const wrapper = mount(GuideCard, {
+      ...globalConfig,
+      props: { guide: SAMPLE_GUIDE, isLiked: true },
+    });
+
+    const likeButton = wrapper.find(".gcard__like");
+    expect(likeButton.classes()).toContain("liked");
+    expect(likeButton.attributes("aria-label")).toBe("Unlike guide");
+  });
+
+  it("shows no liked class and a 'Like guide' label by default", () => {
+    const wrapper = mount(GuideCard, {
+      ...globalConfig,
+      props: { guide: SAMPLE_GUIDE },
+    });
+
+    const likeButton = wrapper.find(".gcard__like");
+    expect(likeButton.classes()).not.toContain("liked");
+    expect(likeButton.attributes("aria-label")).toBe("Like guide");
   });
 
   it("emits edit with the guide when edit is clicked", async () => {

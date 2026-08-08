@@ -10,6 +10,7 @@ vi.stubGlobal("useApiClient", () => ({ apiFetch: mockApiFetch }));
 // "pinia" (not via a Nuxt auto-import), so no defineStore global stub is
 // needed here — a plain import of the real pinia already resolves it.
 const { useGuidesStore } = await import("../guides");
+import type { FetchGuidesResult } from "../guides";
 
 describe("useGuidesStore", () => {
   beforeEach(() => {
@@ -27,7 +28,11 @@ describe("useGuidesStore", () => {
         { id: "g-1", userId: "u-1", title: "Tokyo on foot" },
         { id: "g-2", userId: "u-1", title: "Slow coastlines" },
       ];
-      mockApiFetch.mockResolvedValueOnce(mockGuides);
+      mockApiFetch.mockResolvedValueOnce({
+        guides: mockGuides,
+        page: 1,
+        hasMore: false,
+      });
 
       const store = useGuidesStore();
       await store.fetchGuides();
@@ -37,12 +42,93 @@ describe("useGuidesStore", () => {
       expect(store.error).toBeNull();
     });
 
-    it("calls GET /api/guides", async () => {
-      mockApiFetch.mockResolvedValue([]);
+    it("calls GET /api/guides with page=1", async () => {
+      mockApiFetch.mockResolvedValue({ guides: [], page: 1, hasMore: false });
       const store = useGuidesStore();
       await store.fetchGuides();
 
-      expect(mockApiFetch).toHaveBeenCalledWith("/api/guides");
+      expect(mockApiFetch).toHaveBeenCalledWith("/api/guides?page=1");
+    });
+
+    it("walks every page and concatenates the results while hasMore is true", async () => {
+      const pageOne = Array.from({ length: 20 }, (_, index) => ({
+        id: `g-${index}`,
+        userId: "u-1",
+        title: `Guide ${index}`,
+      }));
+      const pageTwo = [{ id: "g-20", userId: "u-1", title: "Last Guide" }];
+
+      mockApiFetch
+        .mockResolvedValueOnce({ guides: pageOne, page: 1, hasMore: true })
+        .mockResolvedValueOnce({ guides: pageTwo, page: 2, hasMore: false });
+
+      const store = useGuidesStore();
+      await store.fetchGuides();
+
+      expect(store.guides).toEqual([...pageOne, ...pageTwo]);
+      expect(mockApiFetch).toHaveBeenCalledTimes(2);
+      expect(mockApiFetch).toHaveBeenNthCalledWith(1, "/api/guides?page=1");
+      expect(mockApiFetch).toHaveBeenNthCalledWith(2, "/api/guides?page=2");
+    });
+
+    it("throws on a malformed response rather than silently returning a partial list", async () => {
+      mockApiFetch.mockResolvedValueOnce({ page: 1, hasMore: false });
+      const store = useGuidesStore();
+
+      await expect(store.fetchGuides()).rejects.toThrow(/Malformed/);
+      // The whole point of the throw is to not strand consumers with partial
+      // or falsely-authoritative state.
+      expect(store.isLoading).toBe(false);
+      expect(store.hasLoaded).toBe(false);
+      expect(store.guides).toEqual([]);
+      expect(store.error).not.toBeNull();
+    });
+
+    it("throws mid-walk on a malformed later page without exposing the partial list", async () => {
+      const pageOne = [{ id: "g-1", userId: "u-1", title: "Tokyo" }];
+      mockApiFetch
+        .mockResolvedValueOnce({ guides: pageOne, page: 1, hasMore: true })
+        .mockResolvedValueOnce({ guides: [], page: 2, hasMore: "yes" });
+      const store = useGuidesStore();
+
+      await expect(store.fetchGuides()).rejects.toThrow(/Malformed/);
+      // page 1's rows must not leak into the store as if they were the full set.
+      expect(store.guides).toEqual([]);
+      expect(store.hasLoaded).toBe(false);
+    });
+
+    it("retains a previously-loaded list when a later refetch fails mid-walk", async () => {
+      const loaded = [
+        { id: "g-1", userId: "u-1", title: "Tokyo" },
+        { id: "g-2", userId: "u-1", title: "Osaka" },
+      ];
+      mockApiFetch.mockResolvedValueOnce({
+        guides: loaded,
+        page: 1,
+        hasMore: false,
+      });
+
+      const store = useGuidesStore();
+      await store.fetchGuides();
+      expect(store.guides).toEqual(loaded);
+
+      // A transient failure on a refetch must not blank a working list — the
+      // stale-but-complete list is better than an empty one under the error.
+      mockApiFetch.mockRejectedValueOnce(new Error("Network error"));
+      await expect(store.fetchGuides()).rejects.toThrow("Network error");
+
+      expect(store.guides).toEqual(loaded);
+      expect(store.hasLoaded).toBe(true);
+      expect(store.error).toBe("Network error");
+    });
+
+    it("throws instead of looping forever when the API never stops reporting hasMore", async () => {
+      mockApiFetch.mockResolvedValue({ guides: [], page: 1, hasMore: true });
+      const store = useGuidesStore();
+
+      await expect(store.fetchGuides()).rejects.toThrow(/exceeded 500 pages/);
+      // Asserting the call count pins the bound itself, not just the message.
+      expect(mockApiFetch).toHaveBeenCalledTimes(500);
     });
 
     it("sets isLoading true during fetch", async () => {
@@ -51,7 +137,7 @@ describe("useGuidesStore", () => {
 
       mockApiFetch.mockImplementation(async () => {
         capturedLoading = store.isLoading;
-        return [];
+        return { guides: [], page: 1, hasMore: false };
       });
 
       await store.fetchGuides();
@@ -60,7 +146,7 @@ describe("useGuidesStore", () => {
     });
 
     it("resets isLoading to false after fetch", async () => {
-      mockApiFetch.mockResolvedValue([]);
+      mockApiFetch.mockResolvedValue({ guides: [], page: 1, hasMore: false });
       const store = useGuidesStore();
       await store.fetchGuides();
 
@@ -78,7 +164,7 @@ describe("useGuidesStore", () => {
     });
 
     it("sets hasLoaded on success", async () => {
-      mockApiFetch.mockResolvedValue([]);
+      mockApiFetch.mockResolvedValue({ guides: [], page: 1, hasMore: false });
       const store = useGuidesStore();
 
       expect(store.hasLoaded).toBe(false);
@@ -98,7 +184,7 @@ describe("useGuidesStore", () => {
 
     it("dedupes concurrent calls into a single request", async () => {
       const mockGuides = [{ id: "g-1", userId: "u-1", title: "Tokyo" }];
-      let resolveFetch: (value: typeof mockGuides) => void;
+      let resolveFetch: (value: FetchGuidesResult) => void;
       mockApiFetch.mockImplementationOnce(
         () =>
           new Promise((resolve) => {
@@ -110,7 +196,7 @@ describe("useGuidesStore", () => {
       const first = store.fetchGuides();
       const second = store.fetchGuides();
 
-      resolveFetch!(mockGuides);
+      resolveFetch!({ guides: mockGuides, page: 1, hasMore: false });
       await Promise.all([first, second]);
 
       expect(mockApiFetch).toHaveBeenCalledTimes(1);
@@ -118,13 +204,127 @@ describe("useGuidesStore", () => {
     });
 
     it("allows a fresh request once the in-flight one settles", async () => {
-      mockApiFetch.mockResolvedValue([]);
+      mockApiFetch.mockResolvedValue({ guides: [], page: 1, hasMore: false });
       const store = useGuidesStore();
 
       await store.fetchGuides();
       await store.fetchGuides();
 
       expect(mockApiFetch).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // fetchGuideById
+  // ---------------------------------------------------------------------------
+
+  describe("fetchGuideById", () => {
+    const guide = { id: "g-1", userId: "u-1", title: "Tokyo on foot" };
+
+    it("populates currentGuide on success", async () => {
+      mockApiFetch.mockResolvedValueOnce(guide);
+      const store = useGuidesStore();
+
+      await store.fetchGuideById("g-1");
+
+      expect(store.currentGuide).toEqual(guide);
+      expect(store.isLoadingGuide).toBe(false);
+      expect(store.guideError).toBeNull();
+    });
+
+    it("calls GET /api/guides/:id", async () => {
+      mockApiFetch.mockResolvedValue(guide);
+      const store = useGuidesStore();
+
+      await store.fetchGuideById("g-1");
+
+      expect(mockApiFetch).toHaveBeenCalledWith("/api/guides/g-1");
+    });
+
+    it("sets guideError, clears currentGuide, and rethrows on failure", async () => {
+      mockApiFetch.mockRejectedValue(new Error("Not Found"));
+      const store = useGuidesStore();
+
+      await expect(store.fetchGuideById("g-1")).rejects.toThrow("Not Found");
+
+      expect(store.currentGuide).toBeNull();
+      expect(store.guideError).toBe("Not Found");
+      expect(store.isLoadingGuide).toBe(false);
+    });
+
+    it("drops a stale response so an older request can't overwrite a newer guide", async () => {
+      const slowGuide = { ...guide, id: "g-slow", title: "Slow" };
+      const fastGuide = { ...guide, id: "g-fast", title: "Fast" };
+
+      let resolveSlow: (value: typeof slowGuide) => void;
+      mockApiFetch
+        .mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              resolveSlow = resolve;
+            }),
+        )
+        .mockResolvedValueOnce(fastGuide);
+
+      const store = useGuidesStore();
+      const slow = store.fetchGuideById("g-slow");
+      await store.fetchGuideById("g-fast");
+
+      // The slower first request lands last but must not clobber g-fast.
+      resolveSlow!(slowGuide);
+      await slow;
+
+      expect(store.currentGuide).toEqual(fastGuide);
+    });
+
+    it("does not clobber a newer same-id request when an older one fails late", async () => {
+      const loadedGuide = { ...guide, title: "Loaded" };
+
+      let rejectFirst: (reason: Error) => void;
+      mockApiFetch
+        .mockImplementationOnce(
+          () =>
+            new Promise((_resolve, reject) => {
+              rejectFirst = reject;
+            }),
+        )
+        .mockResolvedValueOnce(loadedGuide);
+
+      const store = useGuidesStore();
+      // Two in-flight requests for the SAME id (e.g. back/forward to /guides/g-1).
+      const first = store.fetchGuideById("g-1");
+      await store.fetchGuideById("g-1");
+
+      // The first (now superseded) request rejects after the second succeeded.
+      rejectFirst!(new Error("late failure"));
+      await expect(first).rejects.toThrow("late failure");
+
+      // The late failure must not blank the guide or surface an error.
+      expect(store.currentGuide).toEqual(loadedGuide);
+      expect(store.guideError).toBeNull();
+    });
+
+    it("keeps isLoadingGuide true when an older request settles while a newer one is still in flight", async () => {
+      let resolveFirst: (value: typeof guide) => void;
+      mockApiFetch
+        .mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              resolveFirst = resolve;
+            }),
+        )
+        // The second request never settles, so the spinner must stay on.
+        .mockImplementationOnce(() => new Promise(() => {}));
+
+      const store = useGuidesStore();
+      const first = store.fetchGuideById("g-1");
+      store.fetchGuideById("g-2");
+
+      resolveFirst!(guide);
+      await first;
+
+      expect(store.isLoadingGuide).toBe(true);
+      expect(store.currentGuide).toBeNull();
     });
   });
 
@@ -150,7 +350,7 @@ describe("useGuidesStore", () => {
       // below) — queue its response too, alongside the create response.
       mockApiFetch
         .mockResolvedValueOnce(newGuide) // POST /api/guides
-        .mockResolvedValueOnce([newGuide]); // refetch GET /api/guides
+        .mockResolvedValueOnce({ guides: [newGuide], page: 1, hasMore: false }); // refetch GET /api/guides
 
       const store = useGuidesStore();
       const result = await store.createGuide({ title: "Paris in a weekend" });
@@ -161,7 +361,9 @@ describe("useGuidesStore", () => {
 
     it("calls POST /api/guides with the input body", async () => {
       const newGuide = { id: "g-1", userId: "u-1", title: "Paris" };
-      mockApiFetch.mockResolvedValue(newGuide);
+      mockApiFetch
+        .mockResolvedValueOnce(newGuide) // POST /api/guides
+        .mockResolvedValueOnce({ guides: [newGuide], page: 1, hasMore: false }); // refetch GET /api/guides
 
       const store = useGuidesStore();
       await store.createGuide({ title: "Paris", readTimeMinutes: 6 });
@@ -177,7 +379,7 @@ describe("useGuidesStore", () => {
       const created = { id: "g-2", userId: "u-1", title: "Paris" };
 
       mockApiFetch
-        .mockResolvedValueOnce([existing])
+        .mockResolvedValueOnce({ guides: [existing], page: 1, hasMore: false })
         .mockResolvedValueOnce(created);
 
       const store = useGuidesStore();
@@ -192,7 +394,7 @@ describe("useGuidesStore", () => {
     it("leaves the list untouched and rethrows when the request fails", async () => {
       const existing = { id: "g-1", userId: "u-1", title: "Tokyo on foot" };
       mockApiFetch
-        .mockResolvedValueOnce([existing])
+        .mockResolvedValueOnce({ guides: [existing], page: 1, hasMore: false })
         .mockRejectedValueOnce(new Error("boom"));
 
       const store = useGuidesStore();
@@ -209,7 +411,7 @@ describe("useGuidesStore", () => {
       mockApiFetch
         .mockRejectedValueOnce(new Error("Network error"))
         .mockResolvedValueOnce(created)
-        .mockResolvedValueOnce([created]);
+        .mockResolvedValueOnce({ guides: [created], page: 1, hasMore: false });
 
       const store = useGuidesStore();
       await expect(store.fetchGuides()).rejects.toThrow("Network error");
@@ -229,7 +431,11 @@ describe("useGuidesStore", () => {
       const created2 = { id: "g-2", userId: "u-1", title: "Tokyo" };
       mockApiFetch
         .mockResolvedValueOnce(created) // POST /api/guides
-        .mockResolvedValueOnce([created2, created]); // refetch GET /api/guides
+        .mockResolvedValueOnce({
+          guides: [created2, created],
+          page: 1,
+          hasMore: false,
+        }); // refetch GET /api/guides
 
       const store = useGuidesStore();
       expect(store.hasLoaded).toBe(false);
@@ -237,7 +443,7 @@ describe("useGuidesStore", () => {
       await store.createGuide({ title: "Paris" });
 
       expect(mockApiFetch).toHaveBeenCalledTimes(2);
-      expect(mockApiFetch).toHaveBeenNthCalledWith(2, "/api/guides");
+      expect(mockApiFetch).toHaveBeenNthCalledWith(2, "/api/guides?page=1");
       expect(store.hasLoaded).toBe(true);
       expect(store.guides).toEqual([created2, created]);
     });
@@ -267,7 +473,7 @@ describe("useGuidesStore", () => {
       const updated = { id: "g-1", userId: "u-1", title: "Tokyo, revised" };
 
       mockApiFetch
-        .mockResolvedValueOnce([original])
+        .mockResolvedValueOnce({ guides: [original], page: 1, hasMore: false })
         .mockResolvedValueOnce(updated);
 
       const store = useGuidesStore();
@@ -283,7 +489,9 @@ describe("useGuidesStore", () => {
 
     it("calls PATCH /api/guides/:id with the input body", async () => {
       const updated = { id: "g-1", userId: "u-1", title: "Osaka" };
-      mockApiFetch.mockResolvedValue(updated);
+      mockApiFetch
+        .mockResolvedValueOnce(updated) // PATCH /api/guides/:id
+        .mockResolvedValueOnce({ guides: [updated], page: 1, hasMore: false }); // refetch GET /api/guides
 
       const store = useGuidesStore();
       await store.updateGuide("g-1", { title: "Osaka", visibility: "public" });
@@ -300,7 +508,11 @@ describe("useGuidesStore", () => {
       const updatedGuide1 = { id: "g-1", userId: "u-1", title: "Tokyo redo" };
 
       mockApiFetch
-        .mockResolvedValueOnce([guide1, guide2])
+        .mockResolvedValueOnce({
+          guides: [guide1, guide2],
+          page: 1,
+          hasMore: false,
+        })
         .mockResolvedValueOnce(updatedGuide1);
 
       const store = useGuidesStore();
@@ -315,7 +527,7 @@ describe("useGuidesStore", () => {
     it("leaves the list untouched and rethrows when the request fails", async () => {
       const guide1 = { id: "g-1", userId: "u-1", title: "Tokyo on foot" };
       mockApiFetch
-        .mockResolvedValueOnce([guide1])
+        .mockResolvedValueOnce({ guides: [guide1], page: 1, hasMore: false })
         .mockRejectedValueOnce(new Error("boom"));
 
       const store = useGuidesStore();
@@ -325,6 +537,24 @@ describe("useGuidesStore", () => {
         store.updateGuide("g-1", { title: "New title" }),
       ).rejects.toThrow("boom");
       expect(store.guides).toEqual([guide1]);
+    });
+
+    it("syncs the open detail guide when it is the one edited", async () => {
+      const original = { id: "g-1", userId: "u-1", title: "Tokyo on foot" };
+      const updated = { id: "g-1", userId: "u-1", title: "Tokyo, revised" };
+
+      mockApiFetch
+        .mockResolvedValueOnce(original)
+        .mockResolvedValueOnce(updated)
+        // markLoadSucceeded refetches the list because fetchGuideById never
+        // set hasLoaded — give that call a clean empty response.
+        .mockResolvedValue([]);
+
+      const store = useGuidesStore();
+      await store.fetchGuideById("g-1");
+      await store.updateGuide("g-1", { title: "Tokyo, revised" });
+
+      expect(store.currentGuide).toEqual(updated);
     });
   });
 
@@ -338,7 +568,11 @@ describe("useGuidesStore", () => {
       const guide2 = { id: "g-2", userId: "u-1", title: "Slow coastlines" };
 
       mockApiFetch
-        .mockResolvedValueOnce([guide1, guide2])
+        .mockResolvedValueOnce({
+          guides: [guide1, guide2],
+          page: 1,
+          hasMore: false,
+        })
         .mockResolvedValueOnce({ success: true });
 
       const store = useGuidesStore();
@@ -350,7 +584,9 @@ describe("useGuidesStore", () => {
     });
 
     it("calls DELETE /api/guides/:id", async () => {
-      mockApiFetch.mockResolvedValue({ success: true });
+      mockApiFetch
+        .mockResolvedValueOnce({ success: true }) // DELETE /api/guides/:id
+        .mockResolvedValueOnce({ guides: [], page: 1, hasMore: false }); // refetch GET /api/guides
 
       const store = useGuidesStore();
       await store.deleteGuide("g-1");
@@ -363,7 +599,7 @@ describe("useGuidesStore", () => {
     it("leaves the list untouched and rethrows when the request fails", async () => {
       const guide1 = { id: "g-1", userId: "u-1", title: "Tokyo on foot" };
       mockApiFetch
-        .mockResolvedValueOnce([guide1])
+        .mockResolvedValueOnce({ guides: [guide1], page: 1, hasMore: false })
         .mockRejectedValueOnce(new Error("boom"));
 
       const store = useGuidesStore();
@@ -371,6 +607,112 @@ describe("useGuidesStore", () => {
 
       await expect(store.deleteGuide("g-1")).rejects.toThrow("boom");
       expect(store.guides).toEqual([guide1]);
+    });
+
+    it("clears the open detail guide when it is the one deleted", async () => {
+      const guide1 = { id: "g-1", userId: "u-1", title: "Tokyo on foot" };
+
+      mockApiFetch
+        .mockResolvedValueOnce(guide1)
+        .mockResolvedValueOnce({ success: true })
+        // markLoadSucceeded refetches the list because fetchGuideById never
+        // set hasLoaded — give that call a clean empty response.
+        .mockResolvedValue([]);
+
+      const store = useGuidesStore();
+      await store.fetchGuideById("g-1");
+      await store.deleteGuide("g-1");
+
+      expect(store.currentGuide).toBeNull();
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // likeGuide
+  // ---------------------------------------------------------------------------
+
+  describe("likeGuide", () => {
+    it("increments likeCount in the list", async () => {
+      const guide = { id: "g-1", userId: "u-1", title: "Tokyo", likeCount: 0 };
+      const liked = { ...guide, likeCount: 1 };
+      mockApiFetch
+        .mockResolvedValueOnce({ guides: [guide], page: 1, hasMore: false })
+        .mockResolvedValueOnce(liked);
+
+      const store = useGuidesStore();
+      await store.fetchGuides();
+
+      const result = await store.likeGuide("g-1");
+
+      expect(result).toEqual(liked);
+      expect(store.guides[0].likeCount).toBe(1);
+    });
+
+    it("calls POST /api/guides/:id/like", async () => {
+      const liked = { id: "g-1", userId: "u-1", title: "Tokyo", likeCount: 1 };
+      mockApiFetch.mockResolvedValue(liked);
+
+      const store = useGuidesStore();
+      await store.likeGuide("g-1");
+
+      expect(mockApiFetch).toHaveBeenCalledWith("/api/guides/g-1/like", {
+        method: "POST",
+      });
+    });
+
+    it("rethrows when the request fails", async () => {
+      mockApiFetch.mockRejectedValueOnce(new Error("Not found"));
+
+      const store = useGuidesStore();
+
+      await expect(store.likeGuide("missing")).rejects.toThrow("Not found");
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // unlikeGuide
+  // ---------------------------------------------------------------------------
+
+  describe("unlikeGuide", () => {
+    it("decrements likeCount in the list", async () => {
+      const guide = { id: "g-1", userId: "u-1", title: "Tokyo", likeCount: 1 };
+      const unliked = { ...guide, likeCount: 0 };
+      mockApiFetch
+        .mockResolvedValueOnce({ guides: [guide], page: 1, hasMore: false })
+        .mockResolvedValueOnce(unliked);
+
+      const store = useGuidesStore();
+      await store.fetchGuides();
+
+      const result = await store.unlikeGuide("g-1");
+
+      expect(result).toEqual(unliked);
+      expect(store.guides[0].likeCount).toBe(0);
+    });
+
+    it("calls DELETE /api/guides/:id/like", async () => {
+      const unliked = {
+        id: "g-1",
+        userId: "u-1",
+        title: "Tokyo",
+        likeCount: 0,
+      };
+      mockApiFetch.mockResolvedValue(unliked);
+
+      const store = useGuidesStore();
+      await store.unlikeGuide("g-1");
+
+      expect(mockApiFetch).toHaveBeenCalledWith("/api/guides/g-1/like", {
+        method: "DELETE",
+      });
+    });
+
+    it("rethrows when the request fails", async () => {
+      mockApiFetch.mockRejectedValueOnce(new Error("Not found"));
+
+      const store = useGuidesStore();
+
+      await expect(store.unlikeGuide("missing")).rejects.toThrow("Not found");
     });
   });
 });

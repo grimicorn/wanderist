@@ -21,8 +21,10 @@
         v-else
         :guide="guide"
         :deleting="deletingGuideIds.has(guide.id)"
+        :is-liked="likedGuideIds.has(guide.id)"
         @edit="emit('edit', guide)"
         @delete="emit('delete', guide)"
+        @toggle-like="emit('toggle-like', guide)"
       />
     </template>
   </div>
@@ -44,6 +46,7 @@ defineProps<{
   hasLoaded: boolean;
   editingGuideId: string | null;
   deletingGuideIds: Set<string>;
+  likedGuideIds: Set<string>;
   isSavingGuide: boolean;
   formError: string | null;
 }>();
@@ -51,6 +54,7 @@ defineProps<{
 const emit = defineEmits<{
   edit: [guide: Guide];
   delete: [guide: Guide];
+  "toggle-like": [guide: Guide];
   submitEdit: [guideId: string, input: CreateGuideInput];
   cancelEdit: [];
 }>();

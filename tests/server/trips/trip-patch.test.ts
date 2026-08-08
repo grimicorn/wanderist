@@ -75,6 +75,14 @@ vi.mock("../../../server/db/index", () => ({
   getDb: () => ({ update: mockUpdate }),
 }));
 
+const mockDeleteMediaIfUnreferenced = vi.fn().mockResolvedValue(true);
+const mockAssertCoverImageOwned = vi.fn().mockResolvedValue(undefined);
+
+vi.mock("../../../server/utils/coverImageCleanup", () => ({
+  deleteMediaIfUnreferenced: mockDeleteMediaIfUnreferenced,
+  assertCoverImageOwned: mockAssertCoverImageOwned,
+}));
+
 Object.assign(globalThis, {
   defineEventHandler: (handler: (event: object) => unknown) => handler,
   createError: mockCreateError,
@@ -114,6 +122,8 @@ describe("PATCH /api/trips/[id]", () => {
     mockWhere.mockReturnValue({ returning: mockReturning });
     mockSet.mockReturnValue({ where: mockWhere });
     mockUpdate.mockReturnValue({ set: mockSet });
+    mockDeleteMediaIfUnreferenced.mockResolvedValue(true);
+    mockAssertCoverImageOwned.mockResolvedValue(undefined);
   });
 
   it("updates and returns the trip", async () => {
@@ -238,5 +248,157 @@ describe("PATCH /api/trips/[id]", () => {
     expect(mockSet).toHaveBeenCalledWith(
       expect.objectContaining({ name: "Iceland" }),
     );
+  });
+
+  it("cleans up the previous cover media when coverImageId changes", async () => {
+    mockLoadOwnedOrThrow.mockResolvedValue({
+      id: "trip-1",
+      userId: "user-1",
+      coverImageId: "media-old",
+    });
+    mockReadBody.mockResolvedValue({ coverImageId: "media-new" });
+
+    await callHandler(handler, buildEvent());
+
+    expect(mockSet).toHaveBeenCalledWith(
+      expect.objectContaining({ coverImageId: "media-new" }),
+    );
+    expect(mockDeleteMediaIfUnreferenced).toHaveBeenCalledWith(
+      expect.anything(),
+      "user-1",
+      "media-old",
+    );
+  });
+
+  it("updates the trip before cleaning up the previous cover", async () => {
+    mockLoadOwnedOrThrow.mockResolvedValue({
+      id: "trip-1",
+      userId: "user-1",
+      coverImageId: "media-old",
+    });
+    mockReadBody.mockResolvedValue({ coverImageId: "media-new" });
+
+    await callHandler(handler, buildEvent());
+
+    const updateOrder = mockUpdate.mock.invocationCallOrder[0];
+    const cleanupOrder =
+      mockDeleteMediaIfUnreferenced.mock.invocationCallOrder[0];
+    expect(updateOrder).toBeLessThan(cleanupOrder);
+  });
+
+  it("cleans up the previous cover media when coverImageId is cleared to null", async () => {
+    mockLoadOwnedOrThrow.mockResolvedValue({
+      id: "trip-1",
+      userId: "user-1",
+      coverImageId: "media-old",
+    });
+    mockReadBody.mockResolvedValue({ coverImageId: null });
+    mockReturning.mockResolvedValue([{ ...UPDATED_TRIP, coverImageId: null }]);
+
+    await callHandler(handler, buildEvent());
+
+    expect(mockSet).toHaveBeenCalledWith(
+      expect.objectContaining({ coverImageId: null }),
+    );
+    expect(mockAssertCoverImageOwned).not.toHaveBeenCalled();
+    expect(mockDeleteMediaIfUnreferenced).toHaveBeenCalledWith(
+      expect.anything(),
+      "user-1",
+      "media-old",
+    );
+  });
+
+  it("does not clean up when the cover image is unchanged", async () => {
+    mockLoadOwnedOrThrow.mockResolvedValue({
+      id: "trip-1",
+      userId: "user-1",
+      coverImageId: "media-same",
+    });
+    mockReadBody.mockResolvedValue({ coverImageId: "media-same" });
+
+    await callHandler(handler, buildEvent());
+
+    expect(mockDeleteMediaIfUnreferenced).not.toHaveBeenCalled();
+  });
+
+  it("does not clean up when there was no previous cover image", async () => {
+    mockLoadOwnedOrThrow.mockResolvedValue({
+      id: "trip-1",
+      userId: "user-1",
+      coverImageId: null,
+    });
+    mockReadBody.mockResolvedValue({ coverImageId: "media-new" });
+
+    await callHandler(handler, buildEvent());
+
+    expect(mockDeleteMediaIfUnreferenced).not.toHaveBeenCalled();
+  });
+
+  it("trims whitespace from coverImageId before storing", async () => {
+    mockLoadOwnedOrThrow.mockResolvedValue({
+      id: "trip-1",
+      userId: "user-1",
+      coverImageId: null,
+    });
+    mockReadBody.mockResolvedValue({ coverImageId: "  media-new  " });
+
+    await callHandler(handler, buildEvent());
+
+    expect(mockSet).toHaveBeenCalledWith(
+      expect.objectContaining({ coverImageId: "media-new" }),
+    );
+  });
+
+  it("rejects an empty-string coverImageId with 400", async () => {
+    mockReadBody.mockResolvedValue({ coverImageId: "" });
+
+    await expect(callHandler(handler, buildEvent())).rejects.toMatchObject({
+      statusCode: 400,
+    });
+  });
+
+  it("rejects a whitespace-only coverImageId with 400", async () => {
+    mockReadBody.mockResolvedValue({ coverImageId: "   " });
+
+    await expect(callHandler(handler, buildEvent())).rejects.toMatchObject({
+      statusCode: 400,
+    });
+  });
+
+  it("rejects a non-string coverImageId with 400", async () => {
+    mockReadBody.mockResolvedValue({ coverImageId: 123 });
+
+    await expect(callHandler(handler, buildEvent())).rejects.toMatchObject({
+      statusCode: 400,
+    });
+  });
+
+  it("rejects a coverImageId the user does not own with the assertion's error", async () => {
+    mockReadBody.mockResolvedValue({ coverImageId: "media-new" });
+    mockAssertCoverImageOwned.mockRejectedValue(
+      Object.assign(new Error("Cover image not found"), { statusCode: 404 }),
+    );
+
+    await expect(callHandler(handler, buildEvent())).rejects.toMatchObject({
+      statusCode: 404,
+    });
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  it("still returns the updated trip when cover cleanup fails", async () => {
+    mockLoadOwnedOrThrow.mockResolvedValue({
+      id: "trip-1",
+      userId: "user-1",
+      coverImageId: "media-old",
+    });
+    mockReadBody.mockResolvedValue({ coverImageId: "media-new" });
+    mockReturning.mockResolvedValue([
+      { ...UPDATED_TRIP, coverImageId: "media-new" },
+    ]);
+    mockDeleteMediaIfUnreferenced.mockRejectedValue(new Error("blob down"));
+
+    const result = await callHandler(handler, buildEvent());
+
+    expect(result).toMatchObject({ coverImageId: "media-new" });
   });
 });
