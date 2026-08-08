@@ -1,13 +1,15 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { mount } from "@vue/test-utils";
-import { ref } from "vue";
+import { reactive, ref } from "vue";
 import ProfilePage from "../u/[id].vue";
 import ProfileHeader from "~/components/ProfileHeader.vue";
 import ProfileFollowerList from "~/components/ProfileFollowerList.vue";
 import type { ProfileUser, ProfileFollower } from "~/composables/useProfile";
 
-// The profile route is keyed by the target user's id.
-vi.stubGlobal("useRoute", () => ({ params: { id: "user-1" }, query: {} }));
+// The profile route is keyed by the target user's id. Reactive so a test can
+// simulate the viewer navigating to another profile mid-interaction.
+const routeParams = reactive({ id: "user-1" });
+vi.stubGlobal("useRoute", () => ({ params: routeParams, query: {} }));
 
 // The page loads via useAsyncData; the global stub ignores the handler, so
 // invoke it here to exercise the mount-time fetches and record the call so the
@@ -117,6 +119,7 @@ const SAMPLE_PROFILE: ProfileUser = {
 describe("profile page", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    routeParams.id = "user-1";
     profile.value = null;
     followers.value = [];
     hasMoreFollowers.value = false;
@@ -276,22 +279,23 @@ describe("profile page", () => {
     expect(mockFetchFollowers).not.toHaveBeenCalled();
   });
 
-  it("does not adjust the count when the loaded profile changes mid-toggle", async () => {
+  it("does not adjust the count when the viewer navigates away mid-toggle", async () => {
     profile.value = { ...SAMPLE_PROFILE, userId: "user-1", followerCount: 3 };
-    // Simulate the viewer navigating to another profile while the toggle is in
-    // flight: the loaded profile is swapped out before toggleFollow resolves.
+    // Simulate real navigation: the route param moves to another profile while
+    // toggleFollow is still in flight (follower rows link to /u/[id]). The
+    // loaded profile stays user-1 because fetchProfile hasn't resolved yet.
     mockToggleFollow.mockImplementation(async (id: string) => {
       followingIds.value = new Set([...followingIds.value, id]);
-      profile.value = { ...SAMPLE_PROFILE, userId: "user-2", followerCount: 9 };
+      routeParams.id = "user-2";
     });
     const wrapper = mount(ProfilePage, globalConfig);
     mockFetchFollowers.mockClear();
 
     await clickFollowButton(wrapper);
 
-    // The newly-loaded profile's count must be left as-is, not bumped by the
-    // toggle that targeted the previous profile.
-    expect(profile.value?.followerCount).toBe(9);
+    // The toggle targeted user-1 but the route is now user-2, so the loaded
+    // profile's count must not be bumped and no followers refetch should fire.
+    expect(profile.value?.followerCount).toBe(3);
     expect(mockFetchFollowers).not.toHaveBeenCalled();
   });
 });

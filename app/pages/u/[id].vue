@@ -140,8 +140,10 @@ async function onToggleFollow(): Promise<void> {
   const targetUserId = userId.value;
   const wasFollowing = isFollowing(targetUserId);
   await toggleFollow(targetUserId);
-  // Bail if the loaded profile is no longer the one we toggled (navigated away).
-  if (!profile.value || profile.value.userId !== targetUserId) {
+  // Bail if the viewer navigated away mid-toggle. profile.value can still hold
+  // the previous traveler (fetchProfile doesn't clear it until the new request
+  // resolves), so check the live route param too — not just the loaded profile.
+  if (userId.value !== targetUserId || profile.value?.userId !== targetUserId) {
     return;
   }
   // Keep the displayed follower count in step with the button after a
