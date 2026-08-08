@@ -40,6 +40,7 @@ describe("purge-deleted-accounts scheduled function", () => {
     mockPurgeExpiredDeletedAccounts.mockResolvedValue({
       purgedUserIds: ["user-1", "user-2"],
       purgedCount: 2,
+      failedBlobKeys: [],
     });
 
     const response = await handler();
@@ -50,7 +51,26 @@ describe("purge-deleted-accounts scheduled function", () => {
     expect(JSON.parse(response.body)).toEqual({
       purgedUserIds: ["user-1", "user-2"],
       purgedCount: 2,
+      failedBlobKeys: [],
     });
+  });
+
+  it("logs an error for orphaned blobs when some blob deletions failed, but still returns 200", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    mockPurgeExpiredDeletedAccounts.mockResolvedValue({
+      purgedUserIds: ["user-1"],
+      purgedCount: 1,
+      failedBlobKeys: ["user-1/media-1", "user-1/media-1-thumb"],
+    });
+
+    const response = await handler();
+
+    expect(response.statusCode).toBe(200);
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining("2 media blob(s) failed to delete"),
+      ["user-1/media-1", "user-1/media-1-thumb"],
+    );
+    consoleSpy.mockRestore();
   });
 
   it("logs and re-throws when the purge run fails, so Netlify records the invocation as failed", async () => {
