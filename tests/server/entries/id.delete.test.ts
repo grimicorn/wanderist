@@ -91,6 +91,14 @@ describe("DELETE /api/entries/:id", () => {
 
     await invokeHandler({});
 
+    expect(mockLoadOwnedOrThrow).toHaveBeenCalledWith(
+      {},
+      entries,
+      entries.id,
+      entries.userId,
+      "e-1",
+    );
+
     const ownershipOrder = mockLoadOwnedOrThrow.mock.invocationCallOrder[0];
     const deleteOrder = mockDb.delete.mock.invocationCallOrder[0];
     expect(ownershipOrder).toBeLessThan(deleteOrder);
