@@ -220,15 +220,24 @@
             <div v-if="connectionsActionError" style="margin-bottom: 12px">
               <AppAlert intent="error" :title="connectionsActionError" />
             </div>
-            <div v-if="importResult" style="margin-bottom: 12px">
+            <div v-if="importAlert" style="margin-bottom: 12px">
               <AppAlert
-                :intent="importResult.errors.length > 0 ? 'error' : 'success'"
-                :title="
-                  importResult.errors.length > 0
-                    ? `Import finished with ${importResult.errors.length} error${importResult.errors.length === 1 ? '' : 's'}`
-                    : `Imported ${importResult.imported} photo${importResult.imported === 1 ? '' : 's'}`
-                "
+                :intent="importAlert.intent"
+                :title="importAlert.message"
               />
+              <ul
+                v-if="importResult && importResult.errors.length > 0"
+                style="
+                  margin: 8px 0 0;
+                  padding-left: 20px;
+                  font-size: 0.85em;
+                  opacity: 0.85;
+                "
+              >
+                <li v-for="(error, index) in importResult.errors" :key="index">
+                  {{ error }}
+                </li>
+              </ul>
             </div>
 
             <!-- Instagram -->
@@ -526,7 +535,10 @@
 <script setup lang="ts">
 import type { Ref } from "vue";
 import { usePreferences } from "~/composables/usePreferences";
-import { useConnections } from "~/composables/useConnections";
+import {
+  useConnections,
+  describeInstagramImportResult,
+} from "~/composables/useConnections";
 import { useAccountActions } from "~/composables/useAccountActions";
 import { useBilling } from "~/composables/useBilling";
 
@@ -559,6 +571,14 @@ const {
   disconnectGoogle,
   importInstagramPhotos,
 } = useConnections();
+
+const importAlert = computed(() => {
+  const result = importResult.value;
+  if (!result) {
+    return null;
+  }
+  return describeInstagramImportResult(result);
+});
 
 const {
   subscription,

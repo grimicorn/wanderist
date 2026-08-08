@@ -97,6 +97,18 @@ describe("rate limit middleware", () => {
     expect(mockSetResponseHeader).not.toHaveBeenCalled();
   });
 
+  it("skips a dynamic-looking path that matches no policied route pattern", () => {
+    // No policy covers /api/entries/:id, so the matcher returns no pattern and
+    // the request is left unmetered — enumerating ids can't trip a limit that
+    // was never configured for that route.
+    const event = buildEvent("/api/entries/123", "GET", "user-1");
+
+    const result = rateLimitMiddleware(event as never);
+
+    expect(result).toBeUndefined();
+    expect(mockConsume).not.toHaveBeenCalled();
+  });
+
   it("keys on the authenticated user for a policied route and sets rate limit headers", () => {
     const event = buildEvent("/api/media", "POST", "user-1");
 
@@ -167,6 +179,18 @@ describe("rate limit middleware", () => {
       limit: 20,
       windowMs: 60_000,
     });
+  });
+
+  it("leaves a doubled-slash path unmetered, mirroring what h3's router matches", () => {
+    // radix3 strips one trailing slash, so /api/media// matches no policy —
+    // the same path h3 fails to route to a handler, so there's no work to
+    // meter. Pinned so the matcher stays in lockstep with the real router.
+    const event = buildEvent("/api/media//", "POST", "user-1");
+
+    const result = rateLimitMiddleware(event as never);
+
+    expect(result).toBeUndefined();
+    expect(mockConsume).not.toHaveBeenCalled();
   });
 
   it("normalizes a HEAD request to the GET policy, since h3 runs the GET handler for it", () => {
