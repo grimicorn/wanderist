@@ -20,7 +20,7 @@ import { decryptToken } from "./tokenCrypto";
 import {
   INSTAGRAM_REFRESH_THRESHOLD_DAYS,
   isUnrecoverableRefreshError,
-  markInstagramTokenExpired,
+  markInstagramTokenExpiredBestEffort,
   persistRefreshedInstagramToken,
   type InstagramTokenDb,
 } from "./instagramToken";
@@ -120,31 +120,12 @@ async function refreshAccount(
     const message = error instanceof Error ? error.message : "Unknown error";
     const unrecoverable = isUnrecoverableRefreshError(error);
     if (unrecoverable) {
-      await markExpiredBestEffort(db, account.externalId, now);
+      // Instagram rejected the token — stamp it expired (best-effort, so a
+      // stamp failure never aborts the batch) so it drops out of the due window
+      // next run instead of failing forever.
+      await markInstagramTokenExpiredBestEffort(db, account.externalId, now);
     }
     return { userId: account.userId, error: message, unrecoverable };
-  }
-}
-
-/**
- * Stamps a row expired without letting a failed stamp propagate: the batch has
- * already decided this account failed, and a DB error on the stamp must not
- * discard the accounts refreshed earlier in the run.
- */
-async function markExpiredBestEffort(
-  db: InstagramTokenDb,
-  externalId: string,
-  now: Date,
-): Promise<void> {
-  try {
-    // Instagram rejected the token — stamp it expired so it drops out of the
-    // due window next run instead of failing forever.
-    await markInstagramTokenExpired(db, externalId, now);
-  } catch (markError) {
-    console.warn(
-      "refreshExpiringInstagramTokens: failed to mark token expired",
-      { externalId, markError },
-    );
   }
 }
 

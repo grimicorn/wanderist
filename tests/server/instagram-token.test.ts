@@ -371,6 +371,65 @@ describe("ensureFreshInstagramToken", () => {
     ).rejects.toBeInstanceOf(InstagramTokenExpiredError);
   });
 
+  it("stamps the row expired on a 400 so repeated imports stop re-hitting Instagram", async () => {
+    const { db, update, set } = makeUpdatableDb();
+    mockRefreshLongLivedToken.mockRejectedValue(
+      new MockInstagramApiError("session expired", 400),
+    );
+
+    await expect(
+      ensureFreshInstagramToken(
+        db,
+        "user-1",
+        { externalId: "ig-A", accessToken: "encrypted:dead", expiresAt: null },
+        now,
+      ),
+    ).rejects.toBeInstanceOf(InstagramTokenExpiredError);
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(set).toHaveBeenCalledWith({ expiresAt: now });
+  });
+
+  it("does not stamp the row when the already-expired token fails a non-API refresh", async () => {
+    const { db, update } = makeUpdatableDb();
+    const expiresAt = new Date(now.getTime() - MS_PER_DAY);
+    mockRefreshLongLivedToken.mockRejectedValue(new Error("network down"));
+
+    await expect(
+      ensureFreshInstagramToken(
+        db,
+        "user-1",
+        { externalId: "ig-A", accessToken: "encrypted:dead", expiresAt },
+        now,
+      ),
+    ).rejects.toBeInstanceOf(InstagramTokenExpiredError);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("returns the fresh token even when persisting it fails", async () => {
+    const consoleSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { db, where } = makeUpdatableDb();
+    where.mockRejectedValue(new Error("db down"));
+    const expiresAt = new Date(
+      now.getTime() + (INSTAGRAM_REFRESH_THRESHOLD_DAYS - 1) * MS_PER_DAY,
+    );
+    mockRefreshLongLivedToken.mockResolvedValue({
+      access_token: "new-token",
+      token_type: "bearer",
+      expires_in: 5_183_944,
+    });
+
+    const token = await ensureFreshInstagramToken(
+      db,
+      "user-1",
+      { externalId: "ig-A", accessToken: "encrypted:old-token", expiresAt },
+      now,
+    );
+
+    expect(token).toBe("new-token");
+    expect(consoleSpy).toHaveBeenCalled();
+    consoleSpy.mockRestore();
+  });
+
   it("falls back on a transient 429 while the token is still valid", async () => {
     const consoleSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const { db } = makeUpdatableDb();

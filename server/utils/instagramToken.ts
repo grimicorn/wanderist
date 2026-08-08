@@ -175,6 +175,28 @@ export async function markInstagramTokenExpired(
 }
 
 /**
+ * Stamps a row expired without letting the write itself propagate. Both the
+ * on-use path and the scheduled batch call this after Instagram rejects a
+ * token: the caller has already classified the account as dead, so a DB error
+ * on the stamp must not abort the caller (fail the import / take down the
+ * batch). The failure is surfaced via a log rather than a throw.
+ */
+export async function markInstagramTokenExpiredBestEffort(
+  db: InstagramTokenDb,
+  externalId: string,
+  now: Date,
+): Promise<void> {
+  try {
+    await markInstagramTokenExpired(db, externalId, now);
+  } catch (markError) {
+    console.warn(
+      "markInstagramTokenExpiredBestEffort: failed to mark token expired",
+      { externalId, markError },
+    );
+  }
+}
+
+/**
  * A refresh failure is unrecoverable when Instagram itself rejected the token
  * (400/401 — expired or revoked), or when our own stored expiry is already
  * past. Either way the user must reconnect; the caller turns this into a
@@ -219,6 +241,14 @@ export async function ensureFreshInstagramToken(
     refreshed = await refreshLongLivedToken({ accessToken: currentToken });
   } catch (error) {
     if (isRefreshUnrecoverable(error, stored.expiresAt, now)) {
+      // Instagram rejected the token (400/401): stamp the row expired so
+      // repeated imports inside the refresh window stop firing a live,
+      // guaranteed-to-fail refresh until the nightly job cleans it up. Gated on
+      // the API rejection specifically — an already-past stored expiry needs no
+      // stamp. Best-effort so a stamp failure still surfaces the reconnect.
+      if (isUnrecoverableRefreshError(error)) {
+        await markInstagramTokenExpiredBestEffort(db, stored.externalId, now);
+      }
       throw new InstagramTokenExpiredError(
         "Instagram token expired and could not be refreshed",
         { cause: error },
@@ -231,6 +261,16 @@ export async function ensureFreshInstagramToken(
     return currentToken;
   }
 
-  await persistRefreshedInstagramToken(db, stored.externalId, refreshed, now);
+  // The refreshed token is already valid; a failure persisting it must not fail
+  // the import that triggered the refresh. Return the fresh token and let the
+  // next run re-refresh + re-persist from the still-stored older token.
+  try {
+    await persistRefreshedInstagramToken(db, stored.externalId, refreshed, now);
+  } catch (persistError) {
+    console.warn(
+      "ensureFreshInstagramToken: refreshed token could not be persisted",
+      { userId, persistError },
+    );
+  }
   return refreshed.access_token;
 }
