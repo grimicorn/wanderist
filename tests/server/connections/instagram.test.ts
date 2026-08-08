@@ -150,6 +150,12 @@ vi.mock("../../../server/utils/instagramClient", () => ({
     "id,caption,media_type,timestamp,permalink,media_url,location",
   INSTAGRAM_MEDIA_LIMIT: 50,
   INSTAGRAM_GEOTAGGED_MEDIA_TYPES: new Set(["IMAGE", "CAROUSEL_ALBUM"]),
+  // Lowered from the production cap so the per-run bound is exercised with a
+  // small fixture: three new items overflow a cap of two.
+  INSTAGRAM_IMPORT_MAX_ITEMS_PER_RUN: 2,
+  // Large so the wall-time budget never trips inside these fast, mocked tests;
+  // the count cap is what the fixtures exercise.
+  INSTAGRAM_IMPORT_TIME_BUDGET_MS: 60000,
 }));
 
 vi.mock("../../../server/utils/tokenCrypto", () => ({
@@ -538,6 +544,7 @@ describe("POST /api/connections/instagram/import", () => {
     // here — otherwise a test that sets a one-off or null return leaks into the
     // next test.
     mockPutMediaBlob.mockReset().mockResolvedValue(undefined);
+    mockFetchInstagramImage.mockReset().mockResolvedValue(Buffer.from("img"));
     mockProbeImageDimensions.mockResolvedValue({ width: 1200, height: 800 });
     mockGenerateThumbnail.mockResolvedValue(Buffer.from("thumb"));
     mockFetchInstagramMedia.mockResolvedValue({ data: [] });
@@ -557,10 +564,16 @@ describe("POST /api/connections/instagram/import", () => {
     expect(mockFetchInstagramMedia).not.toHaveBeenCalled();
   });
 
-  it("returns { imported: 0, skipped: 0, errors: [] } when no geotagged photos exist", async () => {
+  it("returns { imported: 0, skipped: 0, errors: [], hasMore: false } when no geotagged photos exist", async () => {
     const result = await call(importHandler, makeEvent());
 
-    expect(result).toEqual({ imported: 0, skipped: 0, errors: [] });
+    expect(result).toEqual({
+      imported: 0,
+      skipped: 0,
+      errors: [],
+      hasMore: false,
+      remaining: 0,
+    });
   });
 
   it("throws 422 when Instagram is not connected", async () => {
@@ -778,7 +791,13 @@ describe("POST /api/connections/instagram/import", () => {
 
     const result = await call(importHandler, makeEvent());
 
-    expect(result).toEqual({ imported: 0, skipped: 1, errors: [] });
+    expect(result).toEqual({
+      imported: 0,
+      skipped: 1,
+      errors: [],
+      hasMore: false,
+      remaining: 0,
+    });
     expect(mockFetchInstagramImage).not.toHaveBeenCalled();
   });
 
@@ -811,5 +830,211 @@ describe("POST /api/connections/instagram/import", () => {
 
     // Both select chains pass through where() — ownership scoping was applied twice.
     expect(mockDbSelectWhere).toHaveBeenCalledTimes(2);
+  });
+
+  function makeGeotaggedItem(id: string): Record<string, unknown> {
+    return {
+      id,
+      media_type: "IMAGE",
+      media_url: `https://cdn.instagram.com/${id}.jpg`,
+      timestamp: "2024-01-01T00:00:00Z",
+      permalink: `https://www.instagram.com/p/${id}/`,
+      location: { name: "Paris", latitude: 48.8566, longitude: 2.3522 },
+    };
+  }
+
+  it("imports at most INSTAGRAM_IMPORT_MAX_ITEMS_PER_RUN new photos and reports hasMore", async () => {
+    // Cap is mocked to 2; three new geotagged items overflow it.
+    mockFilterGeotaggedMedia.mockReturnValue([
+      makeGeotaggedItem("ig-a"),
+      makeGeotaggedItem("ig-b"),
+      makeGeotaggedItem("ig-c"),
+    ]);
+    mockFetchInstagramImage.mockResolvedValue(Buffer.from("img"));
+    mockGetDb.mockReturnValue(makeDbWithTransaction());
+
+    const result = await call(importHandler, makeEvent());
+
+    expect(result).toEqual({
+      imported: 2,
+      skipped: 0,
+      errors: [],
+      hasMore: true,
+      remaining: 1,
+    });
+    // The third item is deferred to the next run: its image is never fetched.
+    expect(mockFetchInstagramImage).toHaveBeenCalledTimes(2);
+  });
+
+  it("reports hasMore false when the pending items fit within one run", async () => {
+    mockFilterGeotaggedMedia.mockReturnValue([
+      makeGeotaggedItem("ig-a"),
+      makeGeotaggedItem("ig-b"),
+    ]);
+    mockFetchInstagramImage.mockResolvedValue(Buffer.from("img"));
+    mockGetDb.mockReturnValue(makeDbWithTransaction());
+
+    const result = await call(importHandler, makeEvent());
+
+    expect(result).toEqual({
+      imported: 2,
+      skipped: 0,
+      errors: [],
+      hasMore: false,
+      remaining: 0,
+    });
+    expect(mockFetchInstagramImage).toHaveBeenCalledTimes(2);
+  });
+
+  it("excludes already-imported items before applying the per-run cap", async () => {
+    // 2 already-imported + 3 new; the cap of 2 must slice the *pending* items,
+    // not the raw geotagged list — so 2 import, 2 are skipped, 1 remains.
+    mockFilterGeotaggedMedia.mockReturnValue([
+      makeGeotaggedItem("ig-old-1"),
+      makeGeotaggedItem("ig-old-2"),
+      makeGeotaggedItem("ig-new-1"),
+      makeGeotaggedItem("ig-new-2"),
+      makeGeotaggedItem("ig-new-3"),
+    ]);
+    mockFetchInstagramImage.mockResolvedValue(Buffer.from("img"));
+    mockGetDb.mockReturnValue(makeDbWithTransaction());
+
+    mockDbSelectWhere.mockImplementationOnce(() => {
+      // Connection lookup — needs .limit().
+      const thenable = Promise.resolve([] as unknown[]);
+      return Object.assign(thenable, { limit: mockDbSelectLimit });
+    });
+    mockDbSelectWhere.mockImplementationOnce(() =>
+      // Dedupe query — two ids already imported.
+      Promise.resolve([{ sourceId: "ig-old-1" }, { sourceId: "ig-old-2" }]),
+    );
+
+    const result = await call(importHandler, makeEvent());
+
+    expect(result).toEqual({
+      imported: 2,
+      skipped: 2,
+      errors: [],
+      hasMore: true,
+      remaining: 1,
+    });
+    expect(mockFetchInstagramImage).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not advertise a resume when the whole batch fails", async () => {
+    // Three new items overflow the cap of 2, but every import fails, so no
+    // source_id is written; re-running would re-slice the same stuck items.
+    // hasMore must be false to avoid an endless retry loop.
+    mockFilterGeotaggedMedia.mockReturnValue([
+      makeGeotaggedItem("ig-a"),
+      makeGeotaggedItem("ig-b"),
+      makeGeotaggedItem("ig-c"),
+    ]);
+    mockFetchInstagramImage.mockRejectedValue(new Error("CDN 404"));
+    mockGetDb.mockReturnValue(makeDbWithTransaction());
+
+    const result = (await call(importHandler, makeEvent())) as {
+      imported: number;
+      hasMore: boolean;
+      errors: string[];
+    };
+
+    expect(result.imported).toBe(0);
+    expect(result.hasMore).toBe(false);
+    expect(result.errors).toHaveLength(2);
+    // 3 pending, 0 imported: all three (2 failed + 1 untouched) still remain,
+    // and the UI's "N still pending" copy is computed from this value.
+    expect(result.remaining).toBe(3);
+  });
+
+  it("still advertises a resume when part of the batch fails but one succeeds", async () => {
+    // Cap 2; batch is [ig-a, ig-b]. ig-a's image fetch fails, ig-b succeeds, so
+    // progress was made and a third item still waits — hasMore stays true.
+    mockFilterGeotaggedMedia.mockReturnValue([
+      makeGeotaggedItem("ig-a"),
+      makeGeotaggedItem("ig-b"),
+      makeGeotaggedItem("ig-c"),
+    ]);
+    mockFetchInstagramImage
+      .mockRejectedValueOnce(new Error("CDN 404"))
+      .mockResolvedValue(Buffer.from("img"));
+    mockGetDb.mockReturnValue(makeDbWithTransaction());
+
+    const result = (await call(importHandler, makeEvent())) as {
+      imported: number;
+      hasMore: boolean;
+      remaining: number;
+      errors: string[];
+    };
+
+    expect(result.imported).toBe(1);
+    expect(result.hasMore).toBe(true);
+    // 3 pending, 1 imported; the failed item plus the untouched one both remain.
+    expect(result.remaining).toBe(2);
+    expect(result.errors).toHaveLength(1);
+  });
+
+  it("stops mid-batch when the wall-time budget is spent", async () => {
+    vi.useFakeTimers();
+    try {
+      mockFilterGeotaggedMedia.mockReturnValue([
+        makeGeotaggedItem("ig-a"),
+        makeGeotaggedItem("ig-b"),
+      ]);
+      // The first import overruns the (mocked 60s) budget, so the loop must
+      // break before starting the second item — proving the time budget, not
+      // just the count cap, bounds the run.
+      mockFetchInstagramImage.mockImplementation(() => {
+        vi.advanceTimersByTime(61000);
+        return Promise.resolve(Buffer.from("img"));
+      });
+      mockGetDb.mockReturnValue(makeDbWithTransaction());
+
+      const result = (await call(importHandler, makeEvent())) as {
+        imported: number;
+        hasMore: boolean;
+        remaining: number;
+      };
+
+      expect(mockFetchInstagramImage).toHaveBeenCalledTimes(1);
+      expect(result.imported).toBe(1);
+      expect(result.hasMore).toBe(true);
+      expect(result.remaining).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("still attempts one item when the budget was spent before the loop began", async () => {
+    vi.useFakeTimers();
+    try {
+      mockFilterGeotaggedMedia.mockReturnValue([
+        makeGeotaggedItem("ig-a"),
+        makeGeotaggedItem("ig-b"),
+      ]);
+      // The page walk itself consumes the whole budget, so the loop enters
+      // already past the deadline. The forward-progress guard must still attempt
+      // one item — otherwise the user loops forever on "run again" with nothing
+      // ever imported.
+      mockFetchInstagramMedia.mockImplementation(() => {
+        vi.advanceTimersByTime(61000);
+        return Promise.resolve({ data: [] });
+      });
+      mockGetDb.mockReturnValue(makeDbWithTransaction());
+
+      const result = (await call(importHandler, makeEvent())) as {
+        imported: number;
+        hasMore: boolean;
+        remaining: number;
+      };
+
+      // Exactly one item attempted (and imported); the second is deferred.
+      expect(mockFetchInstagramImage).toHaveBeenCalledTimes(1);
+      expect(result.imported).toBe(1);
+      expect(result.hasMore).toBe(true);
+      expect(result.remaining).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

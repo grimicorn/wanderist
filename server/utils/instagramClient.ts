@@ -34,6 +34,42 @@ export const INSTAGRAM_MEDIA_LIMIT = 50;
 // items so a very large account can't spin the handler indefinitely.
 export const INSTAGRAM_MAX_MEDIA_PAGES = 10;
 
+// Upper bound on how many *new* photos a single import run downloads,
+// processes, and commits. Each item does a CDN image fetch, a sharp probe +
+// thumbnail, a DB transaction, and two blob writes — on the order of ~1s each,
+// so an unbounded run over a first-time account's ~500 geotagged items overruns
+// the Netlify function timeout and commits partial work.
+//
+// Budget: this repo sets no maxDuration, so functions run on Netlify's default
+// synchronous ceiling (10s). The page walk (fetchInstagramMedia, up to
+// INSTAGRAM_MAX_MEDIA_PAGES requests) spends a few seconds before any import,
+// leaving room for a single-digit batch. 8 × ~1s keeps the worst case inside
+// the 10s ceiling with headroom. The remaining items resume on the next run
+// (already-imported items are skipped via the idempotent media.source_id set,
+// so progress persists across runs without extra state).
+//
+// This is a secondary ceiling on top of the wall-time budget below: raise it
+// only alongside a raised function timeout, and prefer a background/scheduled
+// function over a large cap for accounts with hundreds of geotagged photos.
+export const INSTAGRAM_IMPORT_MAX_ITEMS_PER_RUN = 8;
+
+// Wall-time budget for the whole import invocation (anchored at handler entry).
+// A count cap alone can't bound duration — per-item cost varies with image
+// size, sharp work, and blob-store latency — so the loop stops before starting
+// a new item once this budget is spent, deferring the rest to the next run.
+//
+// The true worst case is this budget plus the one item already in flight when
+// the check trips: 7000ms + a ~1-3s item ≈ 8-10s, which sits under Netlify's
+// default 10s synchronous ceiling. Raise the budget only alongside a raised
+// timeout, and keep the gap to the ceiling ≥ the slowest expected item.
+//
+// Caveat: the preceding page walk (fetchInstagramMedia, up to
+// INSTAGRAM_MAX_MEDIA_PAGES requests) is counted against this budget but not
+// itself interrupted by it, so a pathologically slow walk could still approach
+// the ceiling before any import. Bounding the walk by the same deadline is a
+// worthwhile follow-up.
+export const INSTAGRAM_IMPORT_TIME_BUDGET_MS = 7000;
+
 // Only image types can carry location metadata.
 export const INSTAGRAM_GEOTAGGED_MEDIA_TYPES = new Set([
   "IMAGE",

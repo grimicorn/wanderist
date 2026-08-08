@@ -11,7 +11,18 @@
  * Place deduplication: photos taken at the same location (name + coordinates)
  * reuse the existing `places` row rather than inserting duplicates.
  *
- * Returns a summary: { imported: number, skipped: number, errors: string[] }
+ * Bounded per run: a first-time account can hold ~500 geotagged photos, and
+ * importing each is expensive (CDN fetch + image processing + DB transaction +
+ * blob writes), so an unbounded run overruns the Netlify function timeout and
+ * commits partial work. Each run imports at most
+ * INSTAGRAM_IMPORT_MAX_ITEMS_PER_RUN new photos and stops before the wall-time
+ * budget is spent, reporting `hasMore` and how many items are `remaining` so
+ * the client can call again to resume. No separate cursor is persisted; the
+ * idempotent `media.source_id` set is the cursor: already-imported items are
+ * skipped, so the next run naturally picks up where this one stopped.
+ *
+ * Returns a summary:
+ *   { imported, skipped, errors, hasMore, remaining }
  */
 
 import { eq, and, inArray } from "drizzle-orm";
@@ -35,6 +46,8 @@ import {
   fetchInstagramMedia,
   fetchInstagramImage,
   filterGeotaggedMedia,
+  INSTAGRAM_IMPORT_MAX_ITEMS_PER_RUN,
+  INSTAGRAM_IMPORT_TIME_BUDGET_MS,
   type InstagramMediaItem,
 } from "../../../utils/instagramClient";
 import { decryptToken } from "../../../utils/tokenCrypto";
@@ -218,7 +231,76 @@ async function importSinglePhoto(
   }
 }
 
-export default defineEventHandler(async (event) => {
+// The POST response shape. The client mirrors this as InstagramImportResult in
+// app/composables/useConnections.ts; annotating the handler's return here makes
+// a server-side rename or dropped field a compile error rather than a runtime
+// surprise in the settings alert copy.
+interface ImportRunSummary {
+  imported: number;
+  skipped: number;
+  errors: string[];
+  hasMore: boolean;
+  remaining: number;
+}
+
+interface BatchResult {
+  imported: number;
+  errors: string[];
+  // How many items the loop actually attempted before its count/time budget was
+  // spent; the rest of `items` is deferred to the next run.
+  processed: number;
+  // True when the loop stopped because the wall-time budget ran out (rather than
+  // the count cap or reaching the end). Lets the caller advertise a resume even
+  // when the deadline hit before anything was imported.
+  stoppedOnDeadline: boolean;
+}
+
+// Imports items one at a time, stopping before it starts an item once either
+// the per-run count cap or the wall-time budget is spent. Bounding on both
+// keeps a run under the function timeout even when per-item cost is uneven.
+async function importBatch(
+  userId: string,
+  items: InstagramMediaItem[],
+  maxItems: number,
+  deadlineAt: number,
+): Promise<BatchResult> {
+  let imported = 0;
+  let processed = 0;
+  let stoppedOnDeadline = false;
+  const errors: string[] = [];
+
+  for (const item of items) {
+    if (processed >= maxItems) {
+      break;
+    }
+    // Always attempt at least one item per run (`processed > 0` guard) so a run
+    // that entered with its time budget already spent — e.g. a slow page walk
+    // ate it — still makes forward progress instead of returning zero-imported
+    // and looping the user on "run again" forever.
+    if (processed > 0 && Date.now() >= deadlineAt) {
+      stoppedOnDeadline = true;
+      break;
+    }
+    processed += 1;
+    try {
+      await importSinglePhoto(userId, item);
+      imported += 1;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      errors.push(`Item ${item.id}: ${message}`);
+    }
+  }
+
+  return { imported, errors, processed, stoppedOnDeadline };
+}
+
+export default defineEventHandler(async (event): Promise<ImportRunSummary> => {
+  // Anchor the wall-time budget at handler entry so it covers the whole
+  // invocation — the page walk and dedupe query included — not just the import
+  // loop. Otherwise a slow page walk plus a full loop could still overrun the
+  // function timeout.
+  const deadlineAt = Date.now() + INSTAGRAM_IMPORT_TIME_BUDGET_MS;
+
   const userId = await ensureUser(event);
   // No separate per-item photo-storage cap here: Instagram sync itself is
   // gated to Wanderer/Nomad (see assertInstagramSyncAllowed), and both of
@@ -257,24 +339,38 @@ export default defineEventHandler(async (event) => {
     instagramIds,
   );
 
-  let imported = 0;
-  let skipped = 0;
-  const errors: string[] = [];
+  const pendingItems = geotagged.filter(
+    (item) => !alreadyImportedIds.has(item.id),
+  );
+  const skipped = geotagged.length - pendingItems.length;
 
-  for (const item of geotagged) {
-    if (alreadyImportedIds.has(item.id)) {
-      skipped += 1;
-      continue;
-    }
+  // Bound the expensive per-item work so the run stays under the function
+  // timeout; the overflow resumes on the next call (already-imported items are
+  // skipped above, so no cursor state is needed to know where to continue).
+  const { imported, errors, processed, stoppedOnDeadline } = await importBatch(
+    userId,
+    pendingItems,
+    INSTAGRAM_IMPORT_MAX_ITEMS_PER_RUN,
+    deadlineAt,
+  );
 
-    try {
-      await importSinglePhoto(userId, item);
-      imported += 1;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown error";
-      errors.push(`Item ${item.id}: ${message}`);
-    }
-  }
+  // `remaining` is the retry count shown to the user: every item not yet
+  // successfully imported, including this run's failures (a failed item is never
+  // written to media.source_id, so it stays pending and is re-attempted).
+  const remaining = pendingItems.length - imported;
 
-  return { imported, skipped, errors };
+  // `deferred` is the count the loop never even attempted (cut off by the count
+  // cap or the time budget). Gate the resume on that, not on `remaining`: if
+  // every pending item was attempted and only failures are left, re-running just
+  // re-fails, so don't advertise phantom deferred work. The `imported > 0`
+  // clause additionally rules out the degenerate case where the whole attempted
+  // batch failed (zero progress), and `stoppedOnDeadline` keeps a run that
+  // imported nothing only because it ran out of time from looking complete.
+  // None of this skips a permanently-broken item sitting among good ones — that
+  // item is re-fetched every run until it succeeds or a human intervenes;
+  // draining past it needs a durable per-source_id failure marker (follow-up).
+  const deferred = pendingItems.length - processed;
+  const hasMore = deferred > 0 && (imported > 0 || stoppedOnDeadline);
+
+  return { imported, skipped, errors, hasMore, remaining };
 });
