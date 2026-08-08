@@ -128,12 +128,12 @@ describe("DELETE /api/entries/:id", () => {
 
     expect(mockDeleteMediaIfUnreferenced).toHaveBeenCalledTimes(2);
     expect(mockDeleteMediaIfUnreferenced).toHaveBeenCalledWith(
-      expect.anything(),
+      mockDb,
       "user-1",
       "media-1",
     );
     expect(mockDeleteMediaIfUnreferenced).toHaveBeenCalledWith(
-      expect.anything(),
+      mockDb,
       "user-1",
       "media-2",
     );
@@ -225,9 +225,14 @@ describe("DELETE /api/entries/:id", () => {
 
     expect(result).toEqual({ success: true });
     expect(mockDeleteMediaIfUnreferenced).toHaveBeenCalledWith(
-      expect.anything(),
+      mockDb,
       "user-1",
       "media-2",
+    );
+    expect(consoleError).toHaveBeenCalledWith(
+      expect.stringContaining(
+        "1 of 2 photo media cleanups failed for entry e-1",
+      ),
     );
     consoleError.mockRestore();
   });
